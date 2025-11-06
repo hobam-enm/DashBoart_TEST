@@ -4108,3 +4108,76 @@ div[data-testid="stVerticalBlockBorderWrapper"] { /* emulate ._liftable */
 """, unsafe_allow_html=True)
 # =========================================================================
 
+
+# === [LAYOUT UTILS • 2025-11-06] =============================================
+# 목적: "페이지 전체가 카드에 갇힌 느낌" 제거 + 필요한 섹션만 카드화
+# - 기본적으로 Streamlit의 block wrapper(기본 카드 느낌) 비활성화
+# - 대신 .card / .nocard 유틸 클래스로 선택적 카드 레이아웃 구성
+st.markdown("""
+<style>
+/* A) Streamlit 기본 wrapper의 테두리/그림자/배경 제거 → 페이지는 '카드 없음'이 기본 */
+div[data-testid="stVerticalBlockBorderWrapper"] {
+  background: transparent !important;
+  box-shadow: none !important;
+  border: none !important;
+  padding: 0 !important;
+}
+
+/* B) 선택형 카드 유틸 클래스 */
+.card {
+  background: var(--card-bg, rgba(255,255,255,.06));
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: 16px;
+  padding: 16px 18px;
+  box-shadow: 0 2px 6px rgba(16,24,40,.12);
+  transition: transform .18s ease, box-shadow .18s ease;
+  position: relative;
+}
+
+.nocard {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+}
+
+/* C) 카드 hover 리프트(그래프/그리드/텍스트 어디를 hover해도 .card 전체 lift) */
+.card:hover {
+  transform: translate3d(0,-4px,0);
+  box-shadow: 0 16px 40px rgba(16,24,40,.16), 0 6px 14px rgba(16,24,40,.10);
+  z-index: 3;
+}
+
+/* D) 카드 내부 개별 요소는 lift 없음(중복 이동 방지) */
+.card .stPlotlyChart:hover,
+.card .ag-theme-streamlit .ag-root-wrapper:hover {
+  transform: none !important;
+  box-shadow: inherit !important;
+}
+
+/* E) 사이드바는 카드화 하지 않음 */
+section[data-testid="stSidebar"] div[data-testid="stVerticalBlockBorderWrapper"] * {
+  transform: none !important;
+  box-shadow: inherit !important;
+}
+
+/* F) 다크/라이트 테마 대응 기본값 */
+@media (prefers-color-scheme: light) {
+  .card { background: rgba(255,255,255,.9); border-color: rgba(0,0,0,.06); }
+}
+</style>
+""", unsafe_allow_html=True)
+
+# === [HOW TO USE]
+# 필요한 구간만 카드로 감싸고, 나머지는 평면 배치(.nocard)로 구성:
+#
+# st.markdown("<div class='card'>", unsafe_allow_html=True)
+# st.plotly_chart(fig, use_container_width=True)
+# st.markdown("</div>", unsafe_allow_html=True)
+#
+# 평면 배치 섹션:
+# st.markdown("<div class='nocard'>", unsafe_allow_html=True)
+# st.write("텍스트 또는 그래프")
+# st.markdown("</div>", unsafe_allow_html=True)
+# ============================================================================
+
