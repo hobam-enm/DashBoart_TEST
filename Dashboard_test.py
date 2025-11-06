@@ -8,7 +8,7 @@ import datetime
 import re
 from typing import List, Dict, Any, Optional 
 import time, uuid
-
+from textwrap import dedent
 import numpy as np
 import pandas as pd
 import plotly.express as px
@@ -1011,8 +1011,6 @@ def render_overview():
         st.markdown("### 📊 Overview")
     with st.expander("ℹ️ 지표 기준 안내", expanded=False):
         st.markdown("<div class='gd-guideline'>", unsafe_allow_html=True)
-
-        import textwrap
         st.markdown(textwrap.dedent("""
             **지표 기준**
         - **시청률** `회차평균`: 전국 기준 가구 / 타깃(2049) 시청률
@@ -1249,8 +1247,6 @@ def render_ip_detail():
         st.markdown("<div class='page-title'>📈 IP 성과 자세히보기</div>", unsafe_allow_html=True)
     with st.expander("ℹ️ 지표 기준 안내", expanded=False):
         st.markdown("<div class='gd-guideline'>", unsafe_allow_html=True)
-
-    import textwrap
         st.markdown(textwrap.dedent("""
         **지표 기준**
         - **시청률** `회차평균`: 전국 기준 가구 / 타깃(2049) 시청률
