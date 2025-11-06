@@ -16,6 +16,14 @@ import plotly.express as px
 from plotly import graph_objects as go
 import plotly.io as pio
 import streamlit as st
+
+def _metric_note():
+    # 지표기준 안내 수정
+    with st.expander("ℹ️ 지표 기준 안내", expanded=False):
+        st.markdown("""
+- (여기에 지표 기준 안내를 작성하세요)
+""")
+
 from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode, JsCode
 import gspread
 from google.oauth2.service_account import Credentials
@@ -270,6 +278,23 @@ html, body {
 .mb-1{ margin-bottom: 4px; } .mb-2{ margin-bottom: 8px; } .mb-3{ margin-bottom: 12px; }
 .round-xl{ border-radius: var(--radius-xl); }
 .elev-1{ box-shadow: var(--shadow-sm); } .elev-2{ box-shadow: var(--shadow-md); }
+
+/* ===== Sidebar Brand (gradient text) ===== */
+.sidebar-hr{height:1px;background:linear-gradient(90deg, rgba(124,58,237,.35),rgba(236,72,153,.25),rgba(249,115,22,.35));margin:12px 0;border-radius:4px;}
+.page-title-wrap{display:flex;align-items:center;gap:8px;margin:6px 0 8px;}
+.page-title-emoji{font-size:18px;opacity:.9}
+.page-title-main{
+  font-weight:900; font-size:18px; letter-spacing:-.2px;
+  background: linear-gradient(90deg, #7C3AED 0%, #EC4899 45%, #F97316 100%);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  white-space:nowrap;
+}
+
+/* Page content title (neutral, no box) */
+.page-title{ 
+  background:none !important; box-shadow:none !important; 
+  border:none !important; padding:0 !important; margin:0 0 8px 0 !important;
+}
 </style>""", unsafe_allow_html=True)
 
 # ===== 네비게이션 아이템 정의 (v2.0) =====
@@ -913,6 +938,8 @@ def render_overview():
     filter_cols = st.columns(4) # [제목 | 편성필터 | 연도필터 | 월필터]
     
     with filter_cols[0]:
+        _metric_note()
+
         st.markdown("### 📊 Overview")
     
     with filter_cols[1]:
@@ -1134,7 +1161,7 @@ def render_ip_detail():
 
     # ▼▼ 제목 표기 방식만 통일 ▼▼
     with filter_cols[0]:
-        st.markdown("<div class='page-title'>📈 IP 성과 자세히보기</div>", unsafe_allow_html=True)
+        st.markdown('### 📈 IP 성과 자세히보기')
 
     ip_options = sorted(df_full["IP"].dropna().unique().tolist())
     with filter_cols[1]:
@@ -1968,6 +1995,8 @@ def render_demographic():
 
     # [수정] 필터 순서 변경: [Title | Mode | Media | IP1 | IP2/Group]
     filter_cols = st.columns([3, 2, 2, 3, 3]) 
+
+    _metric_note()
 
     with filter_cols[0]:
         st.markdown("### 👥 IP 오디언스 히트맵")
@@ -2899,6 +2928,8 @@ def render_episode():
 
     # --- 각 지표별 차트 렌더링 ---
     chart_cols = st.columns(2) 
+    _metric_note()
+
     col_idx = 0
     
     for metric in key_metrics:
@@ -2966,6 +2997,8 @@ def render_growth_score():
     _ep_display = st.session_state.get("growth_ep_cutoff", 4)
 
     head = st.columns([5, 3, 2])
+    _metric_note()
+
     with head[0]:
         st.markdown(
             f"## 🚀 성장스코어-방영지표 <span style='font-size:20px;color:#6b7b93'>(~{_ep_display}회 기준)</span>",
@@ -3453,6 +3486,17 @@ def render_growth_score_digital():
     # ---------- 헤더(타이틀/선택) ----------
     _ep_display = st.session_state.get("growth_d_ep_cutoff", 4)
     head = st.columns([5, 3, 2])
+    _metric_note()
+    # 비교 그룹 기준 (페이지2 스타일)
+    selected_group_criteria = st.multiselect(
+        "비교 그룹 기준",
+        ["동일 편성", "방영 연도"],
+        default=["동일 편성"], label_visibility="collapsed"
+    )
+
+
+    _metric_note()
+
     with head[0]:
         st.markdown(
             f"## 🛰️ 성장스코어-디지털 <span style='font-size:20px;color:#6b7b93'>(~{_ep_display}회 기준)</span>",
