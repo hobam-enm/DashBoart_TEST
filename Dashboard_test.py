@@ -938,6 +938,20 @@ def render_gender_pyramid(container, title: str, df_src: pd.DataFrame, height: i
         fixedrange=True
     )
 
+        # --- 제목 복구 (여기 추가) ---
+    fig.update_layout(
+        title=dict(
+            text=title,          # 호출부에서 넘긴 "🎯 TV 데모 분포" / "📺 TVING 데모 분포"
+            x=0.0, xanchor="left",
+            y=0.98, yanchor="top",
+            font=dict(size=14)
+        )
+    )
+    # 타이틀 영역 확보 (t를 넉넉히)
+    fig.update_layout(margin=dict(l=8, r=8, t=48, b=8))
+    # 필요 시 전역 템플릿 타이틀 충돌 방지:
+    # fig.layout.template = None
+
     container.plotly_chart(fig, use_container_width=True,
                            config={"scrollZoom": False, "staticPlot": False, "displayModeBar": False})
 
@@ -1241,7 +1255,20 @@ def render_ip_detail():
     with filter_cols[0]:
         st.markdown("<div class='page-title'>📈 IP 성과 자세히보기</div>", unsafe_allow_html=True)
     with st.expander("ℹ️ 지표 기준 안내", expanded=False):
-        st.markdown("내용 기입 필요")
+        st.markdown("<div class='gd-guideline'>", unsafe_allow_html=True)
+
+        import textwrap
+        st.markdown(textwrap.dedent("""
+            **지표 기준**
+        - **시청률** `회차평균`: 전국 기준 가구 / 타깃(2049) 시청률
+        - **티빙 LIVE** `회차평균`: 업데이트 예정
+        - **티빙 QUICK** `회차평균`: 방영당일 VOD 시청 UV
+        - **티빙 VOD** `회차평균`: 방영일+1부터 +6까지 **6days** VOD UV
+        - **디지털 조회/언급량** `회차총합`: 방영주차(월~일) 내 총합
+        - **화제성 점수** `회차평균`: 방영기간 주차별 화제성 점수 평균
+        """).strip())
+
+        st.markdown("</div>", unsafe_allow_html=True)
 
     ip_options = sorted(df_full["IP"].dropna().unique().tolist())
     with filter_cols[1]:
