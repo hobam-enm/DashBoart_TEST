@@ -3603,8 +3603,6 @@ def render_growth_score():
 
 def render_growth_score_digital():
 
-    with st.expander("ℹ️ 지표 기준 안내", expanded=False):
-        st.markdown("내용 기입 필요")
     """
     레이아웃: [상단 헤더: 타이틀 | IP선택 | 회차기준] → [선택작품 요약카드]
            → [회차별 등급 추이(선택 IP)] → [포지셔닝맵] → [전체표]
