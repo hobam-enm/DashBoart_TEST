@@ -696,6 +696,9 @@ def render_gradient_title(main_text: str, emoji: str = "🎬"):
 
 with st.sidebar:
     st.markdown('<div class="sidebar-hr"></div>', unsafe_allow_html=True)
+    with st.expander("ℹ️ 지표 기준 안내", expanded=False):
+        st.markdown("내용 기입 필요")
+
     render_gradient_title("드라마 성과 대시보드", emoji="")
     st.markdown(
     "<p style='font-size:12px; color:gray;'>문의 : 미디어)디지털마케팅팀 데이터파트</p>",
@@ -993,6 +996,9 @@ def render_overview():
     with filter_cols[0]:
         st.markdown("### 📊 Overview")
     
+        with st.expander("ℹ️ 지표 기준 안내", expanded=False):
+            st.markdown("내용 기입 필요")
+
     with filter_cols[1]:
         prog_sel = st.multiselect(
             "편성", 
@@ -1213,6 +1219,9 @@ def render_ip_detail():
     # ▼▼ 제목 표기 방식만 통일 ▼▼
     with filter_cols[0]:
         st.markdown("<div class='page-title'>📈 IP 성과 자세히보기</div>", unsafe_allow_html=True)
+
+        with st.expander("ℹ️ 지표 기준 안내", expanded=False):
+            st.markdown("내용 기입 필요")
 
     ip_options = sorted(df_full["IP"].dropna().unique().tolist())
     with filter_cols[1]:
@@ -1943,6 +1952,9 @@ function(params) {
 # ===== [페이지 3] AgGrid 테이블 렌더링 함수 =====
 def render_index_table(df_index: pd.DataFrame, title: str, height: int = 400):
     st.markdown(f"###### {title}")
+    with st.expander("ℹ️ 지표 기준 안내", expanded=False):
+        st.markdown("내용 기입 필요")
+
     if df_index.empty: st.info("비교할 데이터가 없습니다."); return
 
     gb = GridOptionsBuilder.from_dataframe(df_index)
@@ -1976,6 +1988,9 @@ def render_heatmap(df_plot: pd.DataFrame, title: str):
     데이터프레임을 받아 Plotly 히트맵을 렌더링합니다.
     """
     st.markdown(f"###### {title}")
+    with st.expander("ℹ️ 지표 기준 안내", expanded=False):
+        st.markdown("내용 기입 필요")
+
     if df_plot.empty:
         st.info("비교할 데이터가 없습니다.")
         return
@@ -2053,6 +2068,9 @@ def render_demographic():
     with filter_cols[0]:
         st.markdown("### 👥 IP 오디언스 히트맵")
     
+        with st.expander("ℹ️ 지표 기준 안내", expanded=False):
+            st.markdown("내용 기입 필요")
+
     with filter_cols[1]:
         # [수정] st.radio -> st.selectbox
         comparison_mode = st.selectbox(
@@ -2627,6 +2645,9 @@ def _render_kpi_card_comparison(
 def render_ip_vs_ip_comparison(df_all: pd.DataFrame, ip1: str, ip2: str, kpi_percentiles: pd.DataFrame):
     
     st.markdown(f"#### ⚖️ : <span style='color:#d93636;'>{ip1}</span> vs <span style='color:#2a61cc;'>{ip2}</span>", unsafe_allow_html=True)
+    with st.expander("ℹ️ 지표 기준 안내", expanded=False):
+        st.markdown("내용 기입 필요")
+
     st.divider()
 
     # --- 데이터 준비 ---
@@ -2751,6 +2772,9 @@ def render_comparison():
 
     with filter_cols[0]:
         st.markdown("## ⚖️ IP간 비교분석")
+
+        with st.expander("ℹ️ 지표 기준 안내", expanded=False):
+            st.markdown("내용 기입 필요")
 
     with filter_cols[1]:
         comparison_mode = st.radio(
@@ -2956,6 +2980,9 @@ def render_episode():
     with filter_cols[0]:
         st.markdown("## 🎬 회차별 비교 ")
         
+        with st.expander("ℹ️ 지표 기준 안내", expanded=False):
+            st.markdown("내용 기입 필요")
+
     with filter_cols[1]:
         selected_base_ip = st.selectbox(
             "기준 IP (하이라이트)", 
