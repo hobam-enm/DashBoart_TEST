@@ -4045,3 +4045,44 @@ def fmt_eokman(n):
     eok = n // 100_000_000
     man = (n % 100_000_000) // 10_000
     return f"{eok}억{man:04d}만"
+
+
+# === [HOVER FIX OVERRIDE • 2025-11-06] =======================================
+# 전체 효과: "그래프 내부만 둥둥"이 아니라 "박스(카드) 자체"가 떠오르도록 수정
+# 핵심: wrapper(:has(child:hover))에 lift를 주고, child의 개별 lift는 제거
+st.markdown("""
+<style>
+/* 1) 먼저, 차트/그리드 자체의 lift를 끈다 (중복 이동 방지) */
+.stPlotlyChart:hover,
+.ag-theme-streamlit .ag-root-wrapper:hover {
+  transform: none !important;
+  box-shadow: inherit !important;
+}
+
+/* 2) 자식이 hover 상태일 때, 바깥 카드(wrapper)를 들어올린다 */
+div[data-testid="stVerticalBlockBorderWrapper"]:has(.stPlotlyChart:hover),
+div[data-testid="stVerticalBlockBorderWrapper"]:has(.ag-theme-streamlit .ag-root-wrapper:hover),
+div[data-testid="stVerticalBlockBorderWrapper"]:has(.kpi-card:hover),
+div[data-testid="stVerticalBlockBorderWrapper"]:has(.block-card:hover) {
+  transform: translate3d(0,-4px,0) !important;
+  box-shadow: 0 16px 40px rgba(16,24,40,.16), 0 6px 14px rgba(16,24,40,.10) !important;
+  z-index: 3 !important;
+}
+
+/* 3) hover transition은 wrapper에만 맡긴다 (부드러운 일관성) */
+div[data-testid="stVerticalBlockBorderWrapper"] {
+  transition: transform .18s ease, box-shadow .18s ease !important;
+  will-change: transform, box-shadow;
+  backface-visibility: hidden;
+}
+
+/* 4) 사이드바는 lift 금지 유지 */
+section[data-testid="stSidebar"] div[data-testid="stVerticalBlockBorderWrapper"]:has(*) {
+  transform: none !important;
+  box-shadow: inherit !important;
+  z-index: auto !important;
+}
+</style>
+""", unsafe_allow_html=True)
+# ============================================================================
+
