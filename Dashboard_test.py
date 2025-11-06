@@ -3584,7 +3584,7 @@ def render_growth_score_digital():
 
     사용 메트릭(고정):
       - 조회수: 회차합 시계열 → 절대(평균), 상승(회귀 기울기)
-      - 화제성(F_Score): 회차합 시계열 → 절대(평균), 상승(회귀 기울기)
+      - 화제성: 회차합 시계열 → 절대(평균), 상승(회귀 기울기)
     """
     import numpy as np
     import pandas as pd
@@ -3608,7 +3608,7 @@ def render_growth_score_digital():
     # type: "sum" → 회차합, "rank_inv" →(낮을수록 좋음) 평균 후 -1 곱해 상향화
     METRICS = [
 ("조회수",     "조회수",   "sum",      True),
-    ("화제성(F_Score)", "F_Score", "mean", True),
+    ("화제성", "F_Score", "mean", True),
 ]
 
     ips = sorted(df_all["IP"].dropna().unique().tolist())
@@ -3646,7 +3646,7 @@ def render_growth_score_digital():
     with st.expander("ℹ️ 지표 기준 안내", expanded=False):
         st.markdown("""
 **디지털 지표 정의(고정)**
-- **조회수, 화제성(F_Score)**: 회차별 합(에피소드 단위)을 사용 → 1~N회 집계 시계열의 평균/회귀
+- **조회수, 화제성**: 회차별 합(에피소드 단위)을 사용 → 1~N회 집계 시계열의 평균/회귀
   *(※ 화제성은 **상승스코어 미사용**, 절대스코어만 등급화)*
 
 **등급 체계(공통)**
@@ -3785,7 +3785,7 @@ def render_growth_score_digital():
                 """, unsafe_allow_html=True
             )
     _grade_card(card_cols[1], "조회수 등급",         focus["조회수_종합"])
-    _grade_card(card_cols[2], "화제성(F_Score) 등급",         focus["화제성(F_Score)_종합"])
+    _grade_card(card_cols[2], "화제성등급",         focus["화제성)_종합"])
     # 화제성은 '절대'만 표기
     _grade_card(card_cols[4], " ",  " ")  # 자리 균형용(필요 시 다른 지표 대체 가능)
 
@@ -3953,7 +3953,7 @@ def render_growth_score_digital():
     # ---------- [전체표] ----------
     table = base[[
         "IP","종합_절대등급","종합_상승등급","종합등급",
-        "조회수_종합","화제성(F_Score)_종합"
+        "조회수_종합","화제성_종합"
     ]].copy()
 
     # 정렬 키: 종합 절대 → 종합 상승 → IP
@@ -3963,11 +3963,11 @@ def render_growth_score_digital():
 
     # 화면 표시 컬럼(화제성은 절대만 노출)
     table_view = table[[
-        "IP","종합등급","조회수_종합","화제성(F_Score)_종합"
+        "IP","종합등급","조회수_종합","화제성_종합"
     ]].rename(columns={
         "종합등급":"종합",
         "조회수_종합":"조회수",
-        "화제성(F_Score)_종합":"화제성(F_Score)",
+        "화제성(F_Score)_종합":"화제성",
     })
 
     from st_aggrid import GridOptionsBuilder, AgGrid, GridUpdateMode, JsCode
@@ -3988,7 +3988,7 @@ def render_growth_score_digital():
                                 headerClass='centered-header bold-header',
                                 cellStyle={'textAlign':'center'})
     gb.configure_column("IP", pinned='left', cellStyle={'textAlign':'left','fontWeight':'700'})
-    for colname in ["종합","조회수","화제성(F_Score)"]:
+    for colname in ["종합","조회수","화제성"]:
         gb.configure_column(colname, cellStyle=grade_cell, width=120)
     grid_options = gb.build()
 
