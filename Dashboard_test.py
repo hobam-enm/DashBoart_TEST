@@ -3573,37 +3573,10 @@ def render_growth_score():
 # =====================================================
 #endregion
 
+#region [ 14. 페이지 7: 성장스코어-디지털 ]
+# =====================================================
 
-    # --- 화제성 점수(F_Score): 절대값등급 + 상승률등급 ---
-    def _grade_abs(series):
-        s = series.dropna()
-        if len(s) < 3:
-            return None
-        q = s.rank(pct=True).iloc[-1]  # 마지막값 백분위
-        # S/A/B/C/D 등급 맵핑 (상위가 좋음)
-        return 'S' if q >= 0.9 else ('A' if q >= 0.75 else ('B' if q >= 0.5 else ('C' if q >= 0.25 else 'D')))
-
-    
-def _grade_slope(x, y):
-    import numpy as np
-    x = np.asarray(x, dtype=float)
-    y = np.asarray(y, dtype=float)
-    mask = ~np.isnan(x) & ~np.isnan(y)
-    if mask.sum() < 3:
-        return None
-    X = np.vstack([x[mask], np.ones(mask.sum())]).T
-    m, b = np.linalg.lstsq(X, y[mask], rcond=None)[0]
-    # 상승률 등급을 +2, +1, 0, -1, -2 로 산정
-    # 임계값은 기존 페이지 관례(예: 0.10, 0.05, -0.05, -0.10)를 그대로 사용하되,
-    # 필요 시 그룹 분포 기반(percentile)로 교체 가능.
-    if m >=  0.10: return "+2"
-    if m >=  0.05: return "+1"
-    if m >= -0.05: return "0"
-    if m >= -0.10: return "-1"
-    return "-2"
-
-def 
-render_growth_score_digital():
+def render_growth_score_digital():
 
     """
     레이아웃: [상단 헤더: 타이틀 | IP선택 | 회차기준] → [선택작품 요약카드]
@@ -3612,7 +3585,7 @@ render_growth_score_digital():
     사용 메트릭(고정):
       - 조회수: 회차합 시계열 → 절대(평균), 상승(회귀 기울기)
       - 언급량: 회차합 시계열 → 절대(평균), 상승(회귀 기울기)
-      - /*removed_F_Total*/(/*removed_rank*/): 낮을수록 좋음 → 부호 반전 후 **절대만** 등급화(상승은 미사용)
+      - F_Total(화제성 순위): 낮을수록 좋음 → 부호 반전 후 **절대만** 등급화(상승은 미사용)
     """
     import numpy as np
     import pandas as pd
@@ -3636,9 +3609,9 @@ render_growth_score_digital():
     # type: "sum" → 회차합, "rank_inv" →(낮을수록 좋음) 평균 후 -1 곱해 상향화
     METRICS = [
         ("조회수",     "조회수",   "sum",      True),
-        ("sum",      True),
-        ("화제성순위", "/*removed_*/", "rank_inv", False),  # ← 상승 미사용
-    , 'F_Score']
+        ("언급량",     "언급량",   "sum",      True),
+        ("화제성순위", "F_Total", "rank_inv", False),  # ← 상승 미사용
+    ]
 
     ips = sorted(df_all["IP"].dropna().unique().tolist())
     if not ips:
@@ -3676,7 +3649,7 @@ render_growth_score_digital():
         st.markdown("""
 **디지털 지표 정의(고정)**
 - **조회수, 언급량**: 회차별 합(에피소드 단위)을 사용 → 1~N회 집계 시계열의 평균/회귀
-- **/*removed_F_Total*/(/*removed_rank*/)**: 값이 **낮을수록 우수** → 평균 산출 전 `-1` 곱해 상향 스케일로 변환  
+- **F_Total(화제성 순위)**: 값이 **낮을수록 우수** → 평균 산출 전 `-1` 곱해 상향 스케일로 변환  
   *(※ 화제성은 **상승스코어 미사용**, 절대스코어만 등급화)*
 
 **등급 체계(공통)**
@@ -3815,7 +3788,7 @@ render_growth_score_digital():
                 """, unsafe_allow_html=True
             )
     _grade_card(card_cols[1], "조회수 등급",         focus["조회수_종합"])
-    _grade_card(card_cols[2], ,         focus["언급량_종합"])
+    _grade_card(card_cols[2], "언급량 등급",         focus["언급량_종합"])
     # 화제성은 '절대'만 표기
     _grade_card(card_cols[3], "화제성(순위) 절대",   focus["화제성순위_절대등급"])
     _grade_card(card_cols[4], " ",  " ")  # 자리 균형용(필요 시 다른 지표 대체 가능)
