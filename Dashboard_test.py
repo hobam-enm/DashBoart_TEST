@@ -74,7 +74,7 @@ def _validate_token(token: str) -> bool:
     if not ent:
         return False
     if _now() - ent["ts"] > AUTH_TTL:
-        # 만료 → 제거
+        # 만료 -> 제거
         del store[token]
         return False
     return True
@@ -119,7 +119,7 @@ def check_password_with_token() -> bool:
         if secret_pwd and isinstance(pwd, str) and pwd.strip() == str(secret_pwd).strip():
             new_token = _issue_token()
             _persist_auth(new_token)
-            _set_auth_query(new_token)  # URL에 토큰 부여 → 새로고침 후에도 유지
+            _set_auth_query(new_token)  # URL에 토큰 부여 -> 새로고침 후에도 유지
             _rerun()
         else:
             st.sidebar.warning("비밀번호가 일치하지 않습니다.")
@@ -369,7 +369,7 @@ section[data-testid="stSidebar"] .stButton [data-testid="baseButton-primary"]:ho
 }
 .page-title-emoji{ font-size:20px; line-height:1; }
 .page-title-main{
-  /* clamp(min, preferred, max) → 사이드바가 좁아도 자연스레 줄어듦 */
+  /* clamp(min, preferred, max) -> 사이드바가 좁아도 자연스레 줄어듦 */
   font-size: clamp(18px, 2.2vw, 24px);
   font-weight: 800; letter-spacing:-0.2px; line-height:1.15;
   background: linear-gradient(90deg,#6A5ACD 0%, #A663CC 40%, #FF7A8A 75%, #FF8A3D 100%);
@@ -1413,7 +1413,7 @@ with st.expander("ℹ️ 지표 기준 안내", expanded=False):
         return float(s.min()) if not s.empty else None
 
     # ✅ F_score 평균(시청률과 같은 로직) with 폴백:
-    # 1) 회차가 있으면: 회차별 평균 → 전체 평균
+    # 1) 회차가 있으면: 회차별 평균 -> 전체 평균
     def _mean_like_rating(df_src: pd.DataFrame, metric_name: str) -> float | None:
         sub = _metric_filter(df_src, metric_name).copy()
         if sub.empty:
@@ -2300,7 +2300,7 @@ def get_kpi_data_for_all_ips(df_all: pd.DataFrame) -> pd.DataFrame:
     if "회차_numeric" in df.columns:
         df = df.dropna(subset=["회차_numeric"])
 
-    # 1) 시청률(회차 평균 → IP 평균)
+    # 1) 시청률(회차 평균 -> IP 평균)
     def _ip_mean_of_ep_mean(metric_name: str) -> pd.Series:
         sub = df[df["metric"] == metric_name]
         if sub.empty: return pd.Series(dtype=float, name=metric_name)
@@ -2310,7 +2310,7 @@ def get_kpi_data_for_all_ips(df_all: pd.DataFrame) -> pd.DataFrame:
     kpi_t_rating = _ip_mean_of_ep_mean("T시청률")
     kpi_h_rating = _ip_mean_of_ep_mean("H시청률")
 
-    # 2) TVING VOD (회차 합 → IP 평균)
+    # 2) TVING VOD (회차 합 -> IP 평균)
     sub_vod = df[(df["metric"] == "시청인구") & (df["매체"] == "TVING VOD")]
     if not sub_vod.empty:
         vod_ep_sum = sub_vod.groupby(["IP", "회차_numeric"])["value"].sum().reset_index()
@@ -2318,7 +2318,7 @@ def get_kpi_data_for_all_ips(df_all: pd.DataFrame) -> pd.DataFrame:
     else:
         kpi_vod = pd.Series(dtype=float, name="TVING VOD")
 
-    # 3) TVING L+Q (회차 합 → IP 평균)
+    # 3) TVING L+Q (회차 합 -> IP 평균)
     sub_lq = df[(df["metric"] == "시청인구") & (df["매체"].isin(["TVING LIVE", "TVING QUICK"]))]
     if not sub_lq.empty:
         lq_ep_sum = sub_lq.groupby(["IP", "회차_numeric"])["value"].sum().reset_index()
@@ -3086,7 +3086,7 @@ with st.expander("ℹ️ 지표 기준 안내", expanded=False):
     _이 페이지 전용 지표 기준 안내 내용을 여기에 작성하세요._
     """)
     """
-    레이아웃: [상단 헤더: '선택한 작품' | IP선택 | 회차기준] → [선택작품 요약카드] → [포지셔닝맵] → [전체표]
+    레이아웃: [상단 헤더: '선택한 작품' | IP선택 | 회차기준] -> [선택작품 요약카드] -> [포지셔닝맵] -> [전체표]
     변경사항 반영:
       - 타이틀을 '[선택한 작품명] 스코어' 로 표시
       - '종합등급' 카드 2칸(강조)
@@ -3339,7 +3339,7 @@ with st.expander("ℹ️ 지표 기준 안내", expanded=False):
             tmp.append(row)
         tmp = pd.DataFrame(tmp)
 
-        # 등급 산정(각 지표 → 절대/상승 → 종합, 그 다음 '종합'의 절대/상승)
+        # 등급 산정(각 지표 -> 절대/상승 -> 종합, 그 다음 '종합'의 절대/상승)
         for disp, _, _ in METRICS:
             tmp[f"{disp}_절대등급"] = _quintile_grade(tmp[f"{disp}_절대"],   ["S","A","B","C","D"])
             tmp[f"{disp}_상승등급"] = _quintile_grade(tmp[f"{disp}_기울기"], ["+2","+1","0","-1","-2"])
@@ -3573,13 +3573,13 @@ with st.expander("ℹ️ 지표 기준 안내", expanded=False):
     _이 페이지 전용 지표 기준 안내 내용을 여기에 작성하세요._
     """)
     """
-    레이아웃: [상단 헤더: 타이틀 | IP선택 | 회차기준] → [선택작품 요약카드]
-           → [회차별 등급 추이(선택 IP)] → [포지셔닝맵] → [전체표]
+#     레이아웃: [상단 헤더: 타이틀 | IP선택 | 회차기준] -> [선택작품 요약카드]
+           -> [회차별 등급 추이(선택 IP)] -> [포지셔닝맵] -> [전체표]
 
     사용 메트릭(고정):
-      - 조회수: 회차합 시계열 → 절대(평균), 상승(회귀 기울기)
-      - 언급량: 회차합 시계열 → 절대(평균), 상승(회귀 기울기)
-      - F_Total(화제성 순위): 낮을수록 좋음 → 부호 반전 후 **절대만** 등급화(상승은 미사용)
+      - 조회수: 회차합 시계열 -> 절대(평균), 상승(회귀 기울기)
+      - 언급량: 회차합 시계열 -> 절대(평균), 상승(회귀 기울기)
+      - F_Total(화제성 순위): 낮을수록 좋음 -> 부호 반전 후 **절대만** 등급화(상승은 미사용)
     """
     import numpy as np
     import pandas as pd
@@ -3600,7 +3600,7 @@ with st.expander("ℹ️ 지표 기준 안내", expanded=False):
     ABS_NUM    = {"S":5, "A":4, "B":3, "C":2, "D":1}
 
     # (표시명, metric명, 집계타입, slope사용여부)
-    # type: "sum" → 회차합, "rank_inv" →(낮을수록 좋음) 평균 후 -1 곱해 상향화
+    # type: "sum" -> 회차합, "rank_inv" ->(낮을수록 좋음) 평균 후 -1 곱해 상향화
     METRICS = [
         ("조회수",     "조회수",   "sum",      True),
         ("언급량",     "언급량",   "sum",      True),
@@ -3631,8 +3631,8 @@ with st.expander("ℹ️ 지표 기준 안내", expanded=False):
 
     # ---------- 지표 기준 안내 ----------
 **디지털 지표 정의(고정)**
-- **조회수, 언급량**: 회차별 합(에피소드 단위)을 사용 → 1~N회 집계 시계열의 평균/회귀
-- **F_Total(화제성 순위)**: 값이 **낮을수록 우수** → 평균 산출 전 `-1` 곱해 상향 스케일로 변환  
+- **조회수, 언급량**: 회차별 합(에피소드 단위)을 사용 -> 1~N회 집계 시계열의 평균/회귀
+- **F_Total(화제성 순위)**: 값이 **낮을수록 우수** -> 평균 산출 전 `-1` 곱해 상향 스케일로 변환  
   *(※ 화제성은 **상승스코어 미사용**, 절대스코어만 등급화)*
 
 **등급 체계(공통)**
@@ -3682,8 +3682,8 @@ with st.expander("ℹ️ 지표 기준 안내", expanded=False):
         if mtype == "sum":
             s = sub.groupby("회차_numeric", as_index=False)["value"].sum()
         elif mtype == "rank_inv":
-            s = sub.groupby("회차_numeric", as_index=False)["value"].mean()  # 순위 → 평균
-            s["value"] = -1 * s["value"]  # 낮을수록 좋음 → 상향 스케일
+            s = sub.groupby("회차_numeric", as_index=False)["value"].mean()  # 순위 -> 평균
+            s["value"] = -1 * s["value"]  # 낮을수록 좋음 -> 상향 스케일
         else:
             s = sub.groupby("회차_numeric", as_index=False)["value"].mean()
         s = s.sort_values("회차_numeric")
@@ -3943,7 +3943,7 @@ with st.expander("ℹ️ 지표 기준 안내", expanded=False):
         "조회수_종합","언급량_종합","화제성순위_절대등급"
     ]].copy()
 
-    # 정렬 키: 종합 절대 → 종합 상승 → IP
+    # 정렬 키: 종합 절대 -> 종합 상승 -> IP
     table["_abs_key"]   = table["종합_절대등급"].map(ABS_SCORE).fillna(0)
     table["_slope_key"] = table["종합_상승등급"].map(SLO_SCORE).fillna(0)
     table = table.sort_values(["_abs_key","_slope_key","IP"], ascending=[False, False, True])
