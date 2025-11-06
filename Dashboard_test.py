@@ -850,11 +850,6 @@ COLOR_FEMALE = "#d93636"
 
 def render_gender_pyramid(container, title: str, df_src: pd.DataFrame, height: int = 260):
 
-    with st.expander("ℹ️ 지표 기준 안내", expanded=False):
-        st.markdown("내용 기입 필요")
-    """
-    지정된 컨테이너에 남/녀 피라미드 차트를 렌더링합니다.
-    """
     container.markdown(f"<div class='sec-title'>{title}</div>", unsafe_allow_html=True)
 
     if df_src.empty:
@@ -1987,8 +1982,6 @@ function(params) {
 # ===== [페이지 3] AgGrid 테이블 렌더링 함수 =====
 def render_index_table(df_index: pd.DataFrame, title: str, height: int = 400):
     st.markdown(f"###### {title}")
-    with st.expander("ℹ️ 지표 기준 안내", expanded=False):
-        st.markdown("내용 기입 필요")
 
     if df_index.empty: st.info("비교할 데이터가 없습니다."); return
 
@@ -2023,8 +2016,6 @@ def render_heatmap(df_plot: pd.DataFrame, title: str):
     데이터프레임을 받아 Plotly 히트맵을 렌더링합니다.
     """
     st.markdown(f"###### {title}")
-    with st.expander("ℹ️ 지표 기준 안내", expanded=False):
-        st.markdown("내용 기입 필요")
 
     if df_plot.empty:
         st.info("비교할 데이터가 없습니다.")
@@ -2103,7 +2094,17 @@ def render_demographic():
     with filter_cols[0]:
         st.markdown("### 👥 IP 오디언스 히트맵")
     with st.expander("ℹ️ 지표 기준 안내", expanded=False):
-        st.markdown("내용 기입 필요")
+        st.markdown("<div class='gd-guideline'>", unsafe_allow_html=True)
+        st.markdown(textwrap.dedent("""
+        **지표 기준**
+        - **시청률** `회차평균`: 전국 기준 가구 / 타깃(2049) 시청률
+        - **티빙 LIVE** `회차평균`: 업데이트 예정
+        - **티빙 QUICK** `회차평균`: 방영당일 VOD 시청 UV
+        - **티빙 VOD** `회차평균`: 방영일+1부터 +6까지 **6days** VOD UV
+        - **디지털 조회/언급량** `회차총합`: 방영주차(월~일) 내 총합
+        - **화제성 점수** `회차평균`: 방영기간 주차별 화제성 점수 평균
+        """).strip())
+        st.markdown("</div>", unsafe_allow_html=True)")
 
     with filter_cols[1]:
         # [수정] st.radio -> st.selectbox
