@@ -2110,8 +2110,20 @@ def render_demographic():
 
     with filter_cols[0]:
         st.markdown("### 👥 IP 오디언스 히트맵")
-    with st.expander("ℹ️ 지표 기준 안내", expanded=False):
-        st.markdown("내용 기입 필요")
+    with st.expander("ℹ️ 사용 설명 및 지표 기준 안내", expanded=False):
+        st.markdown("<div class='gd-guideline'>", unsafe_allow_html=True)
+
+        import textwrap
+        st.markdown(textwrap.dedent("""
+            **사용법**
+        - **상단 필터에서 비교기준, 플랫폼과 기준 IP를 선택**
+        - **비교 기준** : `IP간 비교` , `그룹과 비교`
+            **지표해석**
+        - **기준IP와 비교대상간 해당 연령대의 '시청자수'차이를 보여줍니다**
+        - `**예시** : 01화 20대 남성이 +51%인 경우 -> 기준IP가 비교대상보다 20대 남성 시청자수가 51% 많다'
+        """).strip())
+
+        st.markdown("</div>", unsafe_allow_html=True
 
     with filter_cols[1]:
         # [수정] st.radio -> st.selectbox
@@ -2275,7 +2287,7 @@ def render_demographic():
         df_index[comp_col] = comp_values 
 
     # --- 테이블 렌더링 ---
-    table_title = f"{media_list_label} 데모 증감 비교 ({selected_ip1} vs {comp_name})"
+    table_title = f"{media_list_label} 연령대별 시청자수 차이 ({selected_ip1} vs {comp_name})"
     render_heatmap(df_index, table_title) # <-- 새로운 히트맵 함수 호출
 #endregion
 
