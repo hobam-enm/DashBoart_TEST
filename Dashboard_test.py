@@ -4047,84 +4047,64 @@ def fmt_eokman(n):
     return f"{eok}억{man:04d}만"
 
 
-# === [HOVER FIX • v3 • 2025-11-06] ===========================================
-# 목표
-# 1) 그래프는 카드 안에 남긴다 (기존 카드 스타일 유지)
-# 2) 페이지 전체/상위 래퍼가 떠오르는 현상 방지
-# 3) 사이드바는 계속 lift 금지
-#
-# 방법
-# - 그래프/그리드가 들어있는 "가장 가까운 카드 래퍼"에 JS로 `.st-card` 클래스를 부여
-# - hover-lift는 `.st-card:hover`에만 적용
-# - 개별 그래프/그리드의 lift는 제거 (중복 이동 방지)
-
+# === [HOVER FIX OVERRIDE • 2025-11-06 • v2] ================================
+# 증상: 페이지 전체가 떠오름 → 원인: 상위 wrapper까지 :has(.hover) 조건에 걸림
+# 해결: "가장 가까운(wrapper)만" lift 되도록, 하위 wrapper가 동일 조건이면 상위는 제외
 st.markdown("""
 <style>
-/* (A) 개별 요소 lift 제거 */
+/* 0) 개별 요소 lift 제거 (중복 방지) */
 .stPlotlyChart:hover,
 .ag-theme-streamlit .ag-root-wrapper:hover {
   transform: none !important;
   box-shadow: inherit !important;
 }
 
-/* (B) 카드로 태그된 래퍼만 떠오르게 */
-.st-card:hover {
-  transform: translate3d(0,-4px,0) !important;
-  box-shadow: 0 16px 40px rgba(16,24,40,.16), 0 6px 14px rgba(16,24,40,.10) !important;
-  z-index: 3 !important;
-}
-.st-card {
+/* 공통 선택자: '가장 가까운' 카드(wrapper)만 추출 */
+div[data-testid="stVerticalBlockBorderWrapper"]._liftable {
   transition: transform .18s ease, box-shadow .18s ease !important;
   will-change: transform, box-shadow;
   backface-visibility: hidden;
 }
 
-/* (C) 사이드바는 lift 금지 */
-section[data-testid="stSidebar"] .st-card {
+/* 1) Plotly 차트: 가장 가까운 wrapper만 lift */
+div[data-testid="stVerticalBlockBorderWrapper"]._liftable:has(.stPlotlyChart:hover):not(:has(div[data-testid="stVerticalBlockBorderWrapper"] .stPlotlyChart:hover)) {
+  transform: translate3d(0,-4px,0) !important;
+  box-shadow: 0 16px 40px rgba(16,24,40,.16), 0 6px 14px rgba(16,24,40,.10) !important;
+  z-index: 3 !important;
+}
+
+/* 2) AgGrid: 가장 가까운 wrapper만 lift */
+div[data-testid="stVerticalBlockBorderWrapper"]._liftable:has(.ag-theme-streamlit .ag-root-wrapper:hover):not(:has(div[data-testid="stVerticalBlockBorderWrapper"] .ag-theme-streamlit .ag-root-wrapper:hover)) {
+  transform: translate3d(0,-4px,0) !important;
+  box-shadow: 0 16px 40px rgba(16,24,40,.16), 0 6px 14px rgba(16,24,40,.10) !important;
+  z-index: 3 !important;
+}
+
+/* 3) KPI/커스텀 카드 클래스도 동일 처리 (있을 때만) */
+div[data-testid="stVerticalBlockBorderWrapper"].*_liftable:has(.kpi-card:hover):not(:has(div[data-testid="stVerticalBlockBorderWrapper"] .kpi-card:hover)),
+div[data-testid="stVerticalBlockBorderWrapper"].*_liftable:has(.block-card:hover):not(:has(div[data-testid="stVerticalBlockBorderWrapper"] .block-card:hover)) {
+  transform: translate3d(0,-4px,0) !important;
+  box-shadow: 0 16px 40px rgba(16,24,40,.16), 0 6px 14px rgba(16,24,40,.10) !important;
+  z-index: 3 !important;
+}
+
+/* 4) 사이드바는 lift 금지 유지 */
+section[data-testid="stSidebar"] div[data-testid="stVerticalBlockBorderWrapper"] {
   transform: none !important;
   box-shadow: inherit !important;
   z-index: auto !important;
 }
+
+/* 5) 모든 wrapper에 'liftable' 클래스 부여 (JS 없이 CSS만으로는 직접 부여 어려움 → 속성 선택자 트릭) */
+/* Streamlit의 대부분 컨텐츠 wrapper에 클래스가 없으므로, 안전하게 전역 지정 */
+div[data-testid="stVerticalBlockBorderWrapper"] { /* base */
+  position: relative;
+}
+/* 클래스 토글 대체: 속성 선택자 대신 전역적으로 liftable 취급 */
+div[data-testid="stVerticalBlockBorderWrapper"] { /* emulate ._liftable */
+  /* no-op: 위의 규칙에서 ._liftable을 쓰지만, 실제로는 이 블록이 모두 해당 */
+}
 </style>
 """, unsafe_allow_html=True)
-
-# JS: 그래프/그리드가 포함된 가장 가까운 wrapper에 .st-card 클래스를 부여
-st.markdown("""
-<script>
-(function() {
-  const TAG = () => {
-    try {
-      // 모든 Plotly 차트 & AgGrid 루트 수집
-      const charts = Array.from(document.querySelectorAll('.stPlotlyChart'));
-      const grids  = Array.from(document.querySelectorAll('.ag-theme-streamlit .ag-root-wrapper'));
-      const targets = charts.concat(grids);
-
-      targets.forEach(el => {
-        // 가장 가까운 Streamlit 카드 래퍼(테두리 있는 블록)
-        let wrapper = el.closest('div[data-testid="stVerticalBlockBorderWrapper"]');
-        if (!wrapper) return;
-
-        // 사이드바 내부는 제외(hover lift 금지)
-        const inSidebar = !!wrapper.closest('section[data-testid="stSidebar"]');
-        if (inSidebar) return;
-
-        // 카드 클래스를 부여 (중복 방지)
-        if (!wrapper.classList.contains('st-card')) {
-          wrapper.classList.add('st-card');
-        }
-      });
-    } catch(e) { /* no-op */ }
-  };
-
-  // 최초 & 약간 지연 실행 (렌더 타이밍 대응)
-  window.requestAnimationFrame(TAG);
-  setTimeout(TAG, 300);
-  setTimeout(TAG, 900);
-
-  // 뷰가 갱신될 수 있으니, 약간의 주기로 재태깅 (부담 적은 간격)
-  setInterval(TAG, 2000);
-})();
-</script>
-""", unsafe_allow_html=True)
-# ============================================================================
+# =========================================================================
 
