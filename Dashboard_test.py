@@ -453,6 +453,19 @@ def get_episode_options(df: pd.DataFrame) -> List[str]:
 # CSS 수정: 전체적인 색상 톤, 폰트, 카드 디자인, 네비 버튼 스킨
 st.markdown("""
 <style>
+/* 지표기준안내 전용 타이포 + 인라인코드 스타일 */
+.gd-guideline { font-size: 13px; line-height: 1.35; }
+.gd-guideline ul { margin: .2rem 0 .6rem 1.1rem; padding: 0; }
+.gd-guideline li { margin: .15rem 0; }
+.gd-guideline b, .gd-guideline strong { font-weight: 600; }
+/* 백틱(`...`) 인라인 코드 느낌: 작고, 살짝 녹색 칩 */
+.gd-guideline code{
+  background: rgba(16,185,129,.10);
+  color: #16a34a;
+  padding: 1px 6px;
+  border-radius: 6px;
+  font-size: .92em;   /* 본문보다 더 작게 */
+}
 /* --- 전체 앱 배경 --- */
 [data-testid="stAppViewContainer"] {
     background-color: #f8f9fa; /* 매우 연한 회색 배경 */
@@ -997,21 +1010,22 @@ def render_overview():
     with filter_cols[0]:
         st.markdown("### 📊 Overview")
     with st.expander("ℹ️ 지표 기준 안내", expanded=False):
+        st.markdown("<div class='gd-guideline'>", unsafe_allow_html=True)
+
         st.markdown(
             """
-    <div style="font-size:13px; line-height:1.35">
-    <b>지표 기준</b><br>
-    - <b>시청률</b>`회차평균`: 전국 기준 가구 / 타깃(2049) 시청률<br>
-    - <b>티빙 LIVE</b>`회차평균`: 업데이트 예정<br>
-    - <b>티빙 QUICK</b>`회차평균`: 방영당일 VOD 시청 UV<br>
-    - <b>티빙 VOD</b>`회차평균`: 방영일+1부터 +6까지 6days VOD UV<br>
-    - <b>디지털 조회/언급량</b> `회차총합`: 방영주차 (월~일)내 디지털 조회수 및 언급량의 총합<br>
-    - <b>화제성 점수</b> `회차평균`: 방영 기간내 주차별 화제성 점수의 평균<br><br>
-    - <b>앵커드라마 기준</b> : 토일 3%↑, 월화 2%↑
-    </div>
-            """,
-            unsafe_allow_html=True,
+    **지표 기준**
+    - **시청률** `회차평균`: 전국 기준 가구 / 타깃(2049) 시청률
+    - **티빙 LIVE** `회차평균`: 업데이트 예정
+    - **티빙 QUICK** `회차평균`: 방영당일 VOD 시청 UV
+    - **티빙 VOD** `회차평균`: 방영일+1부터 +6까지 **6days** VOD UV
+    - **디지털 조회/언급량** `회차총합`: 방영주차(월~일) 내 총합
+    - **화제성 점수** `회차평균`: 방영기간 주차별 화제성 점수 평균
+    - **앵커드라마 기준**: 토일 3%↑, 월화 2%↑
+            """.strip()
         )
+        st.markdown("</div>", unsafe_allow_html=True)
+
 
     with filter_cols[1]:
         prog_sel = st.multiselect(
