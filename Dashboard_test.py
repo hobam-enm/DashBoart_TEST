@@ -8,7 +8,8 @@ import datetime
 import re
 from typing import List, Dict, Any, Optional 
 import time, uuid
-from textwrap import dedent
+
+import textwrap
 import numpy as np
 import pandas as pd
 import plotly.express as px
@@ -1012,7 +1013,7 @@ def render_overview():
     with st.expander("ℹ️ 지표 기준 안내", expanded=False):
         st.markdown("<div class='gd-guideline'>", unsafe_allow_html=True)
         st.markdown(textwrap.dedent("""
-            **지표 기준**
+        **지표 기준**
         - **시청률** `회차평균`: 전국 기준 가구 / 타깃(2049) 시청률
         - **티빙 LIVE** `회차평균`: 업데이트 예정
         - **티빙 QUICK** `회차평균`: 방영당일 VOD 시청 UV
@@ -1021,7 +1022,6 @@ def render_overview():
         - **화제성 점수** `회차평균`: 방영기간 주차별 화제성 점수 평균
         - **앵커드라마 기준**: 토일 3%↑, 월화 2%↑
         """).strip())
-
         st.markdown("</div>", unsafe_allow_html=True)
 
 
@@ -1256,7 +1256,6 @@ def render_ip_detail():
         - **디지털 조회/언급량** `회차총합`: 방영주차(월~일) 내 총합
         - **화제성 점수** `회차평균`: 방영기간 주차별 화제성 점수 평균
         """).strip())
-
         st.markdown("</div>", unsafe_allow_html=True)
 
     ip_options = sorted(df_full["IP"].dropna().unique().tolist())
