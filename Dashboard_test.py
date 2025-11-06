@@ -137,268 +137,139 @@ if not check_password_with_token():
 # =====================================================
 
 st.markdown("""<style>
-/* === HOTFIX 2025-10-31 Title size + Box exceptions === */
-
-/* Boost title sizes globally */
-section[data-testid="stVerticalBlock"] h1,
-section[data-testid="stVerticalBlock"] h2,
-section[data-testid="stVerticalBlock"] h3 {
-    font-weight: 800;
-    letter-spacing: -0.02em;
-    line-height: 1.25;
-}
-section[data-testid="stVerticalBlock"] h1 { font-size: clamp(28px, 2.8vw, 38px); }
-section[data-testid="stVerticalBlock"] h2 { font-size: clamp(24px, 2.4vw, 34px); }
-section[data-testid="stVerticalBlock"] h3 { font-size: clamp(22px, 2.0vw, 30px); }
-
-/* .page-title helper if used */
-.page-title {
-    font-size: clamp(26px, 2.4vw, 34px);
-    font-weight: 800;
-    line-height: 1.25;
-    letter-spacing: -0.02em;
-    margin: 6px 0 14px 0;
-    display: inline-flex;
-    align-items: center;
-    gap: 10px;
+/* ====== Global Reset / Typography ====== */
+:root{
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+  --shadow-sm: 0 2px 8px rgba(0,0,0,.08);
+  --shadow-md: 0 8px 24px rgba(0,0,0,.12);
+  --shadow-lg: 0 18px 48px rgba(0,0,0,.18);
+  --brand-1: #0ea5e9; /* cyan-500 */
+  --brand-2: #22c55e; /* emerald-500 */
+  --brand-3: #a855f7; /* violet-500 */
+  --ink-1: #0f172a;  /* slate-900 */
+  --ink-2: #334155;  /* slate-700 */
+  --ink-3: #64748b;  /* slate-500 */
+  --card-bg: rgba(255,255,255,.84);
+  --glass-bg: linear-gradient(180deg, rgba(255,255,255,.88), rgba(255,255,255,.74));
+  --grad-hero: radial-gradient(1200px 600px at 10% -20%, rgba(34,197,94,.12), transparent 60%),
+               radial-gradient(900px 480px at 100% 10%, rgba(14,165,233,.14), transparent 60%);
 }
 
-/* Remove box background/border/shadow for KPI, titles, filters, mode switchers */
-div[data-testid="stVerticalBlockBorderWrapper"]:has(.kpi-card),
-div[data-testid="stVerticalBlockBorderWrapper"]:has(.page-title),
-div[data-testid="stVerticalBlockBorderWrapper"]:has(h1),
-div[data-testid="stVerticalBlockBorderWrapper"]:has(h2),
-div[data-testid="stVerticalBlockBorderWrapper"]:has(h3),
-div[data-testid="stVerticalBlockBorderWrapper"]:has(div[data-testid="stSelectbox"]),
-div[data-testid="stVerticalBlockBorderWrapper"]:has(div[data-testid="stMultiSelect"]),
-div[data-testid="stVerticalBlockBorderWrapper"]:has(div[data-testid="stSlider"]),
-div[data-testid="stVerticalBlockBorderWrapper"]:has(div[data-testid="stRadio"]),
-div[data-testid="stVerticalBlockBorderWrapper"]:has(.filter-group),
-div[data-testid="stVerticalBlockBorderWrapper"]:has(.mode-switch) {
-    background: transparent !important;
-    border: none !important;
-    box-shadow: none !important;
-    padding: 0 !important;
-    margin-bottom: 0.5rem !important;
+html, body {
+  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Apple SD Gothic Neo, Noto Sans KR, Arial, '맑은 고딕', sans-serif;
+  color: var(--ink-1);
 }
 
-/* --- 전체 앱 배경 --- */
-[data-testid="stAppViewContainer"] {
-    background-color: #f8f9fa; /* 매우 연한 회색 배경 */
+/* ====== Page Title (floating band) ====== */
+.page-title{
+  position: relative;
+  font-weight: 800;
+  font-size: 24px;
+  letter-spacing: -0.2px;
+  padding: 18px 18px;
+  margin: 0 0 14px 0;
+  border-radius: var(--radius-xl);
+  background: var(--glass-bg);
+  box-shadow: var(--shadow-sm);
+  backdrop-filter: blur(6px);
+}
+.page-title:before{
+  content: "";
+  position: absolute;
+  inset: -10px -10px auto -10px;
+  height: 60px;
+  z-index: -1;
+  background: var(--grad-hero);
+  filter: blur(6px);
+  opacity: .85;
+  border-radius: 28px;
 }
 
-/* --- st.container(border=True) 카드 스타일 --- */
-div[data-testid="stVerticalBlockBorderWrapper"] {
-    background-color: #ffffff;
-    border: 1px solid #e9e9e9;
-    border-radius: 10px;
-    box-shadow: 0 2px 5px rgba(0,0,0,0.03);
-    padding: 1.25rem 1.25rem 1.5rem 1.25rem;
-    margin-bottom: 1.5rem;
+/* ====== KPI Card (glass-lite + subtle hover) ====== */
+.kpi-card{
+  background: var(--glass-bg);
+  border-radius: var(--radius-xl);
+  padding: 14px 16px;
+  box-shadow: var(--shadow-sm);
+  transition: transform .18s ease, box-shadow .18s ease;
+  border: 1px solid rgba(15,23,42,.06);
+}
+.kpi-card:hover{
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+.kpi-title{
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: .2px;
+  color: var(--ink-3);
+  text-transform: uppercase;
+}
+.kpi-main{
+  display: flex; align-items: baseline; gap: 6px;
+  margin-top: 8px;
+}
+.kpi-value{
+  font-size: 26px;
+  font-weight: 800;
+  letter-spacing: -0.4px;
+}
+.kpi-sub{
+  font-size: 12px;
+  color: var(--ink-3);
 }
 
-/* --- Sidebar 배경/패딩 + 항상 펼침(폭 고정) --- */
-section[data-testid="stSidebar"] {
-    background: #ffffff;
-    border-right: 1px solid #e0e0e0;
-    padding-top: 1rem;
-    padding-left: 0.5rem;
-    padding-right: 0.5rem;
-    min-width:340px !important;
-    max-width:340px !important;
+/* ====== Section / Card ====== */
+.block-card{
+  background: var(--card-bg);
+  border-radius: var(--radius-xl);
+  padding: 18px 18px;
+  box-shadow: var(--shadow-sm);
+  border: 1px solid rgba(2,6,23,.06);
 }
-/* 사이드바 접힘 토글 버튼 숨김 */
-div[data-testid="collapsedControl"] { display:none !important; }
+.block-card:hover{ box-shadow: var(--shadow-md); }
 
-/* --- 로고 --- */
-.sidebar-logo{
-    font-size: 28px;
-    font-weight: 700;
-    color: #1a1a1a;
-    text-align: center;
-    margin-bottom: 10px;
-    padding-top: 10px;
+/* ====== Buttons / Pills (nav/filter) ====== */
+.btn, .pill{
+  display:inline-flex; align-items:center; gap:8px;
+  padding:8px 12px; border-radius: 999px;
+  background:#fff; border:1px solid rgba(15,23,42,.08);
+  box-shadow: var(--shadow-sm);
+  transition: box-shadow .16s ease, transform .16s ease, background .16s;
+  cursor:pointer;
 }
+.btn:hover, .pill:hover{ box-shadow: var(--shadow-md); transform: translateY(-1px); }
+.btn.icon{ padding:8px 10px; }
 
-/* --- (레거시) 네비게이션 앵커 아이템 --- */
-.nav-item{
-    display: block;
-    width: 100%;
-    padding: 12px 15px;
-    color: #333 !important;
-    background: #f1f3f5;
-    text-decoration: none !important;
-    font-weight: 600;
-    border-radius: 8px;
-    margin-bottom: 5px;
-    text-align: center;
-    transition: background-color 0.2s ease, color 0.2s ease;
+/* ====== AgGrid polish ====== */
+.ag-theme-streamlit .ag-root-wrapper{
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
 }
-.nav-item:hover{
-    background: #e9ecef;
-    color: #000 !important;
-    text-decoration: none;
-}
-.active{
-    background: #004a99;
-    color: #ffffff !important;
-    text-decoration: none;
-    font-weight: 700;
-}
-.active:hover{
-    background: #003d80;
-    color: #ffffff !important;
+.ag-theme-streamlit .ag-row-hover{ background: rgba(14,165,233,.06) !important; }
+.ag-theme-streamlit .ag-header-cell-label{ font-weight:700; letter-spacing:.2px; }
+.ag-theme-streamlit .ag-cell{ border-bottom: 1px dashed rgba(2,6,23,.06) !important; }
+
+/* ====== Plotly container ====== */
+.plotly-chart{
+  background: #fff;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  padding: 4px;
 }
 
-/* --- KPI 카드 --- */
-.kpi-card {
-  background: #ffffff;
-  border: 1px solid #e9e9e9;
-  border-radius: 10px;
-  padding: 20px 15px;
-  text-align: center;
-  box-shadow: 0 2px 5px rgba(0,0,0,0.03);
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-}
-.kpi-title { 
-    font-size: 15px; 
-    font-weight: 600; 
-    margin-bottom: 10px; 
-    color: #444; 
-}
-.kpi-value { 
-    font-size: 28px; 
-    font-weight: 700; 
-    color: #000; 
-    line-height: 1.2;
+/* ====== Caption / Footer ====== */
+.caption-ghost{
+  color: var(--ink-3);
+  opacity: .9;
 }
 
-/* --- KPI 서브 라인 --- */
-.kpi-subwrap { margin-top: 10px; line-height: 1.4; }
-.kpi-sublabel { font-size: 12px; font-weight: 500; color: #555; letter-spacing: 0.1px; margin-right: 6px; }
-.kpi-substrong { font-size: 14px; font-weight: 700; color: #111; }
-.kpi-subpct { font-size: 14px; font-weight: 700; }
-
-/* --- AgGrid 공통 --- */
-.ag-theme-streamlit { font-size: 13px; }
-.ag-theme-streamlit .ag-root-wrapper { border-radius: 8px; }
-.ag-theme-streamlit .ag-row-hover { background-color: #f5f8ff !important; }
-.ag-theme-streamlit .ag-header-cell-label { justify-content: center !important; }
-.ag-theme-streamlit .centered-header .ag-header-cell-label { justify-content: center !important; }
-.ag-theme-streamlit .centered-header .ag-sort-indicator-container { margin-left: 4px; }
-.ag-theme-streamlit .bold-header .ag-header-cell-text { 
-    font-weight: 700 !important; 
-    font-size: 13px; 
-    color: #111;
-}
-
-/* --- 페이지 내 섹션 타이틀 --- */
-.sec-title{ 
-    font-size: 20px; 
-    font-weight: 700; 
-    color: #111; 
-    margin: 0 0 10px 0;
-    padding-bottom: 0;
-    border-bottom: none;
-}
-
-/* --- Streamlit 기본 요소 미세 조정 --- */
-div[data-testid="stMultiSelect"], div[data-testid="stSelectbox"] { margin-top: -10px; }
-h3 { margin-top: -15px; margin-bottom: 10px; }
-h4 { font-weight: 700; color: #111; margin-top: 0rem; margin-bottom: 0.5rem; }
-hr { margin: 1.5rem 0; background-color: #e0e0e0; }
-
-/* =====================================================
-   버튼 기반 사이드바 네비게이션 스킨 (리로드 없는 내비)
-   기존 .nav-item 룩&필을 버튼에 이식
-   ===================================================== */
-section[data-testid="stSidebar"] .block-container { padding-top: 0.75rem; }
-
-/* 공통 버튼 스타일 */
-section[data-testid="stSidebar"] .stButton > button {
-  border-radius: 8px;
-  border: 1px solid var(--outline, #DCDCDC);
-  background: #f1f3f5;
-  color: #333;
-  font-weight: 600;
-  padding: 12px 15px;
-  margin: 6px 0 0 0;
-  box-shadow: none;
-  width: 100%;
-  transition: background-color .12s ease-in-out, border-color .12s ease-in-out, color .12s ease-in-out;
-}
-
-/* hover */
-section[data-testid="stSidebar"] .stButton > button:hover {
-  border-color: #B9B9B9;
-  background: #e9ecef;
-  color: #000;
-}
-
-/* 비활성(secondary) */
-section[data-testid="stSidebar"] .stButton [data-testid="baseButton-secondary"] {
-  border: 1px solid #E5E7EB;
-  background: #f1f3f5;
-  color: #333;
-}
-
-/* 활성(Primary) — 기존 .active 느낌 */
-section[data-testid="stSidebar"] .stButton [data-testid="baseButton-primary"] {
-  background: #004a99;
-  color: #fff;
-  border: 1px solid #004a99;
-  box-shadow: 0 4px 10px rgba(0, 74, 153, 0.25);
-}
-
-/* 활성 hover */
-section[data-testid="stSidebar"] .stButton [data-testid="baseButton-primary"]:hover {
-  filter: brightness(1.02);
-  background: #003d80;
-  border-color: #003d80;
-}
-
-/* 사이드바 구분선 */
-.sidebar-hr { margin: 8px 0 12px 0; border-top: 1px solid #E5E7EB; }
-
-/* ==== Sidebar Gradient Title: 1줄, 줄바꿈 없이, 폭 좁아도 예쁘게 ==== */
-.page-title-wrap{
-  display:flex; align-items:center; gap:8px; margin:4px 0 10px 0;
-}
-.page-title-emoji{ font-size:20px; line-height:1; }
-.page-title-main{
-  /* clamp(min, preferred, max) → 사이드바가 좁아도 자연스레 줄어듦 */
-  font-size: clamp(18px, 2.2vw, 24px);
-  font-weight: 800; letter-spacing:-0.2px; line-height:1.15;
-  background: linear-gradient(90deg,#6A5ACD 0%, #A663CC 40%, #FF7A8A 75%, #FF8A3D 100%);
-  -webkit-background-clip:text; background-clip:text; color:transparent;
-  white-space: nowrap;             /* 줄바꿈 금지 */
-  overflow: hidden;                /* 넘치면 숨김 */
-  text-overflow: ellipsis;         /* … 처리 */
-  max-width: 100%;                 /* 사이드바 폭에 맞춰 자르기 */
-}
-
-/* 사이드바 버튼도 약간 컴팩트하게(필요 시) */
-section[data-testid="stSidebar"] .stButton > button{
-  padding: 10px 12px; font-weight: 600;
-}
-
-.kpi-card{border-radius:16px;border:1px solid #e7ebf3;background:#fff;padding:12px 14px;
-                box-shadow:0 1px 2px rgba(0,0,0,0.04)}
-      .kpi-title{font-size:13px;color:#5b6b83;margin-bottom:4px;font-weight:600}
-      .kpi-value{font-weight:800;letter-spacing:-0.2px}
-      .centered-header .ag-header-cell-label{justify-content:center;}
-      .bold-header .ag-header-cell-text{font-weight:700;}
-
-.kpi-card{border-radius:16px;border:1px solid #e7ebf3;background:#fff;padding:12px 14px;
-                box-shadow:0 1px 2px rgba(0,0,0,0.04)}
-      .kpi-title{font-size:13px;color:#5b6b83;margin-bottom:4px;font-weight:600}
-      .kpi-value{font-weight:800;letter-spacing:-0.2px}
-      .centered-header .ag-header-cell-label{justify-content:center;}
-      .bold-header .ag-header-cell-text{font-weight:700;}
-
+/* ====== Utilities ====== */
+.mt-1{ margin-top: 4px; } .mt-2{ margin-top: 8px; } .mt-3{ margin-top: 12px; }
+.mb-1{ margin-bottom: 4px; } .mb-2{ margin-bottom: 8px; } .mb-3{ margin-bottom: 12px; }
+.round-xl{ border-radius: var(--radius-xl); }
+.elev-1{ box-shadow: var(--shadow-sm); } .elev-2{ box-shadow: var(--shadow-md); }
 </style>""", unsafe_allow_html=True)
 
 # ===== 네비게이션 아이템 정의 (v2.0) =====
