@@ -1117,9 +1117,9 @@ def render_overview():
     tving_quick= avg_of_ip_tving_epSum_mean("TVING QUICK")
     tving_vod  = avg_of_ip_tving_epSum_mean("TVING VOD")
     digital_view = avg_of_ip_sums("조회수")
-    digital_buzz = avg_of_ip_sums("언급량")
+    digital_buzz = avg_of_ip_sums("화제성점수")
     f_score      = avg_of_ip_means("F_Score")
-    fundex_top1 = count_ip_with_min1("F_Total")
+    fundex_top1 = count_ip_with_min1("F_Score")
     anchor_total = count_anchor_dramas()
 
     kpi(c1, "🎯 타깃 시청률", fmt(t_rating, digits=3))
@@ -1185,8 +1185,8 @@ def render_overview():
             티빙QUICK=("value", lambda x: x[(f.loc[x.index, "매체"]=="TVING QUICK") & (f.loc[x.index,"metric"]=="시청인구")].sum()),
             티빙VOD_6Days=("value", lambda x: x[(f.loc[x.index, "매체"]=="TVING VOD") & (f.loc[x.index,"metric"]=="시청인구")].sum()),
             디지털조회수=("value", lambda x: x[(f.loc[x.index,"metric"]=="조회수") & ((f.loc[x.index,"매체"]!="유튜브") | (f.loc[x.index,"세부속성1"].isin(["PGC","UGC"])) )].sum()),
-            디지털언급량=("value", lambda x: x[(f.loc[x.index,"metric"]=="언급량")].sum()),
-            화제성순위=("value", lambda x: x[(f.loc[x.index,"metric"]=="F_Total")].min()),
+            디지털언급량=("value", lambda x: x[(f.loc[x.index,"metric"]=="화제성점수")].sum()),
+            화제성점수=("value", lambda x: x[(f.loc[x.index,"metric"]=="F_Score")].min()),
             화제성점수=("value", lambda x: x[(f.loc[x.index,"metric"]=="F_Score")].mean()) # 추가된 부분
         )
         .reset_index()
@@ -1226,7 +1226,7 @@ def render_overview():
     gb.configure_column('티빙VOD_6Days', valueFormatter=fmt_thousands)
     gb.configure_column('디지털조회수', valueFormatter=fmt_thousands)
     gb.configure_column('디지털언급량', valueFormatter=fmt_thousands)
-    gb.configure_column('화제성순위', valueFormatter=fmt_rank)
+    gb.configure_column('화제성점수', valueFormatter=fmt_rank)
     gb.configure_column('화제성점수', valueFormatter=fmt_thousands) # 추가된 부분
 
     grid_options = gb.build()
@@ -1392,10 +1392,10 @@ def render_ip_detail():
     val_live = mean_of_ip_episode_sum(f, "시청인구", ["TVING LIVE"])
     val_quick = mean_of_ip_episode_sum(f, "시청인구", ["TVING QUICK"])
     val_vod = mean_of_ip_episode_sum(f, "시청인구", ["TVING VOD"])
-    val_buzz = mean_of_ip_sums(f, "언급량")
+    val_buzz = mean_of_ip_sums(f, "화제성점수")
     val_view = mean_of_ip_sums(f, "조회수")
 
-    # ▶ 화제성 메트릭 (명시 고정: 순위=F_Total, 점수=F_score)
+    # ▶ 화제성 메트릭 (명시 고정: 순위=F_Score, 점수=F_score)
     def _min_of_ip_metric(df_src: pd.DataFrame, metric_name: str) -> float | None:
         sub = _metric_filter(df_src, metric_name).copy()
         if sub.empty:
@@ -1429,7 +1429,7 @@ def render_ip_detail():
         # 3) 단순 평균
         return float(sub["val"].mean()) if not sub["val"].empty else None
 
-    val_topic_min = _min_of_ip_metric(f, "F_Total")
+    val_topic_min = _min_of_ip_metric(f, "F_Score")
     val_topic_avg = _mean_like_rating(f, "F_score")
 
     base_T = mean_of_ip_episode_mean(base, "T시청률")
@@ -1437,7 +1437,7 @@ def render_ip_detail():
     base_live = mean_of_ip_episode_sum(base, "시청인구", ["TVING LIVE"])
     base_quick = mean_of_ip_episode_sum(base, "시청인구", ["TVING QUICK"])
     base_vod = mean_of_ip_episode_sum(base, "시청인구", ["TVING VOD"])
-    base_buzz = mean_of_ip_sums(base, "언급량")
+    base_buzz = mean_of_ip_sums(base, "화제성점수")
     base_view = mean_of_ip_sums(base, "조회수")
 
     # ▶ 화제성 베이스값
@@ -1466,7 +1466,7 @@ def render_ip_detail():
             raise ValueError("unknown mode")
         return pd.to_numeric(s, errors="coerce").dropna()
 
-    base_topic_min_series = _series_ip_metric(base, "F_Total", mode="min")
+    base_topic_min_series = _series_ip_metric(base, "F_Score", mode="min")
     base_topic_min = float(base_topic_min_series.mean()) if not base_topic_min_series.empty else None
     base_topic_avg = _mean_like_rating(base, "F_score")
 
@@ -1493,9 +1493,9 @@ def render_ip_detail():
     rk_live  = _rank_within_program(base, "시청인구", ip_selected, val_live,  mode="ep_sum_mean", media=["TVING LIVE"])
     rk_quick = _rank_within_program(base, "시청인구", ip_selected, val_quick, mode="ep_sum_mean", media=["TVING QUICK"])
     rk_vod   = _rank_within_program(base, "시청인구", ip_selected, val_vod,   mode="ep_sum_mean", media=["TVING VOD"])
-    rk_buzz  = _rank_within_program(base, "언급량",   ip_selected, val_buzz,  mode="sum",        media=None)
+    rk_buzz  = _rank_within_program(base, "화제성점수",   ip_selected, val_buzz,  mode="sum",        media=None)
     rk_view  = _rank_within_program(base, "조회수",   ip_selected, val_view,  mode="sum",        media=None)
-    rk_fmin  = _rank_within_program(base, "F_Total",  ip_selected, val_topic_min, mode="min",   media=None, low_is_good=True)
+    rk_fmin  = _rank_within_program(base, "F_Score",  ip_selected, val_topic_min, mode="min",   media=None, low_is_good=True)
     rk_fscr  = _rank_within_program(base, "F_score",  ip_selected, val_topic_avg, mode="mean",  media=None, low_is_good=False)
 
     # --- KPI 렌더 유틸 ---
@@ -1690,7 +1690,7 @@ def render_ip_detail():
 
     with cD:
         st.markdown("<div class='sec-title'>💬 디지털 언급량</div>", unsafe_allow_html=True)
-        dbuzz = f[f["metric"] == "언급량"].copy()
+        dbuzz = f[f["metric"] == "화제성점수"].copy()
         if not dbuzz.empty:
             if has_week_col and dbuzz["주차"].notna().any():
                 order = (dbuzz[["주차", "주차_num"]].dropna().drop_duplicates().sort_values("주차_num")["주차"].tolist())
@@ -1723,7 +1723,7 @@ def render_ip_detail():
     cE, cF = st.columns(2)
     with cE:
         st.markdown("<div class='sec-title'>🔥 화제성 지수</div>", unsafe_allow_html=True)
-        fdx = _metric_filter(f, "F_Total").copy()
+        fdx = _metric_filter(f, "F_Score").copy()
         if not fdx.empty:
             fdx["순위"] = pd.to_numeric(fdx["value"], errors="coerce").round().astype("Int64")
 
@@ -2337,7 +2337,7 @@ def get_kpi_data_for_all_ips(df_all: pd.DataFrame) -> pd.DataFrame:
 
     # 4) 디지털 합산(단순 합) — 0은 이미 NaN으로 제거됨
     kpi_view = df[(df["metric"] == "조회수") & ((df["매체"]!="유튜브") | (df["세부속성1"].isin(["PGC","UGC"])) )].groupby("IP")["value"].sum().rename("디지털 조회수")
-    kpi_buzz = df[df["metric"] == "언급량"].groupby("IP")["value"].sum().rename("디지털 언급량")
+    kpi_buzz = df[df["metric"] == "화제성점수"].groupby("IP")["value"].sum().rename("디지털 언급량")
 
     # 통합 & 백분위
     kpi_df = pd.concat([kpi_t_rating, kpi_h_rating, kpi_vod, kpi_livequick, kpi_view, kpi_buzz], axis=1)
@@ -2354,9 +2354,9 @@ def get_agg_kpis_for_ip_page4(df_ip: pd.DataFrame) -> Dict[str, float | None]:
     kpis["TVING VOD"] = mean_of_ip_episode_sum(df_ip, "시청인구", ["TVING VOD"])
     kpis["TVING 라이브+QUICK"] = mean_of_ip_episode_sum(df_ip, "시청인구", ["TVING LIVE", "TVING QUICK"])
     kpis["디지털 조회수"] = mean_of_ip_sums(df_ip, "조회수")
-    kpis["디지털 언급량"] = mean_of_ip_sums(df_ip, "언급량")
+    kpis["디지털 언급량"] = mean_of_ip_sums(df_ip, "화제성점수")
     
-    fundex = df_ip[df_ip["metric"] == "F_Total"]["value"]
+    fundex = df_ip[df_ip["metric"] == "F_Score"]["value"]
     kpis["화제성 순위"] = fundex.min() if not fundex.empty else None
     kpis["화제성 순위(평균)"] = fundex.mean() if not fundex.empty else None 
 
@@ -2475,7 +2475,7 @@ def render_ip_vs_group_comparison(
             theta=score_ip_series.index.map({ 
                 "T시청률": "타깃", "H시청률": "가구", 
                 "TVING 라이브+QUICK": "TVING L+Q", "TVING VOD": "TVING VOD", 
-                "디지털 조회수": "조회수", "디지털 언급량": "언급량"
+                "디지털 조회수": "조회수", "디지털 언급량": "화제성점수"
             }),
             fill='toself', name=ip, line=dict(color="#d93636") 
         ))
@@ -2484,7 +2484,7 @@ def render_ip_vs_group_comparison(
             theta=score_group_series.index.map({
                  "T시청률": "타깃", "H시청률": "가구", 
                  "TVING 라이브+QUICK": "TVING L+Q", "TVING VOD": "TVING VOD", 
-                 "디지털 조회수": "조회수", "디지털 언급량": "언급량"
+                 "디지털 조회수": "조회수", "디지털 언급량": "화제성점수"
             }),
             fill='toself', name=group_name, line=dict(color="#2a61cc") 
         ))
@@ -2707,7 +2707,7 @@ def render_ip_vs_ip_comparison(df_all: pd.DataFrame, ip1: str, ip2: str, kpi_per
     score2 = kpi_percentiles.loc[ip2][radar_metrics].reset_index().rename(columns={'index': 'metric', ip2: 'score'})
     score2["IP"] = ip2
     radar_data = pd.concat([score1, score2])
-    radar_data["metric_label"] = radar_data["metric"].replace({"T시청률": "타깃", "H시청률": "가구", "TVING 라이브+QUICK": "TVING L+Q", "TVING VOD": "TVING VOD", "디지털 조회수": "조회수", "디지털 언급량": "언급량"})
+    radar_data["metric_label"] = radar_data["metric"].replace({"T시청률": "타깃", "H시청률": "가구", "TVING 라이브+QUICK": "TVING L+Q", "TVING VOD": "TVING VOD", "디지털 조회수": "조회수", "디지털 언급량": "화제성점수"})
 
     fig_radar = px.line_polar(radar_data, r="score", theta="metric_label", line_close=True, color="IP", 
                               color_discrete_map={ip1: "#d93636", ip2: "#2a61cc"}, range_r=[0, 100], markers=True)
@@ -2737,8 +2737,8 @@ def render_ip_vs_ip_comparison(df_all: pd.DataFrame, ip1: str, ip2: str, kpi_per
 
     with c_trend2:
         st.markdown("###### 🔥 화제성 순위 (주차별)")
-        f_trend1 = df1[df1["metric"] == "F_Total"].groupby("주차")["value"].min().reset_index(); f_trend1["IP"] = ip1
-        f_trend2 = df2[df2["metric"] == "F_Total"].groupby("주차")["value"].min().reset_index(); f_trend2["IP"] = ip2
+        f_trend1 = df1[df1["metric"] == "F_Score"].groupby("주차")["value"].min().reset_index(); f_trend1["IP"] = ip1
+        f_trend2 = df2[df2["metric"] == "F_Score"].groupby("주차")["value"].min().reset_index(); f_trend2["IP"] = ip2
         f_trend_data = pd.concat([f_trend1, f_trend2])
         
         if not f_trend_data.empty:
@@ -2904,7 +2904,7 @@ def filter_data_for_episode_comparison(
             if not df_vod.empty:
                 result_df = df_vod.groupby("IP")["value"].sum().reset_index()
 
-        elif selected_metric in ["조회수", "언급량"]:
+        elif selected_metric in ["조회수", "화제성점수"]:
             filtered = base_filtered[base_filtered["metric"] == selected_metric]
             if selected_metric == "조회수" and not filtered.empty:
                 # 규칙: 유튜브일 경우 세부속성1이 PGC/UGC만 포함
@@ -3056,7 +3056,7 @@ def render_episode():
         return
 
     # --- 주요 지표 목록 ---
-    key_metrics = ["T시청률", "H시청률", "TVING 라이브+QUICK", "TVING VOD", "조회수", "언급량"]
+    key_metrics = ["T시청률", "H시청률", "TVING 라이브+QUICK", "TVING VOD", "조회수", "화제성점수"]
     filter_desc = " (" + ", ".join(group_filter_applied) + ")" if group_filter_applied else " (전체 IP)"
     st.markdown(f"#### {selected_episode} 성과 비교{filter_desc} (기준 IP: {selected_base_ip})")
     st.caption("선택된 IP 그룹의 성과를 보여줍니다. 기준 IP는 붉은색으로 표시됩니다.")
@@ -3585,7 +3585,7 @@ def render_growth_score_digital():
     사용 메트릭(고정):
       - 조회수: 회차합 시계열 → 절대(평균), 상승(회귀 기울기)
       - 언급량: 회차합 시계열 → 절대(평균), 상승(회귀 기울기)
-      - F_Total(화제성 순위): 낮을수록 좋음 → 부호 반전 후 **절대만** 등급화(상승은 미사용)
+      - F_Score(화제성 순위): 낮을수록 좋음 → 부호 반전 후 **절대만** 등급화(상승은 미사용)
     """
     import numpy as np
     import pandas as pd
@@ -3609,8 +3609,7 @@ def render_growth_score_digital():
     # type: "sum" → 회차합, "rank_inv" →(낮을수록 좋음) 평균 후 -1 곱해 상향화
     METRICS = [
         ("조회수",     "조회수",   "sum",      True),
-        ("언급량",     "언급량",   "sum",      True),
-        ("화제성순위", "F_Total", "rank_inv", False),  # ← 상승 미사용
+        ("화제성점수", "F_Score", "sum",      True),
     ]
 
     ips = sorted(df_all["IP"].dropna().unique().tolist())
@@ -3648,9 +3647,7 @@ def render_growth_score_digital():
     with st.expander("ℹ️ 지표 기준 안내", expanded=False):
         st.markdown("""
 **디지털 지표 정의(고정)**
-- **조회수, 언급량**: 회차별 합(에피소드 단위)을 사용 → 1~N회 집계 시계열의 평균/회귀
-- **F_Total(화제성 순위)**: 값이 **낮을수록 우수** → 평균 산출 전 `-1` 곱해 상향 스케일로 변환  
-  *(※ 화제성은 **상승스코어 미사용**, 절대스코어만 등급화)*
+- **조회수, 화제성점수(F_Score)**: 회차별 합(에피소드 단위)을 사용 → 1~N회 집계 시계열의 평균/회귀
 
 **등급 체계(공통)**
 - **절대값 등급**: IP 간 백분위 20% 단위 `S/A/B/C/D`
@@ -3790,7 +3787,7 @@ def render_growth_score_digital():
     _grade_card(card_cols[1], "조회수 등급",         focus["조회수_종합"])
     _grade_card(card_cols[2], "언급량 등급",         focus["언급량_종합"])
     # 화제성은 '절대'만 표기
-    _grade_card(card_cols[3], "화제성(순위) 절대",   focus["화제성순위_절대등급"])
+    _grade_card(card_cols[3], "화제성(순위) 절대",   focus["화제성점수_절대등급"])
     _grade_card(card_cols[4], " ",  " ")  # 자리 균형용(필요 시 다른 지표 대체 가능)
 
     st.markdown("<div style='height:16px'></div>", unsafe_allow_html=True)
@@ -3957,7 +3954,7 @@ def render_growth_score_digital():
     # ---------- [전체표] ----------
     table = base[[
         "IP","종합_절대등급","종합_상승등급","종합등급",
-        "조회수_종합","언급량_종합","화제성순위_절대등급"
+        "조회수_종합","언급량_종합","화제성점수_절대등급"
     ]].copy()
 
     # 정렬 키: 종합 절대 → 종합 상승 → IP
@@ -3967,12 +3964,12 @@ def render_growth_score_digital():
 
     # 화면 표시 컬럼(화제성은 절대만 노출)
     table_view = table[[
-        "IP","종합등급","조회수_종합","언급량_종합","화제성순위_절대등급"
+        "IP","종합등급","조회수_종합","언급량_종합","화제성점수_절대등급"
     ]].rename(columns={
         "종합등급":"종합",
         "조회수_종합":"조회수",
-        "언급량_종합":"언급량",
-        "화제성순위_절대등급":"화제성(절대)"
+        "언급량_종합":"화제성점수",
+        "화제성점수_절대등급":"화제성점수"
     })
 
     from st_aggrid import GridOptionsBuilder, AgGrid, GridUpdateMode, JsCode
@@ -3993,7 +3990,7 @@ def render_growth_score_digital():
                                 headerClass='centered-header bold-header',
                                 cellStyle={'textAlign':'center'})
     gb.configure_column("IP", pinned='left', cellStyle={'textAlign':'left','fontWeight':'700'})
-    for colname in ["종합","조회수","언급량","화제성(절대)"]:
+    for colname in ["종합","조회수","화제성점수"]:
         gb.configure_column(colname, cellStyle=grade_cell, width=120)
     grid_options = gb.build()
 
