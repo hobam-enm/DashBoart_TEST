@@ -24,7 +24,7 @@ from google.oauth2.service_account import Credentials
 #region [ 1-0. 페이지 설정 — 반드시 첫 번째 Streamlit 명령 ]
 # =====================================================
 st.set_page_config(
-    page_title="(TEST)Drama Dashboard",
+    page_title="Drama Dashboard",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -138,6 +138,15 @@ if not check_password_with_token():
 
 st.markdown("""
 <style>
+/* Hover foundation for floating cards */
+div[data-testid="stVerticalBlockBorderWrapper"]{
+    transition: transform .18s ease, box-shadow .18s ease !important;
+    will-change: transform, box-shadow;
+    overflow: visible !important;
+    position: relative;
+    pointer-events: auto;
+}
+
 /* === HOTFIX 2025-10-31 Title size + Box exceptions === */
 
 /* Boost title sizes globally */
@@ -195,6 +204,13 @@ er lift for floating cards */
 div[data-testid="stVerticalBlockBorderWrapper"]:hover{
     transform: translateY(-2px);
     box-shadow: 0 14px 36px rgba(16, 24, 40, 0.14), 0 4px 12px rgba(16, 24, 40, 0.08);
+}
+
+/* Hover lift for floating cards (strong) */
+div[data-testid="stVerticalBlockBorderWrapper"]:hover{
+    transform: translate3d(0, -2px, 0) !important;
+    box-shadow: 0 14px 36px rgba(16, 24, 40, 0.14), 0 4px 12px rgba(16, 24, 40, 0.08) !important;
+    z-index: 2;
 }
 </style>
 """, unsafe_allow_html=True)
