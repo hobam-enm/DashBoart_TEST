@@ -2455,7 +2455,7 @@ def render_ip_vs_group_comparison(
     # --- 2. 성과 시그니처 (Radar) + 주요 지표 편차 (Bar) ---
     st.markdown(f"#### 2. 성과 포지셔닝 ({group_name} 대비)")
     
-    col_radar = st.columns(1) 
+    (col_radar,) = st.columns(1) 
 
     # 왼쪽: Radar Chart
     with col_radar:
