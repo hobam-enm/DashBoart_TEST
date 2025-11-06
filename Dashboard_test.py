@@ -997,7 +997,15 @@ def render_overview():
     with filter_cols[0]:
         st.markdown("### 📊 Overview")
     with st.expander("ℹ️ 지표 기준 안내", expanded=False):
-        st.markdown("내용 기입 필요")
+                st.markdown("""
+    **지표 기준**
+    - **시청률**'회차평균': 전국 기준 가구 / 타깃(2049) 시청률
+    - **티빙 LIVE**'회차평균': 업데이트 예정
+    - **티빙 QUICK**'회차평균': 방영당일 VOD 시청 UV
+    - **티빙 VOD**'회차평균': 방영일+1부터 +6까지 6days VOD UV
+    - **디지털 조회/언급량 '회차총합': 방영주차 (월~일)내 디지털 조회수 및 언급량의 총합
+    - **화제성 점수** '회차평균': 방영 기간내 주차별 화제성 점수의 평균
+            """)
 
     with filter_cols[1]:
         prog_sel = st.multiselect(
