@@ -455,56 +455,36 @@ def get_episode_options(df: pd.DataFrame) -> List[str]:
 st.markdown("""
 <style>
 /* 지표기준안내 전용 타이포 + 인라인코드 스타일 */
-st.markdown("""
-<style>
 .gd-guideline { font-size: 13px; line-height: 1.35; }
 .gd-guideline ul { margin: .2rem 0 .6rem 1.1rem; padding: 0; }
 .gd-guideline li { margin: .15rem 0; }
-</style>
-""", unsafe_allow_html=True)
 .gd-guideline b, .gd-guideline strong { font-weight: 600; }
 /* 백틱(`...`) 인라인 코드 느낌: 작고, 살짝 녹색 칩 */
 .gd-guideline code{
-st.markdown("""
-<style>
   background: rgba(16,185,129,.10);
   color: #16a34a;
   padding: 1px 6px;
   border-radius: 6px;
   font-size: .92em;   /* 본문보다 더 작게 */
-</style>
-""", unsafe_allow_html=True)
 }
 /* --- 전체 앱 배경 --- */
 [data-testid="stAppViewContainer"] {
-st.markdown("""
-<style>
     background-color: #f8f9fa; /* 매우 연한 회색 배경 */
-</style>
-""", unsafe_allow_html=True)
 }
 
 /* --- st.container(border=True) 카드 스타일 --- */
 div[data-testid="stVerticalBlockBorderWrapper"] {
-st.markdown("""
-<style>
     background-color: #ffffff;
     border: 1px solid #e9e9e9;
     border-radius: 10px;
     box-shadow: 0 2px 5px rgba(0,0,0,0.03);
     padding: 1.25rem 1.25rem 1.5rem 1.25rem;
-</style>
-""", unsafe_allow_html=True)
     margin-bottom: 1.5rem;
 }
 
 /* --- Sidebar 배경/패딩 + 항상 펼침(폭 고정) --- */
 section[data-testid="stSidebar"] {
-st.markdown("""
-<style>
     background: #ffffff;
-</style>
-""", unsafe_allow_html=True)
     border-right: 1px solid #e0e0e0;
     padding-top: 1rem;
     padding-left: 0.5rem;
@@ -517,17 +497,9 @@ div[data-testid="collapsedControl"] { display:none !important; }
 
 /* --- 로고 --- */
 .sidebar-logo{
-st.markdown("""
-<style>
     font-size: 28px;
-</style>
-""", unsafe_allow_html=True)
     font-weight: 700;
-st.markdown("""
-<style>
     color: #1a1a1a;
-</style>
-""", unsafe_allow_html=True)
     text-align: center;
     margin-bottom: 10px;
     padding-top: 10px;
@@ -537,151 +509,83 @@ st.markdown("""
 .nav-item{
     display: block;
     width: 100%;
-st.markdown("""
-<style>
     padding: 12px 15px;
     color: #333 !important;
     background: #f1f3f5;
-</style>
-""", unsafe_allow_html=True)
     text-decoration: none !important;
     font-weight: 600;
-st.markdown("""
-<style>
     border-radius: 8px;
-</style>
-""", unsafe_allow_html=True)
     margin-bottom: 5px;
     text-align: center;
-st.markdown("""
-<style>
     transition: background-color 0.2s ease, color 0.2s ease;
-</style>
-""", unsafe_allow_html=True)
 }
 .nav-item:hover{
-st.markdown("""
-<style>
     background: #e9ecef;
     color: #000 !important;
-</style>
-""", unsafe_allow_html=True)
     text-decoration: none;
 }
 .active{
-st.markdown("""
-<style>
     background: #004a99;
     color: #ffffff !important;
-</style>
-""", unsafe_allow_html=True)
     text-decoration: none;
     font-weight: 700;
 }
 .active:hover{
-st.markdown("""
-<style>
     background: #003d80;
     color: #ffffff !important;
-</style>
-""", unsafe_allow_html=True)
 }
 
 /* --- KPI 카드 --- */
 .kpi-card {
-st.markdown("""
-<style>
   background: #ffffff;
   border: 1px solid #e9e9e9;
   border-radius: 10px;
   padding: 20px 15px;
-</style>
-""", unsafe_allow_html=True)
   text-align: center;
-st.markdown("""
-<style>
   box-shadow: 0 2px 5px rgba(0,0,0,0.03);
-</style>
-""", unsafe_allow_html=True)
   height: 100%;
   display: flex;
   flex-direction: column;
   justify-content: center;
 }
 .kpi-title { 
-st.markdown("""
-<style>
     font-size: 15px; 
-</style>
-""", unsafe_allow_html=True)
     font-weight: 600; 
     margin-bottom: 10px; 
-st.markdown("""
-<style>
     color: #444; 
-</style>
-""", unsafe_allow_html=True)
 }
 .kpi-value { 
-st.markdown("""
-<style>
     font-size: 28px; 
-</style>
-""", unsafe_allow_html=True)
     font-weight: 700; 
-st.markdown("""
-<style>
     color: #000; 
     line-height: 1.2;
-</style>
-""", unsafe_allow_html=True)
 }
 
 /* --- KPI 서브 라인 --- */
-st.markdown("""
-<style>
 .kpi-subwrap { margin-top: 10px; line-height: 1.4; }
 .kpi-sublabel { font-size: 12px; font-weight: 500; color: #555; letter-spacing: 0.1px; margin-right: 6px; }
 .kpi-substrong { font-size: 14px; font-weight: 700; color: #111; }
 .kpi-subpct { font-size: 14px; font-weight: 700; }
-</style>
-""", unsafe_allow_html=True)
 
 /* --- AgGrid 공통 --- */
-st.markdown("""
-<style>
 .ag-theme-streamlit { font-size: 13px; }
 .ag-theme-streamlit .ag-root-wrapper { border-radius: 8px; }
 .ag-theme-streamlit .ag-row-hover { background-color: #f5f8ff !important; }
-</style>
-""", unsafe_allow_html=True)
 .ag-theme-streamlit .ag-header-cell-label { justify-content: center !important; }
 .ag-theme-streamlit .centered-header .ag-header-cell-label { justify-content: center !important; }
 .ag-theme-streamlit .centered-header .ag-sort-indicator-container { margin-left: 4px; }
 .ag-theme-streamlit .bold-header .ag-header-cell-text { 
     font-weight: 700 !important; 
-st.markdown("""
-<style>
     font-size: 13px; 
     color: #111;
-</style>
-""", unsafe_allow_html=True)
 }
 
 /* --- 페이지 내 섹션 타이틀 --- */
 .sec-title{ 
-st.markdown("""
-<style>
     font-size: 20px; 
-</style>
-""", unsafe_allow_html=True)
     font-weight: 700; 
-st.markdown("""
-<style>
     color: #111; 
     margin: 0 0 10px 0;
-</style>
-""", unsafe_allow_html=True)
     padding-bottom: 0;
     border-bottom: none;
 }
@@ -689,12 +593,8 @@ st.markdown("""
 /* --- Streamlit 기본 요소 미세 조정 --- */
 div[data-testid="stMultiSelect"], div[data-testid="stSelectbox"] { margin-top: -10px; }
 h3 { margin-top: -15px; margin-bottom: 10px; }
-st.markdown("""
-<style>
 h4 { font-weight: 700; color: #111; margin-top: 0rem; margin-bottom: 0.5rem; }
 hr { margin: 1.5rem 0; background-color: #e0e0e0; }
-</style>
-""", unsafe_allow_html=True)
 
 /* =====================================================
    버튼 기반 사이드바 네비게이션 스킨 (리로드 없는 내비)
@@ -704,81 +604,49 @@ section[data-testid="stSidebar"] .block-container { padding-top: 0.75rem; }
 
 /* 공통 버튼 스타일 */
 section[data-testid="stSidebar"] .stButton > button {
-st.markdown("""
-<style>
   border-radius: 8px;
   border: 1px solid var(--outline, #DCDCDC);
   background: #f1f3f5;
   color: #333;
-</style>
-""", unsafe_allow_html=True)
   font-weight: 600;
-st.markdown("""
-<style>
   padding: 12px 15px;
   margin: 6px 0 0 0;
   box-shadow: none;
-</style>
-""", unsafe_allow_html=True)
   width: 100%;
-st.markdown("""
-<style>
   transition: background-color .12s ease-in-out, border-color .12s ease-in-out, color .12s ease-in-out;
-</style>
-""", unsafe_allow_html=True)
 }
 
 /* hover */
 section[data-testid="stSidebar"] .stButton > button:hover {
-st.markdown("""
-<style>
   border-color: #B9B9B9;
   background: #e9ecef;
   color: #000;
-</style>
-""", unsafe_allow_html=True)
 }
 
 /* 비활성(secondary) */
 section[data-testid="stSidebar"] .stButton [data-testid="baseButton-secondary"] {
-st.markdown("""
-<style>
   border: 1px solid #E5E7EB;
   background: #f1f3f5;
   color: #333;
-</style>
-""", unsafe_allow_html=True)
 }
 
 /* 활성(Primary) — 기존 .active 느낌 */
 section[data-testid="stSidebar"] .stButton [data-testid="baseButton-primary"] {
-st.markdown("""
-<style>
   background: #004a99;
   color: #fff;
   border: 1px solid #004a99;
   box-shadow: 0 4px 10px rgba(0, 74, 153, 0.25);
-</style>
-""", unsafe_allow_html=True)
 }
 
 /* 활성 hover */
 section[data-testid="stSidebar"] .stButton [data-testid="baseButton-primary"]:hover {
   filter: brightness(1.02);
-st.markdown("""
-<style>
   background: #003d80;
   border-color: #003d80;
-</style>
-""", unsafe_allow_html=True)
 }
 
 /* 사이드바 구분선 */
-st.markdown("""
-<style>
 .sidebar-hr { margin: 8px 0 12px 0; border-top: 1px solid #E5E7EB; }
-</style>
-""", unsafe_allow_html=True)
 </style>
 """, unsafe_allow_html=True)
 
@@ -787,27 +655,15 @@ st.markdown("""
 <style>
 /* ==== Sidebar Gradient Title: 1줄, 줄바꿈 없이, 폭 좁아도 예쁘게 ==== */
 .page-title-wrap{
-st.markdown("""
-<style>
   display:flex; align-items:center; gap:8px; margin:4px 0 10px 0;
-</style>
-""", unsafe_allow_html=True)
 }
-st.markdown("""
-<style>
 .page-title-emoji{ font-size:20px; line-height:1; }
-</style>
-""", unsafe_allow_html=True)
 .page-title-main{
   /* clamp(min, preferred, max) → 사이드바가 좁아도 자연스레 줄어듦 */
-st.markdown("""
-<style>
   font-size: clamp(18px, 2.2vw, 24px);
   font-weight: 800; letter-spacing:-0.2px; line-height:1.15;
   background: linear-gradient(90deg,#6A5ACD 0%, #A663CC 40%, #FF7A8A 75%, #FF8A3D 100%);
   -webkit-background-clip:text; background-clip:text; color:transparent;
-</style>
-""", unsafe_allow_html=True)
   white-space: nowrap;             /* 줄바꿈 금지 */
   overflow: hidden;                /* 넘치면 숨김 */
   text-overflow: ellipsis;         /* … 처리 */
@@ -816,11 +672,7 @@ st.markdown("""
 
 /* 사이드바 버튼도 약간 컴팩트하게(필요 시) */
 section[data-testid="stSidebar"] .stButton > button{
-st.markdown("""
-<style>
   padding: 10px 12px; font-weight: 600;
-</style>
-""", unsafe_allow_html=True)
 }
 </style>
 """, unsafe_allow_html=True)
@@ -1669,11 +1521,7 @@ def render_ip_detail():
             "<span class='kpi-sublabel'>그룹 內</span> "
             f"<span class='kpi-substrong'>{rank_label}</span><br/>"
             "<span class='kpi-sublabel'>그룹 평균比</span> "
-st.markdown("""
-<style>
             f"<span class='kpi-subpct' style='color:{col};'>{pct_txt}</span>"
-</style>
-""", unsafe_allow_html=True)
             "</div>"
         )
 
@@ -2580,6 +2428,7 @@ def render_ip_vs_group_comparison(
     delta_lq = calc_delta(kpis_ip.get('TVING 라이브+QUICK'), kpis_group.get('TVING 라이브+QUICK'))
     delta_vod = calc_delta(kpis_ip.get('TVING VOD'), kpis_group.get('TVING VOD'))
     delta_view = calc_delta(kpis_ip.get('디지털 조회수'), kpis_group.get('디지털 조회수'))
+    delta_buzz = calc_delta(kpis_ip.get('디지털 언급량'), kpis_group.get('디지털 언급량'))
     delta_rank = calc_delta_rank(kpis_ip.get('화제성 순위'), kpis_group.get('화제성 순위'))
 
     # --- 1. 요약 KPI 카드 (한 줄) ---
@@ -2597,6 +2446,7 @@ def render_ip_vs_group_comparison(
     with kpi_cols[4]: 
         st.metric("👀 디지털 조회수", f"{kpis_ip.get('디지털 조회수', 0):,.0f}", f"{delta_view * 100:.1f}%" if delta_view is not None else "N/A", help=f"그룹 평균: {kpis_group.get('디지털 조회수', 0):,.0f}")
     with kpi_cols[5]: 
+        st.metric("💬 디지털 언급량", f"{kpis_ip.get('디지털 언급량', 0):,.0f}", f"{delta_buzz * 100:.1f}%" if delta_buzz is not None else "N/A", help=f"그룹 평균: {kpis_group.get('디지털 언급량', 0):,.0f}")
     with kpi_cols[6]: 
         st.metric("🔥 화제성(최고순위)", f"{kpis_ip.get('화제성 순위', 0):.0f}위" if kpis_ip.get('화제성 순위') else "N/A", f"{delta_rank:.0f}위" if delta_rank is not None else "N/A", delta_color="inverse", help=f"그룹 평균: {kpis_group.get('화제성 순위', 0):.1f}위")
         
@@ -2799,12 +2649,8 @@ def _render_kpi_card_comparison(
             if val1 < val2: winner = 1
             elif val2 < val1: winner = 2
 
-st.markdown("""
-<style>
     val1_style = "color:#d93636; font-weight: 700;" if winner == 1 else ("color:#888; font-weight: 400;" if winner == 2 else "color:#333; font-weight: 400;")
     val2_style = "color:#2a61cc; font-weight: 700;" if winner == 2 else ("color:#888; font-weight: 400;" if winner == 1 else "color:#333; font-weight: 400;")
-</style>
-""", unsafe_allow_html=True)
 
     st.markdown(f"""
     <div class="kpi-card" style="height: 100px; display: flex; flex-direction: column; justify-content: center;">
@@ -2824,11 +2670,7 @@ st.markdown("""
 # --- IP vs IP 메인 렌더링 함수 ---
 def render_ip_vs_ip_comparison(df_all: pd.DataFrame, ip1: str, ip2: str, kpi_percentiles: pd.DataFrame):
     
-st.markdown("""
-<style>
     st.markdown(f"#### ⚖️ : <span style='color:#d93636;'>{ip1}</span> vs <span style='color:#2a61cc;'>{ip2}</span>", unsafe_allow_html=True)
-</style>
-""", unsafe_allow_html=True)
 
     st.divider()
 
@@ -2850,6 +2692,7 @@ st.markdown("""
     st.markdown("<div style='margin-top: 10px;'></div>", unsafe_allow_html=True)
     kpi_cols_2 = st.columns(4) # 4개 (두 번째 줄)
     with kpi_cols_2[0]: _render_kpi_card_comparison("👀 디지털 조회수", kpis1.get("디지털 조회수"), kpis2.get("디지털 조회수"), ip1, ip2, "{:,.0f}")
+    with kpi_cols_2[1]: _render_kpi_card_comparison("💬 디지털 언급량", kpis1.get("디지털 언급량"), kpis2.get("디지털 언급량"), ip1, ip2, "{:,.0f}")
     with kpi_cols_2[2]: _render_kpi_card_comparison("🔥 화제성(최고순위)", kpis1.get("화제성 순위"), kpis2.get("화제성 순위"), ip1, ip2, "{:,.0f}위", higher_is_better=False)
     with kpi_cols_2[3]: st.markdown("") # 빈 칸
 
@@ -3263,10 +3106,10 @@ def render_growth_score():
     SLO_SCORE  = {"+2":5,"+1":4,"0":3,"-1":2,"-2":1}
 
     METRICS = [
-        ("가구시청률", "H시청률", None, True),
-        ("타깃시청률", "T시청률", None, True),
-        ("TVING LIVE", "시청인구", "LIVE", True),
-        ("TVING VOD", "시청인구", "VOD", True)
+        ("가구시청률", "H시청률", None),     # ratings mean
+        ("타깃시청률", "T시청률", None),     # ratings mean
+        ("TVING LIVE", "시청인구", "LIVE"), # ep sum mean
+        ("TVING VOD",  "시청인구", "VOD"),  # ep sum mean
     ]
 
     ips = sorted(df_all["IP"].dropna().unique().tolist())
@@ -3292,11 +3135,7 @@ def render_growth_score():
     head = st.columns([5, 3, 2])
     with head[0]:
         st.markdown(
-st.markdown("""
-<style>
             f"## 🚀 성장스코어-방영지표 <span style='font-size:20px;color:#6b7b93'>(~{_ep_display}회 기준)</span>",
-</style>
-""", unsafe_allow_html=True)
             unsafe_allow_html=True
         )
     with head[1]:
@@ -3326,11 +3165,7 @@ st.markdown("""
             """)
 
     # 선택한 작품 타이틀
-st.markdown("""
-<style>
     st.markdown(f"#### {selected_ip} <span style='font-size:16px;color:#6b7b93'>자세히보기</span>",
-</style>
-""", unsafe_allow_html=True)
             unsafe_allow_html=True
         )
 
@@ -3419,18 +3254,14 @@ st.markdown("""
     # ---------- [선택작품 요약카드] ----------
     focus = base[base["IP"] == selected_ip].iloc[0]
 
-    card_cols = st.columns([2, 1, 1, 1])  # 종합 2칸
+    card_cols = st.columns([2, 1, 1, 1, 1])  # 종합 2칸
     # 종합 카드 (강조)
     with card_cols[0]:
         st.markdown(
             f"""
-st.markdown("""
-<style>
             <div class="kpi-card" style="height:110px;border:2px solid #004a99;background:linear-gradient(180deg,#e8f0ff, #ffffff);">
               <div class="kpi-title" style="font-size:15px;color:#003d80;">종합등급</div>
               <div class="kpi-value" style="font-size:40px;color:#003d80;">{focus['종합등급'] if pd.notna(focus['종합등급']) else '–'}</div>
-</style>
-""", unsafe_allow_html=True)
             </div>
             """,
             unsafe_allow_html=True
@@ -3442,11 +3273,7 @@ st.markdown("""
                 f"""
                 <div class="kpi-card" style="height:110px;">
                   <div class="kpi-title">{title}</div>
-st.markdown("""
-<style>
                   <div class="kpi-value" style="font-size:28px;">{val if pd.notna(val) else '–'}</div>
-</style>
-""", unsafe_allow_html=True)
                 </div>
                 """,
                 unsafe_allow_html=True
@@ -3717,11 +3544,7 @@ st.markdown("""
       let bg='#fff', color='#111', fw='700';
       if (v.startsWith('S')) { bg='rgba(0,91,187,0.14)'; color='#003d80'; }
       else if (v.startsWith('A')) { bg='rgba(0,91,187,0.08)'; color='#004a99'; }
-st.markdown("""
-<style>
       else if (v.startsWith('B')) { bg='rgba(0,0,0,0.03)'; color:'#333'; fw='600'; }
-</style>
-""", unsafe_allow_html=True)
       else if (v.startsWith('C')) { bg='rgba(42,97,204,0.08)'; color='#2a61cc'; }
       else if (v.startsWith('D')) { bg='rgba(42,97,204,0.14)'; color='#1a44a3'; }
       return {'background-color':bg,'color':color,'font-weight':fw,'text-align':'center'};
@@ -3750,34 +3573,8 @@ st.markdown("""
 # =====================================================
 #endregion
 
-
-    # --- 화제성 점수(F_Score): 절대값등급 + 상승률등급 ---
-    def _grade_abs(series):
-        s = series.dropna()
-        if len(s) < 3:
-            return None
-        q = s.rank(pct=True).iloc[-1]  # 마지막값 백분위
-        # S/A/B/C/D 등급 맵핑 (상위가 좋음)
-        return 'S' if q >= 0.9 else ('A' if q >= 0.75 else ('B' if q >= 0.5 else ('C' if q >= 0.25 else 'D')))
-
-    
-def _grade_slope(x, y):
-    import numpy as np
-    x = np.asarray(x, dtype=float)
-    y = np.asarray(y, dtype=float)
-    mask = ~np.isnan(x) & ~np.isnan(y)
-    if mask.sum() < 3:
-        return None
-    X = np.vstack([x[mask], np.ones(mask.sum())]).T
-    m, b = np.linalg.lstsq(X, y[mask], rcond=None)[0]
-    # 상승률 등급을 +2, +1, 0, -1, -2 로 산정
-    # 임계값은 기존 페이지 관례(예: 0.10, 0.05, -0.05, -0.10)를 그대로 사용하되,
-    # 필요 시 그룹 분포 기반(percentile)로 교체 가능.
-    if m >=  0.10: return "+2"
-    if m >=  0.05: return "+1"
-    if m >= -0.05: return "0"
-    if m >= -0.10: return "-1"
-    return "-2"
+#region [ 14. 페이지 7: 성장스코어-디지털 ]
+# =====================================================
 
 def render_growth_score_digital():
 
@@ -3787,6 +3584,8 @@ def render_growth_score_digital():
 
     사용 메트릭(고정):
       - 조회수: 회차합 시계열 → 절대(평균), 상승(회귀 기울기)
+      - 언급량: 회차합 시계열 → 절대(평균), 상승(회귀 기울기)
+      - F_Total(화제성 순위): 낮을수록 좋음 → 부호 반전 후 **절대만** 등급화(상승은 미사용)
     """
     import numpy as np
     import pandas as pd
@@ -3810,9 +3609,8 @@ def render_growth_score_digital():
     # type: "sum" → 회차합, "rank_inv" →(낮을수록 좋음) 평균 후 -1 곱해 상향화
     METRICS = [
         ("조회수",     "조회수",   "sum",      True),
-        ("sum",      True),
-        ("화제성순위", "/*removed_*/", "rank_inv", False),
-        ('화제성', 'F_Score', None, True)
+        ("언급량",     "언급량",   "sum",      True),
+        ("화제성순위", "F_Total", "rank_inv", False),  # ← 상승 미사용
     ]
 
     ips = sorted(df_all["IP"].dropna().unique().tolist())
@@ -3822,13 +3620,9 @@ def render_growth_score_digital():
     # 작은 스타일(요약카드 공통)
     st.markdown("""
     <style>
-st.markdown("""
-<style>
       .kpi-card{border-radius:16px;border:1px solid #e7ebf3;background:#fff;padding:12px 14px;
                 box-shadow:0 1px 2px rgba(0,0,0,0.04)}
       .kpi-title{font-size:13px;color:#5b6b83;margin-bottom:4px;font-weight:600}
-</style>
-""", unsafe_allow_html=True)
       .kpi-value{font-weight:800;letter-spacing:-0.2px}
       .centered-header .ag-header-cell-label{justify-content:center;}
       .bold-header .ag-header-cell-text{font-weight:700;}
@@ -3854,13 +3648,23 @@ st.markdown("""
     with st.expander("ℹ️ 지표 기준 안내", expanded=False):
         st.markdown("""
 **디지털 지표 정의(고정)**
+- **조회수, 언급량**: 회차별 합(에피소드 단위)을 사용 → 1~N회 집계 시계열의 평균/회귀
+- **F_Total(화제성 순위)**: 값이 **낮을수록 우수** → 평균 산출 전 `-1` 곱해 상향 스케일로 변환  
+  *(※ 화제성은 **상승스코어 미사용**, 절대스코어만 등급화)*
+
+**등급 체계(공통)**
+- **절대값 등급**: IP 간 백분위 20% 단위 `S/A/B/C/D`
+- **상승률 등급**: 회귀기울기 slope의 IP 간 백분위 20% `+2/+1/0/-1/-2`
+- **종합등급**: 절대+상승 결합(예: `A+2`)  
+  *(화제성은 상승 NaN 처리되어 종합 상승 평균에서 자동 제외)*
+
+**회차 기준(~N회)**
+- 각 IP의 **1~N회** 데이터만 사용(없는 회차 자동 제외)
+- 0/비정상값은 NaN 처리해 왜곡 방지
+        """)
 
     st.markdown(
-st.markdown("""
-<style>
         f"#### {selected_ip} <span style='font-size:16px;color:#6b7b93'>자세히보기</span>",
-</style>
-""", unsafe_allow_html=True)
         unsafe_allow_html=True
     )
 
@@ -3963,7 +3767,7 @@ st.markdown("""
     # ---------- [선택작품 요약카드] ----------
     focus = base[base["IP"] == selected_ip].iloc[0]
 
-    card_cols = st.columns([2, 1, 1, 1])  # 종합 2칸
+    card_cols = st.columns([2, 1, 1, 1, 1])  # 종합 2칸
     with card_cols[0]:
         st.markdown(
             f"""
@@ -3984,6 +3788,7 @@ st.markdown("""
                 """, unsafe_allow_html=True
             )
     _grade_card(card_cols[1], "조회수 등급",         focus["조회수_종합"])
+    _grade_card(card_cols[2], "언급량 등급",         focus["언급량_종합"])
     # 화제성은 '절대'만 표기
     _grade_card(card_cols[3], "화제성(순위) 절대",   focus["화제성순위_절대등급"])
     _grade_card(card_cols[4], " ",  " ")  # 자리 균형용(필요 시 다른 지표 대체 가능)
@@ -4141,11 +3946,7 @@ st.markdown("""
             if names:
                 fig.add_annotation(
                     x=cc, y=rr, xref="x", yref="y",
-st.markdown("""
-<style>
                     text=f"<span style='line-height:1.04'>{'<br>'.join(names)}</span>",
-</style>
-""", unsafe_allow_html=True)
                     showarrow=False, font=dict(size=12, color=color, family="sans-serif"),
                     xanchor="center", yanchor="middle",
                     yshift=6
@@ -4156,6 +3957,7 @@ st.markdown("""
     # ---------- [전체표] ----------
     table = base[[
         "IP","종합_절대등급","종합_상승등급","종합등급",
+        "조회수_종합","언급량_종합","화제성순위_절대등급"
     ]].copy()
 
     # 정렬 키: 종합 절대 → 종합 상승 → IP
@@ -4165,9 +3967,11 @@ st.markdown("""
 
     # 화면 표시 컬럼(화제성은 절대만 노출)
     table_view = table[[
+        "IP","종합등급","조회수_종합","언급량_종합","화제성순위_절대등급"
     ]].rename(columns={
         "종합등급":"종합",
         "조회수_종합":"조회수",
+        "언급량_종합":"언급량",
         "화제성순위_절대등급":"화제성(절대)"
     })
 
@@ -4251,68 +4055,44 @@ st.markdown("""
 /* 0) 개별 요소 lift 제거 (중복 방지) */
 .stPlotlyChart:hover,
 .ag-theme-streamlit .ag-root-wrapper:hover {
-st.markdown("""
-<style>
   transform: none !important;
   box-shadow: inherit !important;
-</style>
-""", unsafe_allow_html=True)
 }
 
 /* 공통 선택자: '가장 가까운' 카드(wrapper)만 추출 */
 div[data-testid="stVerticalBlockBorderWrapper"]._liftable {
-st.markdown("""
-<style>
   transition: transform .18s ease, box-shadow .18s ease !important;
-</style>
-""", unsafe_allow_html=True)
   will-change: transform, box-shadow;
   backface-visibility: hidden;
 }
 
 /* 1) Plotly 차트: 가장 가까운 wrapper만 lift */
 div[data-testid="stVerticalBlockBorderWrapper"]._liftable:has(.stPlotlyChart:hover):not(:has(div[data-testid="stVerticalBlockBorderWrapper"] .stPlotlyChart:hover)) {
-st.markdown("""
-<style>
   transform: translate3d(0,-4px,0) !important;
   box-shadow: 0 16px 40px rgba(16,24,40,.16), 0 6px 14px rgba(16,24,40,.10) !important;
   z-index: 3 !important;
-</style>
-""", unsafe_allow_html=True)
 }
 
 /* 2) AgGrid: 가장 가까운 wrapper만 lift */
 div[data-testid="stVerticalBlockBorderWrapper"]._liftable:has(.ag-theme-streamlit .ag-root-wrapper:hover):not(:has(div[data-testid="stVerticalBlockBorderWrapper"] .ag-theme-streamlit .ag-root-wrapper:hover)) {
-st.markdown("""
-<style>
   transform: translate3d(0,-4px,0) !important;
   box-shadow: 0 16px 40px rgba(16,24,40,.16), 0 6px 14px rgba(16,24,40,.10) !important;
   z-index: 3 !important;
-</style>
-""", unsafe_allow_html=True)
 }
 
 /* 3) KPI/커스텀 카드 클래스도 동일 처리 (있을 때만) */
 div[data-testid="stVerticalBlockBorderWrapper"].*_liftable:has(.kpi-card:hover):not(:has(div[data-testid="stVerticalBlockBorderWrapper"] .kpi-card:hover)),
 div[data-testid="stVerticalBlockBorderWrapper"].*_liftable:has(.block-card:hover):not(:has(div[data-testid="stVerticalBlockBorderWrapper"] .block-card:hover)) {
-st.markdown("""
-<style>
   transform: translate3d(0,-4px,0) !important;
   box-shadow: 0 16px 40px rgba(16,24,40,.16), 0 6px 14px rgba(16,24,40,.10) !important;
   z-index: 3 !important;
-</style>
-""", unsafe_allow_html=True)
 }
 
 /* 4) 사이드바는 lift 금지 유지 */
 section[data-testid="stSidebar"] div[data-testid="stVerticalBlockBorderWrapper"] {
-st.markdown("""
-<style>
   transform: none !important;
   box-shadow: inherit !important;
   z-index: auto !important;
-</style>
-""", unsafe_allow_html=True)
 }
 
 /* 5) 모든 wrapper에 'liftable' 클래스 부여 (JS 없이 CSS만으로는 직접 부여 어려움 → 속성 선택자 트릭) */
@@ -4335,35 +4115,23 @@ st.markdown("""
 <style>
 /* 1) 사이드바 안의 '모든' 카드형 래퍼 박스 제거 */
 section[data-testid="stSidebar"] div[data-testid="stVerticalBlockBorderWrapper"] {
-st.markdown("""
-<style>
   background: transparent !important;
   border: none !important;
   box-shadow: none !important;
   padding: 0 !important;
-</style>
-""", unsafe_allow_html=True)
 }
 
 /* 2) 사이드바 카드 hover 효과 제거 */
 section[data-testid="stSidebar"] div[data-testid="stVerticalBlockBorderWrapper"]:hover {
-st.markdown("""
-<style>
   transform: none !important;
   box-shadow: none !important;
-</style>
-""", unsafe_allow_html=True)
 }
 
 /* 3) 흔히 감싸는 추가 wrapper들에 대한 여유 규칙 */
 section[data-testid="stSidebar"] [data-testid="stVerticalBlock"] > div {
-st.markdown("""
-<style>
   background: transparent !important;
   border: none !important;
   box-shadow: none !important;
-</style>
-""", unsafe_allow_html=True)
 }
 
 /* 4) 사이드바 기본 컨텐츠 컨테이너의 여백 정리(과도한 패딩 제거) */
@@ -4371,14 +4139,11 @@ section[data-testid="stSidebar"] .block-container,
 section[data-testid="stSidebar"] [data-testid="stSidebarContent"] {
   padding-left: 0 !important;
   padding-right: 0 !important;
-st.markdown("""
-<style>
   box-shadow: none !important;
   border: none !important;
   background: transparent !important;
-</style>
-""", unsafe_allow_html=True)
 }
 </style>
 """, unsafe_allow_html=True)
 # ============================================================================
+
