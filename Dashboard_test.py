@@ -2428,7 +2428,6 @@ def render_ip_vs_group_comparison(
     delta_lq = calc_delta(kpis_ip.get('TVING 라이브+QUICK'), kpis_group.get('TVING 라이브+QUICK'))
     delta_vod = calc_delta(kpis_ip.get('TVING VOD'), kpis_group.get('TVING VOD'))
     delta_view = calc_delta(kpis_ip.get('디지털 조회수'), kpis_group.get('디지털 조회수'))
-    delta_buzz = calc_delta(kpis_ip.get('디지털 언급량'), kpis_group.get('디지털 언급량'))
     delta_rank = calc_delta_rank(kpis_ip.get('화제성 순위'), kpis_group.get('화제성 순위'))
 
     # --- 1. 요약 KPI 카드 (한 줄) ---
@@ -2446,7 +2445,6 @@ def render_ip_vs_group_comparison(
     with kpi_cols[4]: 
         st.metric("👀 디지털 조회수", f"{kpis_ip.get('디지털 조회수', 0):,.0f}", f"{delta_view * 100:.1f}%" if delta_view is not None else "N/A", help=f"그룹 평균: {kpis_group.get('디지털 조회수', 0):,.0f}")
     with kpi_cols[5]: 
-        st.metric("💬 디지털 언급량", f"{kpis_ip.get('디지털 언급량', 0):,.0f}", f"{delta_buzz * 100:.1f}%" if delta_buzz is not None else "N/A", help=f"그룹 평균: {kpis_group.get('디지털 언급량', 0):,.0f}")
     with kpi_cols[6]: 
         st.metric("🔥 화제성(최고순위)", f"{kpis_ip.get('화제성 순위', 0):.0f}위" if kpis_ip.get('화제성 순위') else "N/A", f"{delta_rank:.0f}위" if delta_rank is not None else "N/A", delta_color="inverse", help=f"그룹 평균: {kpis_group.get('화제성 순위', 0):.1f}위")
         
@@ -2692,7 +2690,6 @@ def render_ip_vs_ip_comparison(df_all: pd.DataFrame, ip1: str, ip2: str, kpi_per
     st.markdown("<div style='margin-top: 10px;'></div>", unsafe_allow_html=True)
     kpi_cols_2 = st.columns(4) # 4개 (두 번째 줄)
     with kpi_cols_2[0]: _render_kpi_card_comparison("👀 디지털 조회수", kpis1.get("디지털 조회수"), kpis2.get("디지털 조회수"), ip1, ip2, "{:,.0f}")
-    with kpi_cols_2[1]: _render_kpi_card_comparison("💬 디지털 언급량", kpis1.get("디지털 언급량"), kpis2.get("디지털 언급량"), ip1, ip2, "{:,.0f}")
     with kpi_cols_2[2]: _render_kpi_card_comparison("🔥 화제성(최고순위)", kpis1.get("화제성 순위"), kpis2.get("화제성 순위"), ip1, ip2, "{:,.0f}위", higher_is_better=False)
     with kpi_cols_2[3]: st.markdown("") # 빈 칸
 
@@ -3254,7 +3251,7 @@ def render_growth_score():
     # ---------- [선택작품 요약카드] ----------
     focus = base[base["IP"] == selected_ip].iloc[0]
 
-    card_cols = st.columns([2, 1, 1, 1, 1])  # 종합 2칸
+    card_cols = st.columns([2, 1, 1, 1])  # 종합 2칸
     # 종합 카드 (강조)
     with card_cols[0]:
         st.markdown(
@@ -3610,8 +3607,6 @@ def render_growth_score_digital():
 
     사용 메트릭(고정):
       - 조회수: 회차합 시계열 → 절대(평균), 상승(회귀 기울기)
-      - 언급량: 회차합 시계열 → 절대(평균), 상승(회귀 기울기)
-      - /*removed_F_Total*/(/*removed_rank*/): 낮을수록 좋음 → 부호 반전 후 **절대만** 등급화(상승은 미사용)
     """
     import numpy as np
     import pandas as pd
@@ -3675,20 +3670,6 @@ def render_growth_score_digital():
     with st.expander("ℹ️ 지표 기준 안내", expanded=False):
         st.markdown("""
 **디지털 지표 정의(고정)**
-- **조회수, 언급량**: 회차별 합(에피소드 단위)을 사용 → 1~N회 집계 시계열의 평균/회귀
-- **/*removed_F_Total*/(/*removed_rank*/)**: 값이 **낮을수록 우수** → 평균 산출 전 `-1` 곱해 상향 스케일로 변환  
-  *(※ 화제성은 **상승스코어 미사용**, 절대스코어만 등급화)*
-
-**등급 체계(공통)**
-- **절대값 등급**: IP 간 백분위 20% 단위 `S/A/B/C/D`
-- **상승률 등급**: 회귀기울기 slope의 IP 간 백분위 20% `+2/+1/0/-1/-2`
-- **종합등급**: 절대+상승 결합(예: `A+2`)  
-  *(화제성은 상승 NaN 처리되어 종합 상승 평균에서 자동 제외)*
-
-**회차 기준(~N회)**
-- 각 IP의 **1~N회** 데이터만 사용(없는 회차 자동 제외)
-- 0/비정상값은 NaN 처리해 왜곡 방지
-        """)
 
     st.markdown(
         f"#### {selected_ip} <span style='font-size:16px;color:#6b7b93'>자세히보기</span>",
@@ -3794,7 +3775,7 @@ def render_growth_score_digital():
     # ---------- [선택작품 요약카드] ----------
     focus = base[base["IP"] == selected_ip].iloc[0]
 
-    card_cols = st.columns([2, 1, 1, 1, 1])  # 종합 2칸
+    card_cols = st.columns([2, 1, 1, 1])  # 종합 2칸
     with card_cols[0]:
         st.markdown(
             f"""
@@ -3815,7 +3796,6 @@ def render_growth_score_digital():
                 """, unsafe_allow_html=True
             )
     _grade_card(card_cols[1], "조회수 등급",         focus["조회수_종합"])
-    _grade_card(card_cols[2], ,         focus["언급량_종합"])
     # 화제성은 '절대'만 표기
     _grade_card(card_cols[3], "화제성(순위) 절대",   focus["화제성순위_절대등급"])
     _grade_card(card_cols[4], " ",  " ")  # 자리 균형용(필요 시 다른 지표 대체 가능)
@@ -3984,7 +3964,6 @@ def render_growth_score_digital():
     # ---------- [전체표] ----------
     table = base[[
         "IP","종합_절대등급","종합_상승등급","종합등급",
-        "조회수_종합","언급량_종합","화제성순위_절대등급"
     ]].copy()
 
     # 정렬 키: 종합 절대 → 종합 상승 → IP
@@ -3994,11 +3973,9 @@ def render_growth_score_digital():
 
     # 화면 표시 컬럼(화제성은 절대만 노출)
     table_view = table[[
-        "IP","종합등급","조회수_종합","언급량_종합","화제성순위_절대등급"
     ]].rename(columns={
         "종합등급":"종합",
         "조회수_종합":"조회수",
-        "언급량_종합":"언급량",
         "화제성순위_절대등급":"화제성(절대)"
     })
 
