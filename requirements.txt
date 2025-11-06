@@ -1,0 +1,10 @@
+streamlit==1.39.0
+pandas==2.2.2
+numpy==1.26.4
+plotly==5.24.1
+streamlit-aggrid==0.3.4.post3
+gspread==6.1.4
+google-auth==2.35.0
+requests==2.32.3
+python-dateutil==2.9.0.post0
+google-auth
