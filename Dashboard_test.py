@@ -2862,26 +2862,26 @@ def filter_data_for_episode_comparison(
     selected_episode: str,
     selected_metric: str
 ) -> pd.DataFrame:
-    """특정 회차 비교를 위한 데이터 필터링 및 집계 (필터링된 IP 대상)"""
+    \"\"\"특정 회차 비교를 위한 데이터 필터링 및 집계 (필터링된 IP 대상)\"\"\"
     
-    episode_num_str = selected_episode.split(" ")[0]
+    episode_num_str = selected_episode.split(\" \")[0]
     
     target_episode_num_str = episode_num_str
     try:
         target_episode_num = float(target_episode_num_str) 
     except ValueError:
-        return pd.DataFrame({'IP': df_all_filtered["IP"].unique(), 'value': 0}) 
+        return pd.DataFrame({'IP': df_all_filtered[\"IP\"].unique(), 'value': 0}) 
 
     # --- 해당 회차 데이터 필터링 ---
     base_filtered = pd.DataFrame() 
 
     # 1순위: 숫자 컬럼(`회차_numeric`) 사용
-    if "회차_numeric" in df_all_filtered.columns:
-        base_filtered = df_all_filtered[df_all_filtered["회차_numeric"] == target_episode_num].copy()
+    if \"회차_numeric\" in df_all_filtered.columns:
+        base_filtered = df_all_filtered[df_all_filtered[\"회차_numeric\"] == target_episode_num].copy()
             
     # 2순위: 숫자 컬럼 없거나 못찾으면, '회차' 컬럼에서 문자열 비교
-    if base_filtered.empty and "회차" in df_all_filtered.columns:
-        possible_strs = [target_episode_num_str + "화", target_episode_num_str + "차"]
+    if base_filtered.empty and \"회차\" in df_all_filtered.columns:
+        possible_strs = [target_episode_num_str + \"화\", target_episode_num_str + \"차\"]
         existing_ep_strs_in_filtered = df_all_filtered['회차'].unique()
         episode_filter_str = None
         for p_str in possible_strs:
@@ -2889,57 +2889,58 @@ def filter_data_for_episode_comparison(
                 episode_filter_str = p_str
                 break
         if episode_filter_str:
-            base_filtered = df_all_filtered[df_all_filtered["회차"] == episode_filter_str].copy()
+            base_filtered = df_all_filtered[df_all_filtered[\"회차\"] == episode_filter_str].copy()
 
     # --- 지표별 집계 ---
-    result_df = pd.DataFrame(columns=["IP", "value"]) 
+    result_df = pd.DataFrame(columns=[\"IP\", \"value\"]) 
 
     if not base_filtered.empty:
-        if selected_metric in ["T시청률", "H시청률"]:
-            filtered = base_filtered[base_filtered["metric"] == selected_metric]
+        if selected_metric in [\"T시청률\", \"H시청률\"]:
+            filtered = base_filtered[base_filtered[\"metric\"] == selected_metric]
             if not filtered.empty: 
-                result_df = filtered.groupby("IP")["value"].mean().reset_index()
+                result_df = filtered.groupby(\"IP\")[\"value\"].mean().reset_index()
             
-        elif selected_metric == "TVING 라이브+QUICK":
-             df_lq = base_filtered[
-                 (base_filtered["metric"] == "시청인구") & 
-                 (base_filtered["매체"].isin(["TVING LIVE", "TVING QUICK"]))
-             ]
-             if not df_lq.empty: 
-                 result_df = df_lq.groupby("IP")["value"].sum().reset_index()
-             
-        elif selected_metric == "TVING VOD":
-             df_vod = base_filtered[
-                 (base_filtered["metric"] == "시청인구") & 
-                 (base_filtered["매체"] == "TVING VOD")
-             ]
-             if not df_vod.empty: 
-                 result_df = df_vod.groupby("IP")["value"].sum().reset_index()
+        elif selected_metric == \"TVING 라이브+QUICK\":
+            df_lq = base_filtered[
+                (base_filtered[\"metric\"] == \"시청인구\") & 
+                (base_filtered[\"매체\"].isin([\"TVING LIVE\", \"TVING QUICK\"]))
+            ]
+            if not df_lq.empty: 
+                result_df = df_lq.groupby(\"IP\")[\"value\"].sum().reset_index()
+            
+        elif selected_metric == \"TVING VOD\":
+            df_vod = base_filtered[
+                (base_filtered[\"metric\"] == \"시청인구\") & 
+                (base_filtered[\"매체\"] == \"TVING VOD\")
+            ]
+            if not df_vod.empty: 
+                result_df = df_vod.groupby(\"IP\")[\"value\"].sum().reset_index()
 
-        elif selected_metric in ["조회수", "언급량"]:
-            filtered = base_filtered[base_filtered["metric"] == selected_metric]
-            if selected_metric == "조회수" and not filtered.empty:
-                filtered = filtered[(filtered["매체"]!="유튜브") | (filtered["세부속성1"].isin(["PGC","UGC"]))]
+        elif selected_metric in [\"조회수\", \"언급량\"]:
+            filtered = base_filtered[base_filtered[\"metric\"] == selected_metric]
+            if selected_metric == \"조회수\" and not filtered.empty:
+                # 규칙: 유튜브일 경우 세부속성1이 PGC/UGC만 포함
+                filtered = filtered[(filtered[\"매체\"] != \"유튜브\") | (filtered[\"세부속성1\"].isin([\"PGC\", \"UGC\"]))]
             if not filtered.empty: 
-                result_df = filtered.groupby("IP")["value"].sum().reset_index()
+                result_df = filtered.groupby(\"IP\")[\"value\"].sum().reset_index()
                 
         else: # 기타 지표
-            filtered = base_filtered[base_filtered["metric"] == selected_metric]
+            filtered = base_filtered[base_filtered[\"metric\"] == selected_metric]
             if not filtered.empty: 
-                result_df = filtered.groupby("IP")["value"].mean().reset_index() 
+                result_df = filtered.groupby(\"IP\")[\"value\"].mean().reset_index() 
 
     # --- 모든 IP 포함 및 정렬 ---
-    all_ips_in_filter = df_all_filtered["IP"].unique() 
+    all_ips_in_filter = df_all_filtered[\"IP\"].unique() 
     
     if result_df.empty:
         result_df = pd.DataFrame({'IP': all_ips_in_filter, 'value': 0})
     else:
         if 'value' not in result_df.columns: result_df['value'] = 0
-        result_df = result_df.set_index("IP").reindex(all_ips_in_filter, fill_value=0).reset_index() 
+        result_df = result_df.set_index(\"IP\").reindex(all_ips_in_filter, fill_value=0).reset_index() 
         
     result_df['value'] = pd.to_numeric(result_df['value'], errors='coerce').fillna(0)
         
-    return result_df.sort_values("value", ascending=False)
+    return result_df.sort_values(\"value\", ascending=False)
 
 
 # ===== [페이지 5] 특정 회차 비교 시각화 =====
@@ -2949,20 +2950,20 @@ def plot_episode_comparison(
     selected_episode: str,
     base_ip: str 
 ):
-    """특정 회차 비교 결과 시각화 (Bar Chart with Highlight)"""
+    \"\"\"특정 회차 비교 결과 시각화 (Bar Chart with Highlight)\"\"\"
     
     colors = ['#d93636' if ip == base_ip else '#666666' for ip in df_result['IP']]
-    metric_label = selected_metric.replace("T시청률", "타깃").replace("H시청률", "가구") 
+    metric_label = selected_metric.replace(\"T시청률\", \"타깃\").replace(\"H시청률\", \"가구\") 
     
     fig = px.bar(
         df_result,
-        x="IP",
-        y="value",
-        text="value",
-        title=f"{selected_episode} - '{metric_label}' (기준: {base_ip})" 
+        x=\"IP\",
+        y=\"value\",
+        text=\"value\",
+        title=f\"{selected_episode} - '{metric_label}' (기준: {base_ip})\" 
     )
     
-    hover_template = "<b>%{x}</b><br>" + f"{metric_label}: %{{y:,.2f}}" if selected_metric in ["T시청률", "H시청률"] else "<b>%{x}</b><br>" + f"{metric_label}: %{{y:,.0f}}"
+    hover_template = \"<b>%{x}</b><br>\" + (f\"{metric_label}: %{{y:,2f}}\" if selected_metric in [\"T시청률\", \"H시청률\"] else f\"{metric_label}: %{{y:,0f}}\")
     
     fig.update_traces(
         marker_color=colors, 
@@ -2970,11 +2971,11 @@ def plot_episode_comparison(
         hovertemplate=hover_template 
     )
     
-    if selected_metric in ["T시청률", "H시청률"]:
+    if selected_metric in [\"T시청률\", \"H시청률\"]:
         fig.update_traces(texttemplate='%{text:.2f}%')
-        fig.update_layout(yaxis_title=f"{metric_label} (%)")
+        fig.update_layout(yaxis_title=f\"{metric_label} (%)\")
     else:
-        fig.update_traces(texttemplate='%{text:,.0f}')
+        fig.update_traces(texttemplate='%{text:,0f}')
         fig.update_layout(yaxis_title=metric_label)
         
     fig.update_layout(
@@ -2990,105 +2991,108 @@ def plot_episode_comparison(
 def render_episode():
     
     # --- 데이터 로드 ---
-    # ◀◀◀ [수정] load_data() 호출 방식 변경
+    # ◀◀◀ [변경] load_data() 호출 방식 유지
     df_all = load_data()
     
-    # --- [수정] 필터 메인 영역으로 이동 ---
-    filter_cols = st.columns([3, 3, 2]) # [Title | Base IP | Episode]
-    ip_options_main = sorted(df_all["IP"].dropna().unique().tolist()) 
-    episode_options_main = get_episode_options(df_all) # 공통 유틸
+    # --- [변경] 필터를 한 행에 모두 배치 (타이틀 | 기준IP | 회차 | 비교 그룹 기준[다중]) ---
+    filter_cols = st.columns([3, 3, 2, 3])  # [Title | Base IP | Episode | Group Criteria]
+    ip_options_main = sorted(df_all[\"IP\"].dropna().unique().tolist()) 
+    episode_options_main = get_episode_options(df_all)  # 공통 유틸
     selected_base_ip = None
     selected_episode = None
+    selected_group_criteria = []
 
     with filter_cols[0]:
-        st.markdown("## 🎬 회차별 비교 ")
-    with st.expander("ℹ️ 지표 기준 안내", expanded=False):
-        st.markdown("내용 기입 필요")
+        st.markdown(\"## 🎬 회차별 비교 \")
+    with st.expander(\"ℹ️ 지표 기준 안내\", expanded=False):
+        st.markdown(\"내용 기입 필요\")
 
     with filter_cols[1]:
         selected_base_ip = st.selectbox(
-            "기준 IP (하이라이트)", 
+            \"기준 IP (하이라이트)\", 
             ip_options_main, 
             index=0 if ip_options_main else None, 
-            label_visibility="collapsed", 
-            key="ep_base_ip_main" 
+            label_visibility=\"collapsed\", 
+            key=\"ep_base_ip_main\" 
         )
         
     with filter_cols[2]:
         selected_episode = st.selectbox(
-            "회차", 
+            \"회차\", 
             episode_options_main, 
             index=0 if episode_options_main else None, 
-            label_visibility="collapsed", 
-            key="ep_selected_episode_main" 
+            label_visibility=\"collapsed\", 
+            key=\"ep_selected_episode_main\" 
         )
-        
-    # (기존 'with st.sidebar:' 블록 삭제)
 
-    # --- 메인 페이지 렌더링 ---
-    # st.markdown("## 🎬 회차별 비교 ") # 위로 이동
+    # ◀◀◀ [핵심 변경] 비교대상 그룹: 단일 선택(radio) → 다중 선택(multiselect, 같은 행)
+    with filter_cols[3]:
+        selected_group_criteria = st.multiselect(
+            \"비교 그룹 기준\",
+            [\"동일 편성\", \"방영 연도\"],
+            default=[\"동일 편성\"],
+            label_visibility=\"collapsed\",
+            key=\"ep_group_criteria\"
+        )
 
-    # --- 비교 대상 그룹 선택 (페이지 내 필터) ---
-    comparison_group = st.radio(
-        "비교 대상 그룹",
-        options=["전체 IP", "동일 편성", "방영 연도", "동일 편성 & 연도"],
-        index=0, 
-        key="ep_comp_group",
-        horizontal=True 
-    )
     st.divider()
 
     # --- 입력값 유효성 검사 ---
-    if not selected_base_ip: st.warning("필터에서 기준 IP를 선택해주세요."); return # '사이드바' -> '필터'
-    if not selected_episode: st.warning("필터에서 회차를 선택해주세요."); return # '사이드바' -> '필터'
+    if not selected_base_ip:
+        st.warning(\"필터에서 기준 IP를 선택해주세요.\"); return
+    if not selected_episode:
+        st.warning(\"필터에서 회차를 선택해주세요.\"); return
 
     # --- 필터 적용된 데이터 생성 ---
     df_filtered_main = df_all.copy() 
     group_filter_applied = [] 
 
-    if comparison_group != "전체 IP":
-        base_ip_info_rows = df_all[df_all["IP"] == selected_base_ip] 
+    # ◀◀◀ [핵심 변경] 다중 기준 적용 로직
+    if selected_group_criteria:
+        base_ip_info_rows = df_all[df_all[\"IP\"] == selected_base_ip] 
         if not base_ip_info_rows.empty:
-            base_ip_prog = base_ip_info_rows["편성"].dropna().mode().iloc[0] if not base_ip_info_rows["편성"].dropna().empty else None
-            date_col = "방영시작일" if "방영시작일" in df_all.columns and df_all["방영시작일"].notna().any() else "주차시작일"
+            base_ip_prog = base_ip_info_rows[\"편성\"].dropna().mode().iloc[0] if not base_ip_info_rows[\"편성\"].dropna().empty else None
+            date_col = \"방영시작일\" if \"방영시작일\" in df_all.columns and df_all[\"방영시작일\"].notna().any() else \"주차시작일\"
             base_ip_year = base_ip_info_rows[date_col].dropna().dt.year.mode().iloc[0] if not base_ip_info_rows[date_col].dropna().empty else None
 
-            if "동일 편성" in comparison_group:
+            if \"동일 편성\" in selected_group_criteria:
                 if base_ip_prog:
-                    df_filtered_main = df_filtered_main[df_filtered_main["편성"] == base_ip_prog]
-                    group_filter_applied.append(f"편성='{base_ip_prog}'")
-                else: st.warning(f"기준 IP '{selected_base_ip}'의 편성 정보 없음")
-                     
-            if "방영 연도" in comparison_group: 
+                    df_filtered_main = df_filtered_main[df_filtered_main[\"편성\"] == base_ip_prog]
+                    group_filter_applied.append(f\"편성='{base_ip_prog}'\")
+                else:
+                    st.warning(f\"기준 IP '{selected_base_ip}'의 편성 정보 없음\") 
+            
+            if \"방영 연도\" in selected_group_criteria:
                 if base_ip_year:
-                     df_filtered_main = df_filtered_main[df_filtered_main[date_col].dt.year == int(base_ip_year)]
-                     group_filter_applied.append(f"연도={int(base_ip_year)}")
-                else: st.warning(f"기준 IP '{selected_base_ip}'의 연도 정보 없음")
+                    df_filtered_main = df_filtered_main[df_filtered_main[date_col].dt.year == int(base_ip_year)]
+                    group_filter_applied.append(f\"연도={int(base_ip_year)}\")
+                else:
+                    st.warning(f\"기준 IP '{selected_base_ip}'의 연도 정보 없음\")
         else:
-             st.warning(f"기준 IP '{selected_base_ip}' 정보를 찾을 수 없습니다.")
-             df_filtered_main = pd.DataFrame() # 필터링 결과 없음
+            st.warning(f\"기준 IP '{selected_base_ip}' 정보를 찾을 수 없습니다.\")
+            df_filtered_main = pd.DataFrame()  # 필터링 결과 없음
 
     # --- 필터링 후 데이터 유효성 검사 ---
     if df_filtered_main.empty:
-        st.warning("선택하신 필터에 해당하는 데이터가 없습니다.")
+        st.warning(\"선택하신 필터에 해당하는 데이터가 없습니다.\")
         return
         
-    if selected_base_ip not in df_filtered_main["IP"].unique():
-        st.warning(f"선택하신 그룹 '{comparison_group}'에 기준 IP '{selected_base_ip}'가 포함되지 않습니다.")
+    if selected_base_ip not in df_filtered_main[\"IP\"].unique():
+        st.warning(\"선택하신 그룹 조건에 기준 IP가 포함되지 않습니다.\")
         return 
 
     # --- 주요 지표 목록 정의 ---
     key_metrics = [
-        "T시청률", "H시청률", 
-        "TVING 라이브+QUICK", "TVING VOD", 
-        "조회수", "언급량"
+        \"T시청률\", \"H시청률\", 
+        \"TVING 라이브+QUICK\", \"TVING VOD\", 
+        \"조회수\", \"언급량\"
     ]
 
     # --- 페이지 제목 및 설명 ---
-    filter_desc = " (" + ", ".join(group_filter_applied) + ")" if group_filter_applied else "(전체 IP)"
-    st.markdown(f"#### {selected_episode} 성과 비교 {filter_desc} (기준 IP: {selected_base_ip})")
-    st.caption("선택된 IP 그룹의 성과를 보여줍니다. 기준 IP는 붉은색으로 표시됩니다.")
-    st.markdown("---") 
+    filter_desc = \" (\" + \", \".join(group_filter_applied) + \")\" if group_filter_applied else \"(전체 IP)\"
+    st.markdown(f\"#### {selected_episode} 성과 비교 {filter_desc} (기준 IP: {selected_base_ip})\")
+    st.caption(\"선택된 IP 그룹의 성과를 보여줍니다. 기준 IP는 붉은색으로 표시됩니다.\")
+    st.markdown(\"---\") 
 
     # --- 각 지표별 차트 렌더링 ---
     chart_cols = st.columns(2) 
@@ -3101,20 +3105,17 @@ def render_episode():
                 df_result = filter_data_for_episode_comparison(df_filtered_main, selected_episode, metric)
                 
                 if df_result.empty or df_result['value'].isnull().all() or (df_result['value'] == 0).all(): 
-                    metric_label = metric.replace("T시청률", "타깃").replace("H시청률", "가구")
-                    st.markdown(f"###### {selected_episode} - '{metric_label}'") 
-                    st.info(f"데이터 없음")
-                    st.markdown("---") 
+                    metric_label = metric.replace(\"T시청률\", \"타깃\").replace(\"H시청률\", \"가구\")
+                    st.markdown(f\"###### {selected_episode} - '{metric_label}'\") 
+                    st.info(f\"데이터 없음\")
+                    st.markdown(\"---\") 
                 else:
                     plot_episode_comparison(df_result, metric, selected_episode, selected_base_ip)
-                    st.markdown("---") 
-
+                    st.markdown(\"---\")
             except Exception as e:
-                metric_label = metric.replace("T시청률", "타깃").replace("H시청률", "가구")
-                st.markdown(f"###### {selected_episode} - '{metric_label}'") 
-                st.error(f"차트 생성 오류: {e}")
-                st.markdown("---") 
+                st.error(f\"차트 렌더링 오류({metric}): {e}\")
         col_idx += 1
+
 #endregion
 
 #region [ 13. 페이지 6: 성장스코어-방영성과  ]
