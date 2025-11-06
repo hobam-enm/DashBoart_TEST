@@ -2123,7 +2123,7 @@ def render_demographic():
         - `**예시** : 01화 20대 남성이 +51%인 경우 -> 기준IP가 비교대상보다 20대 남성 시청자수가 51% 많다'
         """).strip())
 
-        st.markdown("</div>", unsafe_allow_html=True
+        st.markdown("</div>", unsafe_allow_html=True)
 
     with filter_cols[1]:
         # [수정] st.radio -> st.selectbox
