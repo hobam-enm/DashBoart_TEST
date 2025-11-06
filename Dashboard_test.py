@@ -25,7 +25,7 @@ from google.oauth2.service_account import Credentials
 #region [ 1-0. 페이지 설정 — 반드시 첫 번째 Streamlit 명령 ]
 # =====================================================
 st.set_page_config(
-    page_title="(TSET)Drama Dashboard",
+    page_title="(TEST)Drama Dashboard",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -612,6 +612,52 @@ def get_episode_options(df: pd.DataFrame) -> List[str]:
 #region [ 7. 공통 시각화 유틸 ]
 # =====================================================
 
+def plot_episode_comparison(
+    df_result: pd.DataFrame,
+    selected_metric: str,
+    selected_episode: str,
+    base_ip: str 
+):
+    """특정 회차 비교 결과 시각화 (Bar Chart with Highlight)"""
+    
+    colors = ['#d93636' if ip == base_ip else '#666666' for ip in df_result['IP']]
+    metric_label = selected_metric.replace("T시청률", "타깃").replace("H시청률", "가구") 
+    
+    fig = px.bar(
+        df_result,
+        x="IP",
+        y="value",
+        text="value",
+        title=f"{selected_episode} - '{metric_label}' (기준: {base_ip})" 
+    )
+    
+    hover_template = "<b>%{x}</b><br>" + f"{metric_label}: %{{y:,.2f}}" if selected_metric in ["T시청률", "H시청률"] else "<b>%{x}</b><br>" + f"{metric_label}: %{{y:,.0f}}"
+    
+    fig.update_traces(
+        marker_color=colors, 
+        textposition='outside',
+        hovertemplate=hover_template 
+    )
+    
+    if selected_metric in ["T시청률", "H시청률"]:
+        fig.update_traces(texttemplate='%{text:.2f}%')
+        fig.update_layout(yaxis_title=f"{metric_label} (%)")
+    else:
+        fig.update_traces(texttemplate='%{text:,.0f}')
+        fig.update_layout(yaxis_title=metric_label)
+        
+    fig.update_layout(
+        xaxis_title=None, 
+        xaxis=dict(tickfont=dict(size=11)), 
+        height=350, 
+        margin=dict(t=40, b=0, l=0, r=0)
+    )
+    st.plotly_chart(fig, use_container_width=True)
+
+
+# ===== [페이지 5] 메인 렌더링 함수 =====
+
+
 # =====================================================
 # (이 곳으로 공통 유틸 함수가 모입니다. 동작은 변경하지 않음)
 
@@ -672,6 +718,63 @@ with st.sidebar:
 
 #region [ 6. 공통 집계 유틸: KPI 계산 ]
 # =====================================================
+
+def kpi(col, title, value):
+    """
+    Streamlit 컬럼 내에 KPI 카드를 렌더링합니다.
+    """
+    with col:
+        st.markdown(
+            f'<div class="kpi-card"><div class="kpi-title">{title}</div>'
+            f'<div class="kpi-value">{value}</div></div>',
+            unsafe_allow_html=True
+        )
+
+# ===== 페이지 라우팅 유틸 =====
+
+def _render_kpi_card_comparison(
+    title: str, 
+    val1: float | None, 
+    val2: float | None, 
+    ip1_name: str, 
+    ip2_name: str, 
+    format_str: str = "{:,.0f}",
+    higher_is_better: bool = True 
+):
+    """2개 IP 값을 비교하는 커스텀 KPI 카드 렌더링 함수"""
+    
+    val1_disp = format_str.format(val1) if val1 is not None else "–"
+    val2_disp = format_str.format(val2) if val2 is not None else "–"
+    
+    winner = 0 
+    if val1 is not None and val2 is not None:
+        if higher_is_better:
+            if val1 > val2: winner = 1
+            elif val2 > val1: winner = 2
+        else: 
+            if val1 < val2: winner = 1
+            elif val2 < val1: winner = 2
+
+    val1_style = "color:#d93636; font-weight: 700;" if winner == 1 else ("color:#888; font-weight: 400;" if winner == 2 else "color:#333; font-weight: 400;")
+    val2_style = "color:#2a61cc; font-weight: 700;" if winner == 2 else ("color:#888; font-weight: 400;" if winner == 1 else "color:#333; font-weight: 400;")
+
+    st.markdown(f"""
+    <div class="kpi-card" style="height: 100px; display: flex; flex-direction: column; justify-content: center;">
+        <div class="kpi-title">{title}</div>
+        <div class="kpi_value" style="font-size: 1.1rem; line-height: 1.4; margin-top: 5px;">
+            <span style="{val1_style}">
+                <span style="font-size: 0.8em; color: #d93636;">{ip1_name}:</span> {val1_disp}
+            </span>
+            <br>
+            <span style="{val2_style}">
+                <span style="font-size: 0.8em; color: #2a61cc;">{ip2_name}:</span> {val2_disp}
+            </span>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+# --- IP vs IP 메인 렌더링 함수 ---
+
 def _episode_col(df: pd.DataFrame) -> str:
     """데이터프레임에 존재하는 회차 숫자 컬럼명을 반환합니다."""
     return "회차_numeric" if "회차_numeric" in df.columns else ("회차_num" if "회차_num" in df.columns else "회차")
