@@ -455,53 +455,35 @@ def get_episode_options(df: pd.DataFrame) -> List[str]:
 st.markdown("""
 <style>
 /* 지표기준안내 전용 타이포 + 인라인코드 스타일 */
-st.markdown("""
-<style>
 .gd-guideline { font-size: 13px; line-height: 1.35; }
 .gd-guideline ul { margin: .2rem 0 .6rem 1.1rem; padding: 0; }
 .gd-guideline li { margin: .15rem 0; }
-</style>
-""", unsafe_allow_html=True)
 .gd-guideline b, .gd-guideline strong { font-weight: 600; }
 /* 백틱(`...`) 인라인 코드 느낌: 작고, 살짝 녹색 칩 */
 .gd-guideline code{
-st.markdown("""
-<style>
   background: rgba(16,185,129,.10);
   color: #16a34a;
   padding: 1px 6px;
   border-radius: 6px;
   font-size: .92em;   /* 본문보다 더 작게 */
-</style>
-""", unsafe_allow_html=True)
 }
 /* --- 전체 앱 배경 --- */
 [data-testid="stAppViewContainer"] {
-st.markdown("""
-<style>
     background-color: #f8f9fa; /* 매우 연한 회색 배경 */
-</style>
-""", unsafe_allow_html=True)
 }
 
 /* --- st.container(border=True) 카드 스타일 --- */
 div[data-testid="stVerticalBlockBorderWrapper"] {
-st.markdown("""
-<style>
     background-color: #ffffff;
     border: 1px solid #e9e9e9;
     border-radius: 10px;
     box-shadow: 0 2px 5px rgba(0,0,0,0.03);
     padding: 1.25rem 1.25rem 1.5rem 1.25rem;
     margin-bottom: 1.5rem;
-</style>
-""", unsafe_allow_html=True)
 }
 
 /* --- Sidebar 배경/패딩 + 항상 펼침(폭 고정) --- */
 section[data-testid="stSidebar"] {
-st.markdown("""
-<style>
     background: #ffffff;
     border-right: 1px solid #e0e0e0;
     padding-top: 1rem;
@@ -509,288 +491,162 @@ st.markdown("""
     padding-right: 0.5rem;
     min-width:340px !important;
     max-width:340px !important;
-</style>
-""", unsafe_allow_html=True)
 }
 /* 사이드바 접힘 토글 버튼 숨김 */
-st.markdown("""
-<style>
 div[data-testid="collapsedControl"] { display:none !important; }
-</style>
-""", unsafe_allow_html=True)
 
 /* --- 로고 --- */
 .sidebar-logo{
-st.markdown("""
-<style>
     font-size: 28px;
-</style>
-""", unsafe_allow_html=True)
     font-weight: 700;
-st.markdown("""
-<style>
     color: #1a1a1a;
-</style>
-""", unsafe_allow_html=True)
     text-align: center;
-st.markdown("""
-<style>
     margin-bottom: 10px;
     padding-top: 10px;
-</style>
-""", unsafe_allow_html=True)
 }
 
 /* --- (레거시) 네비게이션 앵커 아이템 --- */
 .nav-item{
-st.markdown("""
-<style>
     display: block;
     width: 100%;
     padding: 12px 15px;
     color: #333 !important;
     background: #f1f3f5;
-</style>
-""", unsafe_allow_html=True)
     text-decoration: none !important;
     font-weight: 600;
-st.markdown("""
-<style>
     border-radius: 8px;
     margin-bottom: 5px;
-</style>
-""", unsafe_allow_html=True)
     text-align: center;
-st.markdown("""
-<style>
     transition: background-color 0.2s ease, color 0.2s ease;
-</style>
-""", unsafe_allow_html=True)
 }
 .nav-item:hover{
-st.markdown("""
-<style>
     background: #e9ecef;
     color: #000 !important;
-</style>
-""", unsafe_allow_html=True)
     text-decoration: none;
 }
 .active{
-st.markdown("""
-<style>
     background: #004a99;
     color: #ffffff !important;
-</style>
-""", unsafe_allow_html=True)
     text-decoration: none;
     font-weight: 700;
 }
 .active:hover{
-st.markdown("""
-<style>
     background: #003d80;
     color: #ffffff !important;
-</style>
-""", unsafe_allow_html=True)
 }
 
 /* --- KPI 카드 --- */
 .kpi-card {
-st.markdown("""
-<style>
   background: #ffffff;
   border: 1px solid #e9e9e9;
   border-radius: 10px;
   padding: 20px 15px;
-</style>
-""", unsafe_allow_html=True)
   text-align: center;
-st.markdown("""
-<style>
   box-shadow: 0 2px 5px rgba(0,0,0,0.03);
   height: 100%;
   display: flex;
-</style>
-""", unsafe_allow_html=True)
   flex-direction: column;
-st.markdown("""
-<style>
   justify-content: center;
-</style>
-""", unsafe_allow_html=True)
 }
 .kpi-title { 
-st.markdown("""
-<style>
     font-size: 15px; 
-</style>
-""", unsafe_allow_html=True)
     font-weight: 600; 
-st.markdown("""
-<style>
     margin-bottom: 10px; 
     color: #444; 
-</style>
-""", unsafe_allow_html=True)
 }
 .kpi-value { 
-st.markdown("""
-<style>
     font-size: 28px; 
-</style>
-""", unsafe_allow_html=True)
     font-weight: 700; 
-st.markdown("""
-<style>
     color: #000; 
     line-height: 1.2;
-</style>
-""", unsafe_allow_html=True)
 }
 
 /* --- KPI 서브 라인 --- */
-st.markdown("""
-<style>
 .kpi-subwrap { margin-top: 10px; line-height: 1.4; }
 .kpi-sublabel { font-size: 12px; font-weight: 500; color: #555; letter-spacing: 0.1px; margin-right: 6px; }
 .kpi-substrong { font-size: 14px; font-weight: 700; color: #111; }
 .kpi-subpct { font-size: 14px; font-weight: 700; }
-</style>
-""", unsafe_allow_html=True)
 
 /* --- AgGrid 공통 --- */
-st.markdown("""
-<style>
 .ag-theme-streamlit { font-size: 13px; }
 .ag-theme-streamlit .ag-root-wrapper { border-radius: 8px; }
 .ag-theme-streamlit .ag-row-hover { background-color: #f5f8ff !important; }
 .ag-theme-streamlit .ag-header-cell-label { justify-content: center !important; }
 .ag-theme-streamlit .centered-header .ag-header-cell-label { justify-content: center !important; }
 .ag-theme-streamlit .centered-header .ag-sort-indicator-container { margin-left: 4px; }
-</style>
-""", unsafe_allow_html=True)
 .ag-theme-streamlit .bold-header .ag-header-cell-text { 
     font-weight: 700 !important; 
-st.markdown("""
-<style>
     font-size: 13px; 
     color: #111;
-</style>
-""", unsafe_allow_html=True)
 }
 
 /* --- 페이지 내 섹션 타이틀 --- */
 .sec-title{ 
-st.markdown("""
-<style>
     font-size: 20px; 
-</style>
-""", unsafe_allow_html=True)
     font-weight: 700; 
-st.markdown("""
-<style>
     color: #111; 
     margin: 0 0 10px 0;
     padding-bottom: 0;
     border-bottom: none;
-</style>
-""", unsafe_allow_html=True)
 }
 
 /* --- Streamlit 기본 요소 미세 조정 --- */
-st.markdown("""
-<style>
 div[data-testid="stMultiSelect"], div[data-testid="stSelectbox"] { margin-top: -10px; }
 h3 { margin-top: -15px; margin-bottom: 10px; }
 h4 { font-weight: 700; color: #111; margin-top: 0rem; margin-bottom: 0.5rem; }
 hr { margin: 1.5rem 0; background-color: #e0e0e0; }
-</style>
-""", unsafe_allow_html=True)
 
 /* =====================================================
    버튼 기반 사이드바 네비게이션 스킨 (리로드 없는 내비)
    기존 .nav-item 룩&필을 버튼에 이식
    ===================================================== */
-st.markdown("""
-<style>
 section[data-testid="stSidebar"] .block-container { padding-top: 0.75rem; }
-</style>
-""", unsafe_allow_html=True)
 
 /* 공통 버튼 스타일 */
 section[data-testid="stSidebar"] .stButton > button {
-st.markdown("""
-<style>
   border-radius: 8px;
   border: 1px solid var(--outline, #DCDCDC);
   background: #f1f3f5;
   color: #333;
-</style>
-""", unsafe_allow_html=True)
   font-weight: 600;
-st.markdown("""
-<style>
   padding: 12px 15px;
   margin: 6px 0 0 0;
   box-shadow: none;
   width: 100%;
   transition: background-color .12s ease-in-out, border-color .12s ease-in-out, color .12s ease-in-out;
-</style>
-""", unsafe_allow_html=True)
 }
 
 /* hover */
 section[data-testid="stSidebar"] .stButton > button:hover {
-st.markdown("""
-<style>
   border-color: #B9B9B9;
   background: #e9ecef;
   color: #000;
-</style>
-""", unsafe_allow_html=True)
 }
 
 /* 비활성(secondary) */
 section[data-testid="stSidebar"] .stButton [data-testid="baseButton-secondary"] {
-st.markdown("""
-<style>
   border: 1px solid #E5E7EB;
   background: #f1f3f5;
   color: #333;
-</style>
-""", unsafe_allow_html=True)
 }
 
 /* 활성(Primary) — 기존 .active 느낌 */
 section[data-testid="stSidebar"] .stButton [data-testid="baseButton-primary"] {
-st.markdown("""
-<style>
   background: #004a99;
   color: #fff;
   border: 1px solid #004a99;
   box-shadow: 0 4px 10px rgba(0, 74, 153, 0.25);
-</style>
-""", unsafe_allow_html=True)
 }
 
 /* 활성 hover */
 section[data-testid="stSidebar"] .stButton [data-testid="baseButton-primary"]:hover {
-st.markdown("""
-<style>
   filter: brightness(1.02);
   background: #003d80;
   border-color: #003d80;
-</style>
-""", unsafe_allow_html=True)
 }
 
 /* 사이드바 구분선 */
-st.markdown("""
-<style>
 .sidebar-hr { margin: 8px 0 12px 0; border-top: 1px solid #E5E7EB; }
-</style>
-""", unsafe_allow_html=True)
 </style>
 """, unsafe_allow_html=True)
 
@@ -799,44 +655,24 @@ st.markdown("""
 <style>
 /* ==== Sidebar Gradient Title: 1줄, 줄바꿈 없이, 폭 좁아도 예쁘게 ==== */
 .page-title-wrap{
-st.markdown("""
-<style>
   display:flex; align-items:center; gap:8px; margin:4px 0 10px 0;
-</style>
-""", unsafe_allow_html=True)
 }
-st.markdown("""
-<style>
 .page-title-emoji{ font-size:20px; line-height:1; }
-</style>
-""", unsafe_allow_html=True)
 .page-title-main{
   /* clamp(min, preferred, max) → 사이드바가 좁아도 자연스레 줄어듦 */
-st.markdown("""
-<style>
   font-size: clamp(18px, 2.2vw, 24px);
   font-weight: 800; letter-spacing:-0.2px; line-height:1.15;
   background: linear-gradient(90deg,#6A5ACD 0%, #A663CC 40%, #FF7A8A 75%, #FF8A3D 100%);
   -webkit-background-clip:text; background-clip:text; color:transparent;
-</style>
-""", unsafe_allow_html=True)
   white-space: nowrap;             /* 줄바꿈 금지 */
   overflow: hidden;                /* 넘치면 숨김 */
   text-overflow: ellipsis;         /* … 처리 */
-st.markdown("""
-<style>
   max-width: 100%;                 /* 사이드바 폭에 맞춰 자르기 */
-</style>
-""", unsafe_allow_html=True)
 }
 
 /* 사이드바 버튼도 약간 컴팩트하게(필요 시) */
 section[data-testid="stSidebar"] .stButton > button{
-st.markdown("""
-<style>
   padding: 10px 12px; font-weight: 600;
-</style>
-""", unsafe_allow_html=True)
 }
 </style>
 """, unsafe_allow_html=True)
@@ -1012,11 +848,7 @@ def _fmt_ep(n):
 COLOR_MALE = "#2a61cc"
 COLOR_FEMALE = "#d93636"
 
-st.markdown("""
-<style>
 def render_gender_pyramid(container, title: str, df_src: pd.DataFrame, height: int = 260):
-</style>
-""", unsafe_allow_html=True)
 
     if df_src.empty:
         container.info("표시할 데이터가 없습니다.")
@@ -1276,11 +1108,7 @@ def render_overview():
     st.caption('▶ IP별 평균')
 
     c1, c2, c3, c4, c5 = st.columns(5)
-st.markdown("""
-<style>
     st.markdown("<div style='margin-top:20px'></div>", unsafe_allow_html=True)
-</style>
-""", unsafe_allow_html=True)
     c6, c7, c8, c9, c10 = st.columns(5)
 
     t_rating   = avg_of_ip_means("T시청률")
@@ -1693,11 +1521,7 @@ def render_ip_detail():
             "<span class='kpi-sublabel'>그룹 內</span> "
             f"<span class='kpi-substrong'>{rank_label}</span><br/>"
             "<span class='kpi-sublabel'>그룹 평균比</span> "
-st.markdown("""
-<style>
             f"<span class='kpi-subpct' style='color:{col};'>{pct_txt}</span>"
-</style>
-""", unsafe_allow_html=True)
             "</div>"
         )
 
@@ -2074,11 +1898,7 @@ st.markdown("""
     }}
     """)
 
-st.markdown("""
-<style>
     def _render_aggrid_table(df_numeric: pd.DataFrame, title: str, height: int = 320):
-</style>
-""", unsafe_allow_html=True)
         st.markdown(f"###### {title}")
         if df_numeric.empty:
             st.info("표시할 데이터가 없습니다.")
@@ -2176,11 +1996,7 @@ function(params) {
 
 
 # ===== [페이지 3] AgGrid 테이블 렌더링 함수 =====
-st.markdown("""
-<style>
 def render_index_table(df_index: pd.DataFrame, title: str, height: int = 400):
-</style>
-""", unsafe_allow_html=True)
     st.markdown(f"###### {title}")
 
     if df_index.empty: st.info("비교할 데이터가 없습니다."); return
@@ -2833,12 +2649,8 @@ def _render_kpi_card_comparison(
             if val1 < val2: winner = 1
             elif val2 < val1: winner = 2
 
-st.markdown("""
-<style>
     val1_style = "color:#d93636; font-weight: 700;" if winner == 1 else ("color:#888; font-weight: 400;" if winner == 2 else "color:#333; font-weight: 400;")
     val2_style = "color:#2a61cc; font-weight: 700;" if winner == 2 else ("color:#888; font-weight: 400;" if winner == 1 else "color:#333; font-weight: 400;")
-</style>
-""", unsafe_allow_html=True)
 
     st.markdown(f"""
     <div class="kpi-card" style="height: 100px; display: flex; flex-direction: column; justify-content: center;">
@@ -2858,11 +2670,7 @@ st.markdown("""
 # --- IP vs IP 메인 렌더링 함수 ---
 def render_ip_vs_ip_comparison(df_all: pd.DataFrame, ip1: str, ip2: str, kpi_percentiles: pd.DataFrame):
     
-st.markdown("""
-<style>
     st.markdown(f"#### ⚖️ : <span style='color:#d93636;'>{ip1}</span> vs <span style='color:#2a61cc;'>{ip2}</span>", unsafe_allow_html=True)
-</style>
-""", unsafe_allow_html=True)
 
     st.divider()
 
@@ -2881,11 +2689,7 @@ st.markdown("""
     with kpi_cols_1[2]: _render_kpi_card_comparison("⚡ 티빙 라이브+QUICK", kpis1.get("TVING 라이브+QUICK"), kpis2.get("TVING 라이브+QUICK"), ip1, ip2, "{:,.0f}")
     with kpi_cols_1[3]: _render_kpi_card_comparison("▶️ 티빙 VOD", kpis1.get("TVING VOD"), kpis2.get("TVING VOD"), ip1, ip2, "{:,.0f}")
     
-st.markdown("""
-<style>
     st.markdown("<div style='margin-top: 10px;'></div>", unsafe_allow_html=True)
-</style>
-""", unsafe_allow_html=True)
     kpi_cols_2 = st.columns(4) # 4개 (두 번째 줄)
     with kpi_cols_2[0]: _render_kpi_card_comparison("👀 디지털 조회수", kpis1.get("디지털 조회수"), kpis2.get("디지털 조회수"), ip1, ip2, "{:,.0f}")
     with kpi_cols_2[1]: _render_kpi_card_comparison("💬 디지털 언급량", kpis1.get("디지털 언급량"), kpis2.get("디지털 언급량"), ip1, ip2, "{:,.0f}")
@@ -3331,11 +3135,7 @@ def render_growth_score():
     head = st.columns([5, 3, 2])
     with head[0]:
         st.markdown(
-st.markdown("""
-<style>
             f"## 🚀 성장스코어-방영지표 <span style='font-size:20px;color:#6b7b93'>(~{_ep_display}회 기준)</span>",
-</style>
-""", unsafe_allow_html=True)
             unsafe_allow_html=True
         )
     with head[1]:
@@ -3365,11 +3165,7 @@ st.markdown("""
             """)
 
     # 선택한 작품 타이틀
-st.markdown("""
-<style>
     st.markdown(f"#### {selected_ip} <span style='font-size:16px;color:#6b7b93'>자세히보기</span>",
-</style>
-""", unsafe_allow_html=True)
             unsafe_allow_html=True
         )
 
@@ -3463,13 +3259,9 @@ st.markdown("""
     with card_cols[0]:
         st.markdown(
             f"""
-st.markdown("""
-<style>
             <div class="kpi-card" style="height:110px;border:2px solid #004a99;background:linear-gradient(180deg,#e8f0ff, #ffffff);">
               <div class="kpi-title" style="font-size:15px;color:#003d80;">종합등급</div>
               <div class="kpi-value" style="font-size:40px;color:#003d80;">{focus['종합등급'] if pd.notna(focus['종합등급']) else '–'}</div>
-</style>
-""", unsafe_allow_html=True)
             </div>
             """,
             unsafe_allow_html=True
@@ -3479,17 +3271,9 @@ st.markdown("""
         with col:
             st.markdown(
                 f"""
-st.markdown("""
-<style>
                 <div class="kpi-card" style="height:110px;">
-</style>
-""", unsafe_allow_html=True)
                   <div class="kpi-title">{title}</div>
-st.markdown("""
-<style>
                   <div class="kpi-value" style="font-size:28px;">{val if pd.notna(val) else '–'}</div>
-</style>
-""", unsafe_allow_html=True)
                 </div>
                 """,
                 unsafe_allow_html=True
@@ -3760,11 +3544,7 @@ st.markdown("""
       let bg='#fff', color='#111', fw='700';
       if (v.startsWith('S')) { bg='rgba(0,91,187,0.14)'; color='#003d80'; }
       else if (v.startsWith('A')) { bg='rgba(0,91,187,0.08)'; color='#004a99'; }
-st.markdown("""
-<style>
       else if (v.startsWith('B')) { bg='rgba(0,0,0,0.03)'; color:'#333'; fw='600'; }
-</style>
-""", unsafe_allow_html=True)
       else if (v.startsWith('C')) { bg='rgba(42,97,204,0.08)'; color='#2a61cc'; }
       else if (v.startsWith('D')) { bg='rgba(42,97,204,0.14)'; color='#1a44a3'; }
       return {'background-color':bg,'color':color,'font-weight':fw,'text-align':'center'};
@@ -3840,15 +3620,11 @@ def render_growth_score_digital():
     # 작은 스타일(요약카드 공통)
     st.markdown("""
     <style>
-st.markdown("""
-<style>
       .kpi-card{border-radius:16px;border:1px solid #e7ebf3;background:#fff;padding:12px 14px;
                 box-shadow:0 1px 2px rgba(0,0,0,0.04)}
       .kpi-title{font-size:13px;color:#5b6b83;margin-bottom:4px;font-weight:600}
       .kpi-value{font-weight:800;letter-spacing:-0.2px}
       .centered-header .ag-header-cell-label{justify-content:center;}
-</style>
-""", unsafe_allow_html=True)
       .bold-header .ag-header-cell-text{font-weight:700;}
     </style>
     """, unsafe_allow_html=True)
@@ -3995,13 +3771,9 @@ st.markdown("""
     with card_cols[0]:
         st.markdown(
             f"""
-st.markdown("""
-<style>
             <div class="kpi-card" style="height:110px;border:2px solid #004a99;background:linear-gradient(180deg,#e8f0ff, #ffffff);">
               <div class="kpi-title" style="font-size:15px;color:#003d80;">종합등급</div>
               <div class="kpi-value" style="font-size:40px;color:#003d80;">{focus['종합등급'] if pd.notna(focus['종합등급']) else '–'}</div>
-</style>
-""", unsafe_allow_html=True)
             </div>
             """, unsafe_allow_html=True
         )
@@ -4009,17 +3781,9 @@ st.markdown("""
         with col:
             st.markdown(
                 f"""
-st.markdown("""
-<style>
                 <div class="kpi-card" style="height:110px;">
-</style>
-""", unsafe_allow_html=True)
                   <div class="kpi-title">{title}</div>
-st.markdown("""
-<style>
                   <div class="kpi-value" style="font-size:28px;">{val if pd.notna(val) else '–'}</div>
-</style>
-""", unsafe_allow_html=True)
                 </div>
                 """, unsafe_allow_html=True
             )
@@ -4218,11 +3982,7 @@ st.markdown("""
       let bg='#fff', color='#111', fw='700';
       if (v.startsWith('S')) { bg='rgba(0,91,187,0.14)'; color='#003d80'; }
       else if (v.startsWith('A')) { bg='rgba(0,91,187,0.08)'; color='#004a99'; }
-st.markdown("""
-<style>
       else if (v.startsWith('B')) { bg='rgba(0,0,0,0.03)'; color:'#333'; fw='600'; }
-</style>
-""", unsafe_allow_html=True)
       else if (v.startsWith('C')) { bg='rgba(42,97,204,0.08)'; color='#2a61cc'; }
       else if (v.startsWith('D')) { bg='rgba(42,97,204,0.14)'; color='#1a44a3'; }
       return {'background-color':bg,'color':color,'font-weight':fw,'text-align':'center'};
@@ -4349,23 +4109,41 @@ div[data-testid="stVerticalBlockBorderWrapper"] { /* emulate ._liftable */
 # =========================================================================
 
 
-
-# === [SIDEBAR CARD STRIP • global • 2025-11-06] ==============================
+# === [SIDEBAR CARD STRIP • v2 • 2025-11-06] ==================================
+# 사이드바 내부의 모든 카드 박스(배경/보더/섀도우/패딩) 제거 + hover 효과 무력화
 st.markdown("""
 <style>
-section[data-testid="stSidebar"] div[data-testid="stVerticalBlockBorderWrapper"],
-section[data-testid="stSidebar"] [data-testid="stVerticalBlock"] > div,
-section[data-testid="stSidebar"] .block-container,
-section[data-testid="stSidebar"] [data-testid="stSidebarContent"] {
+/* 1) 사이드바 안의 '모든' 카드형 래퍼 박스 제거 */
+section[data-testid="stSidebar"] div[data-testid="stVerticalBlockBorderWrapper"] {
   background: transparent !important;
   border: none !important;
   box-shadow: none !important;
   padding: 0 !important;
 }
+
+/* 2) 사이드바 카드 hover 효과 제거 */
 section[data-testid="stSidebar"] div[data-testid="stVerticalBlockBorderWrapper"]:hover {
   transform: none !important;
   box-shadow: none !important;
 }
+
+/* 3) 흔히 감싸는 추가 wrapper들에 대한 여유 규칙 */
+section[data-testid="stSidebar"] [data-testid="stVerticalBlock"] > div {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+/* 4) 사이드바 기본 컨텐츠 컨테이너의 여백 정리(과도한 패딩 제거) */
+section[data-testid="stSidebar"] .block-container, 
+section[data-testid="stSidebar"] [data-testid="stSidebarContent"] {
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+  box-shadow: none !important;
+  border: none !important;
+  background: transparent !important;
+}
 </style>
 """, unsafe_allow_html=True)
 # ============================================================================
+
