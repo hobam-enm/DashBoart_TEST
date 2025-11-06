@@ -8,6 +8,7 @@ import datetime
 import re
 from typing import List, Dict, Any, Optional 
 import time, uuid
+import textwrap
 
 import numpy as np
 import pandas as pd
@@ -1019,7 +1020,6 @@ def render_overview():
     with st.expander("ℹ️ 지표 기준 안내", expanded=False):
         st.markdown("<div class='gd-guideline'>", unsafe_allow_html=True)
 
-        import textwrap
         st.markdown(textwrap.dedent("""
             **지표 기준**
         - **시청률** `회차평균`: 전국 기준 가구 / 타깃(2049) 시청률
@@ -1257,7 +1257,6 @@ def render_ip_detail():
     with st.expander("ℹ️ 지표 기준 안내", expanded=False):
         st.markdown("<div class='gd-guideline'>", unsafe_allow_html=True)
 
-        import textwrap
         st.markdown(textwrap.dedent("""
             **지표 기준**
         - **시청률** `회차평균`: 전국 기준 가구 / 타깃(2049) 시청률
@@ -2113,15 +2112,15 @@ def render_demographic():
     with st.expander("ℹ️ 사용 설명 및 지표 기준 안내", expanded=False):
         st.markdown("<div class='gd-guideline'>", unsafe_allow_html=True)
 
-        import textwrap
         st.markdown(textwrap.dedent("""
-            **사용법**
-        - **상단 필터에서 비교기준, 플랫폼과 기준 IP를 선택**
-        - **비교 기준** : `IP간 비교` , `그룹과 비교`
-            **지표해석**
-        - **기준IP와 비교대상간 해당 연령대의 '시청자수'차이를 보여줍니다**
-        - **예시** : 01화 20대 남성이 +51%인 경우 → `기준IP가 비교대상보다 20대 남성 시청자수가 51% 많다`
-        """).strip())
+**사용법**
+- **상단 필터에서 비교기준, 플랫폼과 기준 IP를 선택**
+- **비교 기준** : `IP간 비교` , `그룹과 비교`
+        
+**지표해석**
+- **기준IP와 비교대상간 해당 연령대의 '시청자수'차이를 보여줍니다**
+- **예시** : 01화 20대 남성이 +51%인 경우 → `기준IP가 비교대상보다 20대 남성 시청자수가 51% 많다`
+""").strip())
 
         st.markdown("</div>", unsafe_allow_html=True)
 
