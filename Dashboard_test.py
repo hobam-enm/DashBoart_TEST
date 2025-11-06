@@ -119,7 +119,7 @@ def check_password_with_token() -> bool:
         if secret_pwd and isinstance(pwd, str) and pwd.strip() == str(secret_pwd).strip():
             new_token = _issue_token()
             _persist_auth(new_token)
-            _set_auth_query(new_token)  # URL에 토큰 부여 -> 새로고침 후에도 유지
+#             _set_auth_query(new_token)  # URL에 토큰 부여 -> 새로고침 후에도 유지
             _rerun()
         else:
             st.sidebar.warning("비밀번호가 일치하지 않습니다.")
@@ -369,7 +369,7 @@ section[data-testid="stSidebar"] .stButton [data-testid="baseButton-primary"]:ho
 }
 .page-title-emoji{ font-size:20px; line-height:1; }
 .page-title-main{
-  /* clamp(min, preferred, max) -> 사이드바가 좁아도 자연스레 줄어듦 */
+#   /* clamp(min, preferred, max) -> 사이드바가 좁아도 자연스레 줄어듦 */
   font-size: clamp(18px, 2.2vw, 24px);
   font-weight: 800; letter-spacing:-0.2px; line-height:1.15;
   background: linear-gradient(90deg,#6A5ACD 0%, #A663CC 40%, #FF7A8A 75%, #FF8A3D 100%);
@@ -1035,13 +1035,6 @@ def get_avg_demo_pop_by_episode(df_src: pd.DataFrame, medias: List[str]) -> pd.D
 #region [ 8. 페이지 1: Overview ]
 # =====================================================
 def render_overview():
-
-
-# 지표기준 안내 수정
-with st.expander("ℹ️ 지표 기준 안내", expanded=False):
-    st.markdown("""
-    _이 페이지 전용 지표 기준 안내 내용을 여기에 작성하세요._
-    """)
     # ◀◀◀ [수정] load_data() 호출 방식 변경
     df = load_data()
   
@@ -1263,13 +1256,6 @@ with st.expander("ℹ️ 지표 기준 안내", expanded=False):
 # =====================================================
 def render_ip_detail():
 
-
-
-# 지표기준 안내 수정
-with st.expander("ℹ️ 지표 기준 안내", expanded=False):
-    st.markdown("""
-    _이 페이지 전용 지표 기준 안내 내용을 여기에 작성하세요._
-    """)
     # ◀◀◀ [변경 없음] 데이터 로드
     df_full = load_data()
 
@@ -2774,13 +2760,6 @@ def render_ip_vs_ip_comparison(df_all: pd.DataFrame, ip1: str, ip2: str, kpi_per
 
 # ===== [페이지 4] 메인 렌더링 함수 =====
 def render_comparison():
-
-
-# 지표기준 안내 수정
-with st.expander("ℹ️ 지표 기준 안내", expanded=False):
-    st.markdown("""
-    _이 페이지 전용 지표 기준 안내 내용을 여기에 작성하세요._
-    """)
     # ◀◀◀ [수정] load_data() 호출 방식 변경
     df_all = load_data()
     try: 
@@ -3078,15 +3057,8 @@ def render_episode():
 # =====================================================
 
 def render_growth_score():
-
-
-# 지표기준 안내 수정
-with st.expander("ℹ️ 지표 기준 안내", expanded=False):
-    st.markdown("""
-    _이 페이지 전용 지표 기준 안내 내용을 여기에 작성하세요._
-    """)
     """
-    레이아웃: [상단 헤더: '선택한 작품' | IP선택 | 회차기준] -> [선택작품 요약카드] -> [포지셔닝맵] -> [전체표]
+#     레이아웃: [상단 헤더: '선택한 작품' | IP선택 | 회차기준] → [선택작품 요약카드] → [포지셔닝맵] → [전체표]
     변경사항 반영:
       - 타이틀을 '[선택한 작품명] 스코어' 로 표시
       - '종합등급' 카드 2칸(강조)
@@ -3141,6 +3113,13 @@ with st.expander("ℹ️ 지표 기준 안내", expanded=False):
 
     # ---------- 지표 기준 안내 ----------
     # 헤더 다음, 요약카드 위에 배치 권장
+    with st.expander("ℹ️ 지표 기준 안내", expanded=False):
+        st.markdown("""
+    **등급 체계**
+#     - **절대값 등급**: 각 지표의 절대 수준을 IP 간 백분위 20% 단위로 구분 -> `S / A / B / C / D`
+#     - **상승률 등급**: 동일 기간(선택 회차 범위) 내 회차-값 선형회귀 기울기(slope)를 IP 간 백분위 20% 단위로 구분 -> `+2 / +1 / 0 / -1 / -2`
+    - **종합등급**: 절대값과 상승률 등급을 결합해 표기 (예: `A+2`).  
+      - 참고 규칙 예시: **절대값 상위 20%** ∧ **상승률 상위 40%** ⇒ `S+1` 처럼 상/중 상향 표기
 
     **회차 기준(~N회)**
     - 각 IP의 **1~N회** 데이터만 사용 (**적응형 지표**: 없는 회차는 자동 제외).
@@ -3558,28 +3537,14 @@ with st.expander("ℹ️ 지표 기준 안내", expanded=False):
 # =====================================================
 
 def render_growth_score_digital():
-
-
-
-
-selected_group_criteria = st.multiselect(
-    "비교 그룹 기준",
-    ["동일 편성", "방영 연도"],
-    default=["동일 편성"]
-)
-# 지표기준 안내 수정
-with st.expander("ℹ️ 지표 기준 안내", expanded=False):
-    st.markdown("""
-    _이 페이지 전용 지표 기준 안내 내용을 여기에 작성하세요._
-    """)
     """
-#     레이아웃: [상단 헤더: 타이틀 | IP선택 | 회차기준] -> [선택작품 요약카드]
-           -> [회차별 등급 추이(선택 IP)] -> [포지셔닝맵] -> [전체표]
+#     레이아웃: [상단 헤더: 타이틀 | IP선택 | 회차기준] → [선택작품 요약카드]
+#            -> [회차별 등급 추이(선택 IP)] -> [포지셔닝맵] -> [전체표]
 
     사용 메트릭(고정):
-      - 조회수: 회차합 시계열 -> 절대(평균), 상승(회귀 기울기)
-      - 언급량: 회차합 시계열 -> 절대(평균), 상승(회귀 기울기)
-      - F_Total(화제성 순위): 낮을수록 좋음 -> 부호 반전 후 **절대만** 등급화(상승은 미사용)
+#       - 조회수: 회차합 시계열 -> 절대(평균), 상승(회귀 기울기)
+#       - 언급량: 회차합 시계열 -> 절대(평균), 상승(회귀 기울기)
+#       - F_Total(화제성 순위): 낮을수록 좋음 -> 부호 반전 후 **절대만** 등급화(상승은 미사용)
     """
     import numpy as np
     import pandas as pd
@@ -3600,7 +3565,7 @@ with st.expander("ℹ️ 지표 기준 안내", expanded=False):
     ABS_NUM    = {"S":5, "A":4, "B":3, "C":2, "D":1}
 
     # (표시명, metric명, 집계타입, slope사용여부)
-    # type: "sum" -> 회차합, "rank_inv" ->(낮을수록 좋음) 평균 후 -1 곱해 상향화
+    # type: "sum" → 회차합, "rank_inv" →(낮을수록 좋음) 평균 후 -1 곱해 상향화
     METRICS = [
         ("조회수",     "조회수",   "sum",      True),
         ("언급량",     "언급량",   "sum",      True),
@@ -3630,9 +3595,11 @@ with st.expander("ℹ️ 지표 기준 안내", expanded=False):
                                  key="growth_d_ep_cutoff", label_visibility="collapsed")
 
     # ---------- 지표 기준 안내 ----------
+    with st.expander("ℹ️ 지표 기준 안내", expanded=False):
+        st.markdown("""
 **디지털 지표 정의(고정)**
-- **조회수, 언급량**: 회차별 합(에피소드 단위)을 사용 -> 1~N회 집계 시계열의 평균/회귀
-- **F_Total(화제성 순위)**: 값이 **낮을수록 우수** -> 평균 산출 전 `-1` 곱해 상향 스케일로 변환  
+# - **조회수, 언급량**: 회차별 합(에피소드 단위)을 사용 -> 1~N회 집계 시계열의 평균/회귀
+# - **F_Total(화제성 순위)**: 값이 **낮을수록 우수** -> 평균 산출 전 `-1` 곱해 상향 스케일로 변환  
   *(※ 화제성은 **상승스코어 미사용**, 절대스코어만 등급화)*
 
 **등급 체계(공통)**
@@ -3682,8 +3649,8 @@ with st.expander("ℹ️ 지표 기준 안내", expanded=False):
         if mtype == "sum":
             s = sub.groupby("회차_numeric", as_index=False)["value"].sum()
         elif mtype == "rank_inv":
-            s = sub.groupby("회차_numeric", as_index=False)["value"].mean()  # 순위 -> 평균
-            s["value"] = -1 * s["value"]  # 낮을수록 좋음 -> 상향 스케일
+            s = sub.groupby("회차_numeric", as_index=False)["value"].mean()
+            s["value"] = -1 * s["value"]
         else:
             s = sub.groupby("회차_numeric", as_index=False)["value"].mean()
         s = s.sort_values("회차_numeric")
