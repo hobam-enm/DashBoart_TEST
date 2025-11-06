@@ -997,17 +997,21 @@ def render_overview():
     with filter_cols[0]:
         st.markdown("### 📊 Overview")
     with st.expander("ℹ️ 지표 기준 안내", expanded=False):
-                st.markdown("""
-    **지표 기준**
-    - **시청률**`회차평균`: 전국 기준 가구 / 타깃(2049) 시청률
-    - **티빙 LIVE**`회차평균`: 업데이트 예정
-    - **티빙 QUICK**`회차평균`: 방영당일 VOD 시청 UV
-    - **티빙 VOD**`회차평균`: 방영일+1부터 +6까지 6days VOD UV
-    - **디지털 조회/언급량** `회차총합`: 방영주차 (월~일)내 디지털 조회수 및 언급량의 총합
-    - **화제성 점수** `회차평균`: 방영 기간내 주차별 화제성 점수의 평균
-
-    - **앵커드라마 기준** : 토일드라마 타깃시청률 3%이상 , 월화드라마 타깃시청률 2%이상
-            """)
+        st.markdown(
+            """
+    <div style="font-size:13px; line-height:1.35">
+    <b>지표 기준</b><br>
+    - <b>시청률</b>`회차평균`: 전국 기준 가구 / 타깃(2049) 시청률<br>
+    - <b>티빙 LIVE</b>`회차평균`: 업데이트 예정<br>
+    - <b>티빙 QUICK</b>`회차평균`: 방영당일 VOD 시청 UV<br>
+    - <b>티빙 VOD</b>`회차평균`: 방영일+1부터 +6까지 6days VOD UV<br>
+    - <b>디지털 조회/언급량</b> `회차총합`: 방영주차 (월~일)내 디지털 조회수 및 언급량의 총합<br>
+    - <b>화제성 점수</b> `회차평균`: 방영 기간내 주차별 화제성 점수의 평균<br><br>
+    - <b>앵커드라마 기준</b> : 토일 3%↑, 월화 2%↑
+    </div>
+            """,
+            unsafe_allow_html=True,
+        )
 
     with filter_cols[1]:
         prog_sel = st.multiselect(
