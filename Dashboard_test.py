@@ -1,5 +1,4 @@
 # 📊 Overview / IP 성과 대시보드 — v2.0 
-# =============================================================================
 
 
 #region [ 1. 라이브러리 임포트 ]
@@ -25,7 +24,7 @@ from google.oauth2.service_account import Credentials
 #region [ 1-0. 페이지 설정 — 반드시 첫 번째 Streamlit 명령 ]
 # =====================================================
 st.set_page_config(
-    page_title="Drama Dashboard",
+    page_title="(TEST)Drama Dashboard",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -34,6 +33,7 @@ st.set_page_config(
 
 #region [ 1-1. 입장게이트 - URL 토큰 지속 인증 ]
 # =====================================================
+# 새로고침/재실행에도 URL ?auth=토큰 으로 로그인 유지
 AUTH_TTL = 12*3600              # 12시간 유지
 AUTH_QUERY_KEY = "auth"         # URL 쿼리 키
 
@@ -74,7 +74,7 @@ def _validate_token(token: str) -> bool:
     if not ent:
         return False
     if _now() - ent["ts"] > AUTH_TTL:
-        # 만료 -> 제거
+        # 만료 → 제거
         del store[token]
         return False
     return True
@@ -119,7 +119,7 @@ def check_password_with_token() -> bool:
         if secret_pwd and isinstance(pwd, str) and pwd.strip() == str(secret_pwd).strip():
             new_token = _issue_token()
             _persist_auth(new_token)
-#             _set_auth_query(new_token)  # URL에 토큰 부여 -> 새로고침 후에도 유지
+            _set_auth_query(new_token)  # URL에 토큰 부여 → 새로고침 후에도 유지
             _rerun()
         else:
             st.sidebar.warning("비밀번호가 일치하지 않습니다.")
@@ -136,7 +136,8 @@ if not check_password_with_token():
 #region [ 2. 기본 설정 및 공통 상수 ]
 # =====================================================
 
-st.markdown("""<style>
+st.markdown("""
+<style>
 /* === HOTFIX 2025-10-31 Title size + Box exceptions === */
 
 /* Boost title sizes globally */
@@ -182,6 +183,230 @@ div[data-testid="stVerticalBlockBorderWrapper"]:has(.mode-switch) {
     margin-bottom: 0.5rem !important;
 }
 
+
+/* Hov
+/* Subtle background gradient to enhance floating effect */
+[data-testid="stAppViewContainer"] {
+    background: radial-gradient(1200px 500px at 10% -10%, rgba(99, 102, 241, 0.05), transparent 40%),
+                radial-gradient(1200px 500px at 90% -20%, rgba(236, 72, 153, 0.05), transparent 40%),
+                #f7f8fb;
+}
+er lift for floating cards */
+div[data-testid="stVerticalBlockBorderWrapper"]:hover{
+    transform: translateY(-2px);
+    box-shadow: 0 14px 36px rgba(16, 24, 40, 0.14), 0 4px 12px rgba(16, 24, 40, 0.08);
+}
+</style>
+""", unsafe_allow_html=True)
+
+# ===== 네비게이션 아이템 정의 (v2.0) =====
+NAV_ITEMS = {
+    "Overview": "📊 Overview",
+    "IP 성과": "📈 IP 성과 자세히보기",
+    "데모그래픽": "👥 오디언스 히트맵",
+    "비교분석": "⚖️ 비교분석",
+    "성장스코어-방영지표": "🚀 성장스코어-방영지표",
+    "성장스코어-디지털": "🛰️ 성장스코어-디지털",
+    "회차별": "🎬 회차 비교",
+}
+
+# ===== 데모 컬럼 순서 (페이지 2, 3에서 공통 사용) =====
+DECADES = ["10대","20대","30대","40대","50대","60대"]
+DEMO_COLS_ORDER = [f"{d}남성" for d in DECADES] + [f"{d}여성" for d in DECADES]
+
+# ===== ◀◀◀ [신규] Plotly 공통 테마 =====
+dashboard_theme = go.Layout(
+    paper_bgcolor='rgba(0,0,0,0)',  # 카드 배경과 동일하게 투명
+    plot_bgcolor='rgba(0,0,0,0)',   # 차트 내부 배경 투명
+    font=dict(family='sans-serif', size=12, color='#333333'),
+    title=dict(font=dict(size=16, color="#111"), x=0.05),
+    legend=dict(
+        orientation='h',
+        yanchor='bottom',
+        y=1.02,
+        xanchor='right',
+        x=1,
+        bgcolor='rgba(0,0,0,0)'
+    ),
+    margin=dict(l=20, r=20, t=50, b=20), # 기본 마진
+    xaxis=dict(
+        showgrid=False, 
+        zeroline=True, 
+        zerolinecolor='#e0e0e0', 
+        zerolinewidth=1
+    ),
+    yaxis=dict(
+        showgrid=True, 
+        gridcolor='#f0f0f0', # 매우 연한 그리드
+        zeroline=True, 
+        zerolinecolor='#e0e0e0'
+    ),
+    # 테마 색상 (Plotly 기본값 사용. 필요시 주석 해제)
+    # colorway=px.colors.qualitative.Plotly 
+)
+# ◀◀◀ [수정] go.Layout 객체를 go.layout.Template으로 감싸서 등록
+pio.templates['dashboard_theme'] = go.layout.Template(layout=dashboard_theme)
+pio.templates.default = 'dashboard_theme'
+# =====================================================
+#endregion
+
+#region [ 3. 공통 함수: 데이터 로드 / 유틸리티 ]
+# =====================================================
+
+# ===== ◀◀◀ [수정] 데이터 로드 (Streamlit Secrets 사용) =====
+@st.cache_data(ttl=600)
+def load_data() -> pd.DataFrame: # url 인수 제거
+    """
+    Streamlit Secrets를 사용하여 Google Sheets에서 데이터를 인증하고 로드합니다.
+    st.secrets에 'gcp_service_account', 'SHEET_ID', 'GID' (워크시트 이름)가 있어야 합니다.
+    """
+    
+    # ===== 1. Google Sheets 인증 =====
+    scopes = ["https://www.googleapis.com/auth/spreadsheets"]
+    
+    # st.secrets에서 gcp_service_account 정보 로드
+    creds_info = st.secrets["gcp_service_account"]
+    creds = Credentials.from_service_account_info(creds_info, scopes=scopes)
+    client = gspread.authorize(creds)
+
+    # ===== 2. 데이터 로드 =====
+    try:
+        # st.secrets에서 시트 ID와 워크시트 이름(GID 키) 로드
+        sheet_id = st.secrets["SHEET_ID"]
+        # TOML에서 GID = "RAW"로 설정했으므로, "RAW"라는 이름의 워크시트를 엽니다.
+        worksheet_name = st.secrets["GID"] 
+        
+        spreadsheet = client.open_by_key(sheet_id)
+        worksheet = spreadsheet.worksheet(worksheet_name)
+        
+        # 데이터를 DataFrame으로 변환
+        data = worksheet.get_all_records() # 시트의 모든 데이터를 딕셔너리 리스트로 가져옴
+        df = pd.DataFrame(data)
+
+    except gspread.exceptions.WorksheetNotFound:
+        st.error(f"Streamlit Secrets의 GID 값 ('{worksheet_name}')에 해당하는 워크시트를 찾을 수 없습니다.")
+        return pd.DataFrame()
+    except KeyError as e:
+        st.error(f"Streamlit Secrets에 필요한 키({e})가 없습니다. TOML 설정을 확인하세요.")
+        return pd.DataFrame()
+    except Exception as e:
+        st.error(f"Google Sheets 데이터 로드 중 오류 발생: {e}")
+        return pd.DataFrame()
+
+    # --- 3. (이하 원본 코드의 전처리 로직 동일) ---
+    
+    # --- 날짜 파싱 ---
+    if "주차시작일" in df.columns:
+        df["주차시작일"] = pd.to_datetime(
+            df["주차시작일"].astype(str).str.strip(),
+            format="%Y. %m. %d", # ◀◀◀ [참고] 원본 포맷 유지
+            errors="coerce"
+        )
+    if "방영시작일" in df.columns:
+        df["방영시작일"] = pd.to_datetime(
+            df["방영시작일"].astype(str).str.strip(),
+            format="%Y. %m. %d", # ◀◀◀ [참고] 원본 포맷 유지
+            errors="coerce"
+        )
+
+    # --- 숫자형 데이터 변환 ---
+    # gspread.get_all_records()는 이미 1,000단위 콤마나 %를 제거하고 숫자/문자열로 가져옵니다.
+    # 하지만 만약을 위해 원본 코드의 숫자 변환 로직을 유지합니다.
+    if "value" in df.columns:
+        # .astype(str)을 추가하여 gspread가 숫자로 가져온 경우에도 처리되도록 보장
+        v = df["value"].astype(str).str.replace(",", "", regex=False).str.replace("%", "", regex=False)
+        df["value"] = pd.to_numeric(v, errors="coerce").fillna(0)
+
+    # --- 문자열 데이터 정제 ---
+    for c in ["IP", "편성", "지표구분", "매체", "데모", "metric", "회차", "주차"]:
+        if c in df.columns:
+            df[c] = df[c].astype(str).str.strip()
+
+    # --- 파생 컬럼 생성 ---
+    if "회차" in df.columns:
+        df["회차_numeric"] = df["회차"].str.extract(r"(\d+)", expand=False).astype(float)
+    else:
+        df["회차_numeric"] = pd.NA
+
+    return df
+
+# ===== 일반 포맷팅 유틸 =====
+def fmt(v, digits=3, intlike=False):
+    """
+    숫자 포맷팅 헬퍼 (None이나 NaN은 '–'로 표시)
+    """
+    if v is None or pd.isna(v):
+        return "–"
+    return f"{v:,.0f}" if intlike else f"{v:.{digits}f}"
+
+# ===== KPI 카드 렌더링 유틸 =====
+def kpi(col, title, value):
+    """
+    Streamlit 컬럼 내에 KPI 카드를 렌더링합니다.
+    """
+    with col:
+        st.markdown(
+            f'<div class="kpi-card"><div class="kpi-title">{title}</div>'
+            f'<div class="kpi-value">{value}</div></div>',
+            unsafe_allow_html=True
+        )
+
+# ===== 페이지 라우팅 유틸 =====
+def get_current_page_default(default="Overview"):
+    """
+    URL 쿼리 파라미터(?page=...)에서 현재 페이지를 읽어옵니다.
+    없으면 default 값을 반환합니다.
+    """
+    try:
+        qp = st.query_params  # Streamlit 신버전
+        p = qp.get("page", None)
+        if p is None:
+            return default
+        return p if isinstance(p, str) else p[0]
+    except Exception:
+        qs = st.experimental_get_query_params()  # 구버전 호환
+        return (qs.get("page", [default])[0])
+
+# ===== 회차 옵션 생성 유틸 (페이지 5) =====
+def get_episode_options(df: pd.DataFrame) -> List[str]:
+    """데이터에서 사용 가능한 회차 목록 (문자열, '00' 제외, '차'/'화' 제거)을 추출합니다."""
+    
+    valid_options = []
+    # 숫자 회차 컬럼 우선 사용
+    if "회차_numeric" in df.columns:
+        unique_episodes_num = sorted([
+            int(ep) for ep in df["회차_numeric"].dropna().unique() if ep > 0 # 0보다 큰 경우만
+        ])
+        if unique_episodes_num:
+            max_ep_num = unique_episodes_num[-1]
+            for ep_num in unique_episodes_num: valid_options.append(str(ep_num))
+            # 마지막 회차 처리
+            last_ep_str_num = str(max_ep_num)
+            if last_ep_str_num in valid_options and valid_options[-1] != last_ep_str_num:
+                 valid_options.remove(last_ep_str_num); valid_options.append(last_ep_str_num)
+            if len(valid_options) > 0 and "(마지막화)" not in valid_options[-1]:
+                 valid_options[-1] = f"{valid_options[-1]} (마지막화)"
+            return valid_options
+        else: return []
+    # 숫자 회차 컬럼 없을 경우
+    elif "회차" in df.columns:
+        raw_options = sorted(df["회차"].dropna().unique())
+        for opt in raw_options:
+            # '00'으로 시작하는 것 제외
+            if not opt.startswith("00"):
+                cleaned_opt = re.sub(r"[화차]", "", opt) # '화' 또는 '차' 제거
+                if cleaned_opt.isdigit() and int(cleaned_opt) > 0: 
+                    valid_options.append(cleaned_opt)
+        # 숫자 기준으로 정렬
+        return sorted(list(set(valid_options)), key=lambda x: int(x) if x.isdigit() else float('inf')) 
+    else: return []
+#endregion
+
+#region [ 4. 공통 스타일 ]
+# =====================================================
+# CSS 수정: 전체적인 색상 톤, 폰트, 카드 디자인, 네비 버튼 스킨
+st.markdown("""
+<style>
 /* --- 전체 앱 배경 --- */
 [data-testid="stAppViewContainer"] {
     background-color: #f8f9fa; /* 매우 연한 회색 배경 */
@@ -362,14 +587,19 @@ section[data-testid="stSidebar"] .stButton [data-testid="baseButton-primary"]:ho
 
 /* 사이드바 구분선 */
 .sidebar-hr { margin: 8px 0 12px 0; border-top: 1px solid #E5E7EB; }
+</style>
+""", unsafe_allow_html=True)
 
+# [ 4. 공통 스타일 ] 맨 아래쪽에 이 블록을 추가(또는 기존 page-title 스타일을 교체)
+st.markdown("""
+<style>
 /* ==== Sidebar Gradient Title: 1줄, 줄바꿈 없이, 폭 좁아도 예쁘게 ==== */
 .page-title-wrap{
   display:flex; align-items:center; gap:8px; margin:4px 0 10px 0;
 }
 .page-title-emoji{ font-size:20px; line-height:1; }
 .page-title-main{
-#   /* clamp(min, preferred, max) -> 사이드바가 좁아도 자연스레 줄어듦 */
+  /* clamp(min, preferred, max) → 사이드바가 좁아도 자연스레 줄어듦 */
   font-size: clamp(18px, 2.2vw, 24px);
   font-weight: 800; letter-spacing:-0.2px; line-height:1.15;
   background: linear-gradient(90deg,#6A5ACD 0%, #A663CC 40%, #FF7A8A 75%, #FF8A3D 100%);
@@ -384,301 +614,14 @@ section[data-testid="stSidebar"] .stButton [data-testid="baseButton-primary"]:ho
 section[data-testid="stSidebar"] .stButton > button{
   padding: 10px 12px; font-weight: 600;
 }
-
-.kpi-card{border-radius:16px;border:1px solid #e7ebf3;background:#fff;padding:12px 14px;
-                box-shadow:0 1px 2px rgba(0,0,0,0.04)}
-      .kpi-title{font-size:13px;color:#5b6b83;margin-bottom:4px;font-weight:600}
-      .kpi-value{font-weight:800;letter-spacing:-0.2px}
-      .centered-header .ag-header-cell-label{justify-content:center;}
-      .bold-header .ag-header-cell-text{font-weight:700;}
-
-.kpi-card{border-radius:16px;border:1px solid #e7ebf3;background:#fff;padding:12px 14px;
-                box-shadow:0 1px 2px rgba(0,0,0,0.04)}
-      .kpi-title{font-size:13px;color:#5b6b83;margin-bottom:4px;font-weight:600}
-      .kpi-value{font-weight:800;letter-spacing:-0.2px}
-      .centered-header .ag-header-cell-label{justify-content:center;}
-      .bold-header .ag-header-cell-text{font-weight:700;}
-
-
-/* ==== Floating / Glass-lite card polish (override) ==== */
-.kpi-card, .block-card, .plotly-chart, .ag-theme-streamlit .ag-root-wrapper {
-  border-radius: 16px !important;
-  box-shadow: 0 8px 24px rgba(0,0,0,.10) !important;
-  border: 1px solid rgba(2,6,23,.06) !important;
-  background: rgba(255,255,255,.92) !important;
-  backdrop-filter: blur(6px);
-}
-.kpi-card:hover, .block-card:hover, .plotly-chart:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 16px 36px rgba(0,0,0,.14) !important;
-  transition: transform .18s ease, box-shadow .18s ease;
-}
-/* Sidebar title sizing (slightly larger) */
-section[data-testid="stSidebar"] h2 { font-size: 24px; letter-spacing: -0.02em; }
-section[data-testid="stSidebar"] h3 { font-size: 20px; letter-spacing: -0.02em; }
-</style>""", unsafe_allow_html=True)
-
-# ===== 네비게이션 아이템 정의 (v2.0) =====
-NAV_ITEMS = {
-    "Overview": "📊 Overview",
-    "IP 성과": "📈 IP 성과 자세히보기",
-    "데모그래픽": "👥 오디언스 히트맵",
-    "비교분석": "⚖️ 비교분석",
-    "성장스코어-방영지표": "🚀 성장스코어-방영지표",
-    "성장스코어-디지털": "🛰️ 성장스코어-디지털",
-    "회차별": "🎬 회차 비교",
-}
-
-# ===== 데모 컬럼 순서 (페이지 2, 3에서 공통 사용) =====
-DECADES = ["10대","20대","30대","40대","50대","60대"]
-DEMO_COLS_ORDER = [f"{d}남성" for d in DECADES] + [f"{d}여성" for d in DECADES]
-
-# ===== ◀◀◀ [신규] Plotly 공통 테마 =====
-dashboard_theme = go.Layout(
-    paper_bgcolor='rgba(0,0,0,0)',  # 카드 배경과 동일하게 투명
-    plot_bgcolor='rgba(0,0,0,0)',   # 차트 내부 배경 투명
-    font=dict(family='sans-serif', size=12, color='#333333'),
-    title=dict(font=dict(size=16, color="#111"), x=0.05),
-    legend=dict(
-        orientation='h',
-        yanchor='bottom',
-        y=1.02,
-        xanchor='right',
-        x=1,
-        bgcolor='rgba(0,0,0,0)'
-    ),
-    margin=dict(l=20, r=20, t=50, b=20), # 기본 마진
-    xaxis=dict(
-        showgrid=False, 
-        zeroline=True, 
-        zerolinecolor='#e0e0e0', 
-        zerolinewidth=1
-    ),
-    yaxis=dict(
-        showgrid=True, 
-        gridcolor='#f0f0f0', # 매우 연한 그리드
-        zeroline=True, 
-        zerolinecolor='#e0e0e0'
-    ),
-    # 테마 색상 (Plotly 기본값 사용. 필요시 주석 해제)
-    # colorway=px.colors.qualitative.Plotly 
-)
-# ◀◀◀ [수정] go.Layout 객체를 go.layout.Template으로 감싸서 등록
-pio.templates['dashboard_theme'] = go.layout.Template(layout=dashboard_theme)
-pio.templates.default = 'dashboard_theme'
-# =====================================================
-#endregion
-
-#region [ 3. 공통 함수: 데이터 로드 / 유틸리티 ]
-# =====================================================
-
-# ===== ◀◀◀ [수정] 데이터 로드 (Streamlit Secrets 사용) =====
-@st.cache_data(ttl=600)
-def load_data() -> pd.DataFrame: # url 인수 제거
-    """
-    Streamlit Secrets를 사용하여 Google Sheets에서 데이터를 인증하고 로드합니다.
-    st.secrets에 'gcp_service_account', 'SHEET_ID', 'GID' (워크시트 이름)가 있어야 합니다.
-    """
-    
-    # ===== 1. Google Sheets 인증 =====
-    scopes = ["https://www.googleapis.com/auth/spreadsheets"]
-    
-    # st.secrets에서 gcp_service_account 정보 로드
-    creds_info = st.secrets["gcp_service_account"]
-    creds = Credentials.from_service_account_info(creds_info, scopes=scopes)
-    client = gspread.authorize(creds)
-
-    # ===== 2. 데이터 로드 =====
-    try:
-        # st.secrets에서 시트 ID와 워크시트 이름(GID 키) 로드
-        sheet_id = st.secrets["SHEET_ID"]
-        # TOML에서 GID = "RAW"로 설정했으므로, "RAW"라는 이름의 워크시트를 엽니다.
-        worksheet_name = st.secrets["GID"] 
-        
-        spreadsheet = client.open_by_key(sheet_id)
-        worksheet = spreadsheet.worksheet(worksheet_name)
-        
-        # 데이터를 DataFrame으로 변환
-        data = worksheet.get_all_records() # 시트의 모든 데이터를 딕셔너리 리스트로 가져옴
-        df = pd.DataFrame(data)
-
-    except gspread.exceptions.WorksheetNotFound:
-        st.error(f"Streamlit Secrets의 GID 값 ('{worksheet_name}')에 해당하는 워크시트를 찾을 수 없습니다.")
-        return pd.DataFrame()
-    except KeyError as e:
-        st.error(f"Streamlit Secrets에 필요한 키({e})가 없습니다. TOML 설정을 확인하세요.")
-        return pd.DataFrame()
-    except Exception as e:
-        st.error(f"Google Sheets 데이터 로드 중 오류 발생: {e}")
-        return pd.DataFrame()
-
-    # --- 3. (이하 원본 코드의 전처리 로직 동일) ---
-    
-    # --- 날짜 파싱 ---
-    if "주차시작일" in df.columns:
-        df["주차시작일"] = pd.to_datetime(
-            df["주차시작일"].astype(str).str.strip(),
-            format="%Y. %m. %d", # ◀◀◀ [참고] 원본 포맷 유지
-            errors="coerce"
-        )
-    if "방영시작일" in df.columns:
-        df["방영시작일"] = pd.to_datetime(
-            df["방영시작일"].astype(str).str.strip(),
-            format="%Y. %m. %d", # ◀◀◀ [참고] 원본 포맷 유지
-            errors="coerce"
-        )
-
-    # --- 숫자형 데이터 변환 ---
-    # gspread.get_all_records()는 이미 1,000단위 콤마나 %를 제거하고 숫자/문자열로 가져옵니다.
-    if "value" in df.columns:
-        # .astype(str)을 추가하여 gspread가 숫자로 가져온 경우에도 처리되도록 보장
-        v = df["value"].astype(str).str.replace(",", "", regex=False).str.replace("%", "", regex=False)
-        df["value"] = pd.to_numeric(v, errors="coerce").fillna(0)
-
-    # --- 문자열 데이터 정제 ---
-    for c in ["IP", "편성", "지표구분", "매체", "데모", "metric", "회차", "주차"]:
-        if c in df.columns:
-            df[c] = df[c].astype(str).str.strip()
-
-    # --- 파생 컬럼 생성 ---
-    if "회차" in df.columns:
-        df["회차_numeric"] = df["회차"].str.extract(r"(\d+)", expand=False).astype(float)
-    else:
-        df["회차_numeric"] = pd.NA
-
-    return df
-
-# ===== 일반 포맷팅 유틸 =====
-def fmt(v, digits=3, intlike=False):
-    """
-    숫자 포맷팅 헬퍼 (None이나 NaN은 '–'로 표시)
-    """
-    if v is None or pd.isna(v):
-        return "–"
-    return f"{v:,.0f}" if intlike else f"{v:.{digits}f}"
-
-# ===== KPI 카드 렌더링 유틸 =====
-
-# ===== 페이지 라우팅 유틸 =====
-def get_current_page_default(default="Overview"):
-    """
-    URL 쿼리 파라미터(?page=...)에서 현재 페이지를 읽어옵니다.
-    없으면 default 값을 반환합니다.
-    """
-    try:
-        qp = st.query_params  # Streamlit 신버전
-        p = qp.get("page", None)
-        if p is None:
-            return default
-        return p if isinstance(p, str) else p[0]
-    except Exception:
-        qs = st.experimental_get_query_params()  # 구버전 호환
-        return (qs.get("page", [default])[0])
-
-# ===== 회차 옵션 생성 유틸 (페이지 5) =====
-def get_episode_options(df: pd.DataFrame) -> List[str]:
-    """데이터에서 사용 가능한 회차 목록 (문자열, '00' 제외, '차'/'화' 제거)을 추출합니다."""
-    
-    valid_options = []
-    # 숫자 회차 컬럼 우선 사용
-    if "회차_numeric" in df.columns:
-        unique_episodes_num = sorted([
-            int(ep) for ep in df["회차_numeric"].dropna().unique() if ep > 0 # 0보다 큰 경우만
-        ])
-        if unique_episodes_num:
-            max_ep_num = unique_episodes_num[-1]
-            for ep_num in unique_episodes_num: valid_options.append(str(ep_num))
-            # 마지막 회차 처리
-            last_ep_str_num = str(max_ep_num)
-            if last_ep_str_num in valid_options and valid_options[-1] != last_ep_str_num:
-                 valid_options.remove(last_ep_str_num); valid_options.append(last_ep_str_num)
-            if len(valid_options) > 0 and "(마지막화)" not in valid_options[-1]:
-                 valid_options[-1] = f"{valid_options[-1]} (마지막화)"
-            return valid_options
-        else: return []
-    # 숫자 회차 컬럼 없을 경우
-    elif "회차" in df.columns:
-        raw_options = sorted(df["회차"].dropna().unique())
-        for opt in raw_options:
-            # '00'으로 시작하는 것 제외
-            if not opt.startswith("00"):
-                cleaned_opt = re.sub(r"[화차]", "", opt) # '화' 또는 '차' 제거
-                if cleaned_opt.isdigit() and int(cleaned_opt) > 0: 
-                    valid_options.append(cleaned_opt)
-        # 숫자 기준으로 정렬
-        return sorted(list(set(valid_options)), key=lambda x: int(x) if x.isdigit() else float('inf')) 
-    else: return []
-#endregion
-
-#region [ 4. 공통 스타일 ]
-# =====================================================
-
-
-# [ 4. 공통 스타일 ] 맨 아래쪽에 이 블록을 추가(또는 기존 page-title 스타일을 교체)
-
+</style>
+""", unsafe_allow_html=True)
 
 
 #endregion
 
 
 #region [ 5. 사이드바 네비게이션 ]
-
-#region [ 6. 공통 집계 유틸 (KPI 계산 등) ]
-
-
-#region [ 7. 공통 시각화 유틸 ]
-# =====================================================
-
-def plot_episode_comparison(
-    df_result: pd.DataFrame,
-    selected_metric: str,
-    selected_episode: str,
-    base_ip: str 
-):
-    """특정 회차 비교 결과 시각화 (Bar Chart with Highlight)"""
-    
-    colors = ['#d93636' if ip == base_ip else '#666666' for ip in df_result['IP']]
-    metric_label = selected_metric.replace("T시청률", "타깃").replace("H시청률", "가구") 
-    
-    fig = px.bar(
-        df_result,
-        x="IP",
-        y="value",
-        text="value",
-        title=f"{selected_episode} - '{metric_label}' (기준: {base_ip})" 
-    )
-    
-    hover_template = "<b>%{x}</b><br>" + f"{metric_label}: %{{y:,.2f}}" if selected_metric in ["T시청률", "H시청률"] else "<b>%{x}</b><br>" + f"{metric_label}: %{{y:,.0f}}"
-    
-    fig.update_traces(
-        marker_color=colors, 
-        textposition='outside',
-        hovertemplate=hover_template 
-    )
-    
-    if selected_metric in ["T시청률", "H시청률"]:
-        fig.update_traces(texttemplate='%{text:.2f}%')
-        fig.update_layout(yaxis_title=f"{metric_label} (%)")
-    else:
-        fig.update_traces(texttemplate='%{text:,.0f}')
-        fig.update_layout(yaxis_title=metric_label)
-        
-    fig.update_layout(
-        xaxis_title=None, 
-        xaxis=dict(tickfont=dict(size=11)), 
-        height=350, 
-        margin=dict(t=40, b=0, l=0, r=0)
-    )
-    st.plotly_chart(fig, use_container_width=True)
-
-
-# ===== [페이지 5] 메인 렌더링 함수 =====
-
-
-# =====================================================
-# (이 곳으로 공통 유틸 함수가 모입니다. 동작은 변경하지 않음)
-
-
 # =====================================================
 # 현재 페이지 읽기(없으면 Overview)
 current_page = get_current_page_default("Overview")
@@ -707,10 +650,6 @@ def render_gradient_title(main_text: str, emoji: str = "🎬"):
 
 with st.sidebar:
     st.markdown('<div class="sidebar-hr"></div>', unsafe_allow_html=True)
-    with st.expander("지표기준 안내", expanded=False):
-        # 지표기준 안내 수정
-        st.markdown("")
-
     render_gradient_title("드라마 성과 대시보드", emoji="")
     st.markdown(
     "<p style='font-size:12px; color:gray;'>문의 : 미디어)디지털마케팅팀 데이터파트</p>",
@@ -739,63 +678,6 @@ with st.sidebar:
 
 #region [ 6. 공통 집계 유틸: KPI 계산 ]
 # =====================================================
-
-def kpi(col, title, value):
-    """
-    Streamlit 컬럼 내에 KPI 카드를 렌더링합니다.
-    """
-    with col:
-        st.markdown(
-            f'<div class="kpi-card"><div class="kpi-title">{title}</div>'
-            f'<div class="kpi-value">{value}</div></div>',
-            unsafe_allow_html=True
-        )
-
-# ===== 페이지 라우팅 유틸 =====
-
-def _render_kpi_card_comparison(
-    title: str, 
-    val1: float | None, 
-    val2: float | None, 
-    ip1_name: str, 
-    ip2_name: str, 
-    format_str: str = "{:,.0f}",
-    higher_is_better: bool = True 
-):
-    """2개 IP 값을 비교하는 커스텀 KPI 카드 렌더링 함수"""
-    
-    val1_disp = format_str.format(val1) if val1 is not None else "–"
-    val2_disp = format_str.format(val2) if val2 is not None else "–"
-    
-    winner = 0 
-    if val1 is not None and val2 is not None:
-        if higher_is_better:
-            if val1 > val2: winner = 1
-            elif val2 > val1: winner = 2
-        else: 
-            if val1 < val2: winner = 1
-            elif val2 < val1: winner = 2
-
-    val1_style = "color:#d93636; font-weight: 700;" if winner == 1 else ("color:#888; font-weight: 400;" if winner == 2 else "color:#333; font-weight: 400;")
-    val2_style = "color:#2a61cc; font-weight: 700;" if winner == 2 else ("color:#888; font-weight: 400;" if winner == 1 else "color:#333; font-weight: 400;")
-
-    st.markdown(f"""
-    <div class="kpi-card" style="height: 100px; display: flex; flex-direction: column; justify-content: center;">
-        <div class="kpi-title">{title}</div>
-        <div class="kpi_value" style="font-size: 1.1rem; line-height: 1.4; margin-top: 5px;">
-            <span style="{val1_style}">
-                <span style="font-size: 0.8em; color: #d93636;">{ip1_name}:</span> {val1_disp}
-            </span>
-            <br>
-            <span style="{val2_style}">
-                <span style="font-size: 0.8em; color: #2a61cc;">{ip2_name}:</span> {val2_disp}
-            </span>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-
-# --- IP vs IP 메인 렌더링 함수 ---
-
 def _episode_col(df: pd.DataFrame) -> str:
     """데이터프레임에 존재하는 회차 숫자 컬럼명을 반환합니다."""
     return "회차_numeric" if "회차_numeric" in df.columns else ("회차_num" if "회차_num" in df.columns else "회차")
@@ -1065,10 +947,6 @@ def render_overview():
     with filter_cols[0]:
         st.markdown("### 📊 Overview")
     
-        with st.expander("지표기준 안내", expanded=False):
-            # 지표기준 안내 수정
-            st.markdown("")
-
     with filter_cols[1]:
         prog_sel = st.multiselect(
             "편성", 
@@ -1290,10 +1168,6 @@ def render_ip_detail():
     with filter_cols[0]:
         st.markdown("<div class='page-title'>📈 IP 성과 자세히보기</div>", unsafe_allow_html=True)
 
-        with st.expander("지표기준 안내", expanded=False):
-            # 지표기준 안내 수정
-            st.markdown("")
-
     ip_options = sorted(df_full["IP"].dropna().unique().tolist())
     with filter_cols[1]:
         ip_selected = st.selectbox(
@@ -1393,6 +1267,7 @@ def render_ip_detail():
 
     # =========================
     # 🔧 Metric Normalizer
+    # =========================
     def _normalize_metric(s: str) -> str:
         """
         metric 문자열을 소문자화하고, 영숫자만 남김.
@@ -1428,7 +1303,9 @@ def render_ip_detail():
         return float(s.min()) if not s.empty else None
 
     # ✅ F_score 평균(시청률과 같은 로직) with 폴백:
-    # 1) 회차가 있으면: 회차별 평균 -> 전체 평균
+    # 1) 회차가 있으면: 회차별 평균 → 전체 평균
+    # 2) 회차가 없고 날짜가 있으면: 날짜별 평균 → 전체 평균
+    # 3) 둘 다 없으면: 단순 평균
     def _mean_like_rating(df_src: pd.DataFrame, metric_name: str) -> float | None:
         sub = _metric_filter(df_src, metric_name).copy()
         if sub.empty:
@@ -2020,10 +1897,6 @@ function(params) {
 # ===== [페이지 3] AgGrid 테이블 렌더링 함수 =====
 def render_index_table(df_index: pd.DataFrame, title: str, height: int = 400):
     st.markdown(f"###### {title}")
-    with st.expander("지표기준 안내", expanded=False):
-        # 지표기준 안내 수정
-        st.markdown("")
-
     if df_index.empty: st.info("비교할 데이터가 없습니다."); return
 
     gb = GridOptionsBuilder.from_dataframe(df_index)
@@ -2057,10 +1930,6 @@ def render_heatmap(df_plot: pd.DataFrame, title: str):
     데이터프레임을 받아 Plotly 히트맵을 렌더링합니다.
     """
     st.markdown(f"###### {title}")
-    with st.expander("지표기준 안내", expanded=False):
-        # 지표기준 안내 수정
-        st.markdown("")
-
     if df_plot.empty:
         st.info("비교할 데이터가 없습니다.")
         return
@@ -2138,10 +2007,6 @@ def render_demographic():
     with filter_cols[0]:
         st.markdown("### 👥 IP 오디언스 히트맵")
     
-        with st.expander("지표기준 안내", expanded=False):
-            # 지표기준 안내 수정
-            st.markdown("")
-
     with filter_cols[1]:
         # [수정] st.radio -> st.selectbox
         comparison_mode = st.selectbox(
@@ -2327,7 +2192,7 @@ def get_kpi_data_for_all_ips(df_all: pd.DataFrame) -> pd.DataFrame:
     if "회차_numeric" in df.columns:
         df = df.dropna(subset=["회차_numeric"])
 
-    # 1) 시청률(회차 평균 -> IP 평균)
+    # 1) 시청률(회차 평균 → IP 평균)
     def _ip_mean_of_ep_mean(metric_name: str) -> pd.Series:
         sub = df[df["metric"] == metric_name]
         if sub.empty: return pd.Series(dtype=float, name=metric_name)
@@ -2337,7 +2202,7 @@ def get_kpi_data_for_all_ips(df_all: pd.DataFrame) -> pd.DataFrame:
     kpi_t_rating = _ip_mean_of_ep_mean("T시청률")
     kpi_h_rating = _ip_mean_of_ep_mean("H시청률")
 
-    # 2) TVING VOD (회차 합 -> IP 평균)
+    # 2) TVING VOD (회차 합 → IP 평균)
     sub_vod = df[(df["metric"] == "시청인구") & (df["매체"] == "TVING VOD")]
     if not sub_vod.empty:
         vod_ep_sum = sub_vod.groupby(["IP", "회차_numeric"])["value"].sum().reset_index()
@@ -2345,7 +2210,7 @@ def get_kpi_data_for_all_ips(df_all: pd.DataFrame) -> pd.DataFrame:
     else:
         kpi_vod = pd.Series(dtype=float, name="TVING VOD")
 
-    # 3) TVING L+Q (회차 합 -> IP 평균)
+    # 3) TVING L+Q (회차 합 → IP 평균)
     sub_lq = df[(df["metric"] == "시청인구") & (df["매체"].isin(["TVING LIVE", "TVING QUICK"]))]
     if not sub_lq.empty:
         lq_ep_sum = sub_lq.groupby(["IP", "회차_numeric"])["value"].sum().reset_index()
@@ -2671,6 +2536,28 @@ def render_ip_vs_group_comparison(
 # ===== [페이지 4] "IP vs IP" 렌더링 =====
 
 # --- KPI 비교 카드 렌더링 함수 ---
+def _render_kpi_card_comparison(
+    title: str, 
+    val1: float | None, 
+    val2: float | None, 
+    ip1_name: str, 
+    ip2_name: str, 
+    format_str: str = "{:,.0f}",
+    higher_is_better: bool = True 
+):
+    """2개 IP 값을 비교하는 커스텀 KPI 카드 렌더링 함수"""
+    
+    val1_disp = format_str.format(val1) if val1 is not None else "–"
+    val2_disp = format_str.format(val2) if val2 is not None else "–"
+    
+    winner = 0 
+    if val1 is not None and val2 is not None:
+        if higher_is_better:
+            if val1 > val2: winner = 1
+            elif val2 > val1: winner = 2
+        else: 
+            if val1 < val2: winner = 1
+            elif val2 < val1: winner = 2
 
     val1_style = "color:#d93636; font-weight: 700;" if winner == 1 else ("color:#888; font-weight: 400;" if winner == 2 else "color:#333; font-weight: 400;")
     val2_style = "color:#2a61cc; font-weight: 700;" if winner == 2 else ("color:#888; font-weight: 400;" if winner == 1 else "color:#333; font-weight: 400;")
@@ -2694,10 +2581,6 @@ def render_ip_vs_group_comparison(
 def render_ip_vs_ip_comparison(df_all: pd.DataFrame, ip1: str, ip2: str, kpi_percentiles: pd.DataFrame):
     
     st.markdown(f"#### ⚖️ : <span style='color:#d93636;'>{ip1}</span> vs <span style='color:#2a61cc;'>{ip2}</span>", unsafe_allow_html=True)
-    with st.expander("지표기준 안내", expanded=False):
-        # 지표기준 안내 수정
-        st.markdown("")
-
     st.divider()
 
     # --- 데이터 준비 ---
@@ -2822,10 +2705,6 @@ def render_comparison():
 
     with filter_cols[0]:
         st.markdown("## ⚖️ IP간 비교분석")
-
-        with st.expander("지표기준 안내", expanded=False):
-            # 지표기준 안내 수정
-            st.markdown("")
 
     with filter_cols[1]:
         comparison_mode = st.radio(
@@ -2971,6 +2850,47 @@ def filter_data_for_episode_comparison(
 
 
 # ===== [페이지 5] 특정 회차 비교 시각화 =====
+def plot_episode_comparison(
+    df_result: pd.DataFrame,
+    selected_metric: str,
+    selected_episode: str,
+    base_ip: str 
+):
+    """특정 회차 비교 결과 시각화 (Bar Chart with Highlight)"""
+    
+    colors = ['#d93636' if ip == base_ip else '#666666' for ip in df_result['IP']]
+    metric_label = selected_metric.replace("T시청률", "타깃").replace("H시청률", "가구") 
+    
+    fig = px.bar(
+        df_result,
+        x="IP",
+        y="value",
+        text="value",
+        title=f"{selected_episode} - '{metric_label}' (기준: {base_ip})" 
+    )
+    
+    hover_template = "<b>%{x}</b><br>" + f"{metric_label}: %{{y:,.2f}}" if selected_metric in ["T시청률", "H시청률"] else "<b>%{x}</b><br>" + f"{metric_label}: %{{y:,.0f}}"
+    
+    fig.update_traces(
+        marker_color=colors, 
+        textposition='outside',
+        hovertemplate=hover_template 
+    )
+    
+    if selected_metric in ["T시청률", "H시청률"]:
+        fig.update_traces(texttemplate='%{text:.2f}%')
+        fig.update_layout(yaxis_title=f"{metric_label} (%)")
+    else:
+        fig.update_traces(texttemplate='%{text:,.0f}')
+        fig.update_layout(yaxis_title=metric_label)
+        
+    fig.update_layout(
+        xaxis_title=None, 
+        xaxis=dict(tickfont=dict(size=11)), 
+        height=350, 
+        margin=dict(t=40, b=0, l=0, r=0)
+    )
+    st.plotly_chart(fig, use_container_width=True)
 
 
 # ===== [페이지 5] 메인 렌더링 함수 =====
@@ -2990,10 +2910,6 @@ def render_episode():
     with filter_cols[0]:
         st.markdown("## 🎬 회차별 비교 ")
         
-        with st.expander("지표기준 안내", expanded=False):
-            # 지표기준 안내 수정
-            st.markdown("")
-
     with filter_cols[1]:
         selected_base_ip = st.selectbox(
             "기준 IP (하이라이트)", 
@@ -3111,7 +3027,7 @@ def render_episode():
 
 def render_growth_score():
     """
-#     레이아웃: [상단 헤더: '선택한 작품' | IP선택 | 회차기준] → [선택작품 요약카드] → [포지셔닝맵] → [전체표]
+    레이아웃: [상단 헤더: '선택한 작품' | IP선택 | 회차기준] → [선택작품 요약카드] → [포지셔닝맵] → [전체표]
     변경사항 반영:
       - 타이틀을 '[선택한 작품명] 스코어' 로 표시
       - '종합등급' 카드 2칸(강조)
@@ -3141,7 +3057,16 @@ def render_growth_score():
         st.warning("IP 데이터가 없습니다."); return
 
     # 작은 스타일(요약카드 공통)
-    
+    st.markdown("""
+    <style>
+      .kpi-card{border-radius:16px;border:1px solid #e7ebf3;background:#fff;padding:12px 14px;
+                box-shadow:0 1px 2px rgba(0,0,0,0.04)}
+      .kpi-title{font-size:13px;color:#5b6b83;margin-bottom:4px;font-weight:600}
+      .kpi-value{font-weight:800;letter-spacing:-0.2px}
+      .centered-header .ag-header-cell-label{justify-content:center;}
+      .bold-header .ag-header-cell-text{font-weight:700;}
+    </style>
+    """, unsafe_allow_html=True)
 
     # ---------- 헤더(타이틀/선택) ----------
     # 헤더에 표시할 회차 기준은 session_state의 현재값(없으면 기본 4)을 사용
@@ -3169,8 +3094,8 @@ def render_growth_score():
     with st.expander("ℹ️ 지표 기준 안내", expanded=False):
         st.markdown("""
     **등급 체계**
-#     - **절대값 등급**: 각 지표의 절대 수준을 IP 간 백분위 20% 단위로 구분 -> `S / A / B / C / D`
-#     - **상승률 등급**: 동일 기간(선택 회차 범위) 내 회차-값 선형회귀 기울기(slope)를 IP 간 백분위 20% 단위로 구분 -> `+2 / +1 / 0 / -1 / -2`
+    - **절대값 등급**: 각 지표의 절대 수준을 IP 간 백분위 20% 단위로 구분 → `S / A / B / C / D`
+    - **상승률 등급**: 동일 기간(선택 회차 범위) 내 회차-값 선형회귀 기울기(slope)를 IP 간 백분위 20% 단위로 구분 → `+2 / +1 / 0 / -1 / -2`
     - **종합등급**: 절대값과 상승률 등급을 결합해 표기 (예: `A+2`).  
       - 참고 규칙 예시: **절대값 상위 20%** ∧ **상승률 상위 40%** ⇒ `S+1` 처럼 상/중 상향 표기
 
@@ -3301,6 +3226,8 @@ def render_growth_score():
     st.markdown("<div style='height:16px'></div>", unsafe_allow_html=True)
     # ===== [회차별 등급 추이: 선택 IP] ==========================================
     # x: 2·4·6… 실제 데이터가 존재하는 마지막 회차까지
+    # y: 종합_절대등급(S/A/B/C/D) → 5/4/3/2/1로 매핑하여 라인차트
+    # 각 지점 라벨: 'S+1' (절대 + 상승)
     from plotly import graph_objects as go
 
     # --- (1) 선택 IP의 '실제 값'이 있는 회차까지만 Ns 생성 ---
@@ -3371,7 +3298,7 @@ def render_growth_score():
             tmp.append(row)
         tmp = pd.DataFrame(tmp)
 
-        # 등급 산정(각 지표 -> 절대/상승 -> 종합, 그 다음 '종합'의 절대/상승)
+        # 등급 산정(각 지표 → 절대/상승 → 종합, 그 다음 '종합'의 절대/상승)
         for disp, _, _ in METRICS:
             tmp[f"{disp}_절대등급"] = _quintile_grade(tmp[f"{disp}_절대"],   ["S","A","B","C","D"])
             tmp[f"{disp}_상승등급"] = _quintile_grade(tmp[f"{disp}_기울기"], ["+2","+1","0","-1","-2"])
@@ -3591,13 +3518,13 @@ def render_growth_score():
 
 def render_growth_score_digital():
     """
-#     레이아웃: [상단 헤더: 타이틀 | IP선택 | 회차기준] → [선택작품 요약카드]
-#            -> [회차별 등급 추이(선택 IP)] -> [포지셔닝맵] -> [전체표]
+    레이아웃: [상단 헤더: 타이틀 | IP선택 | 회차기준] → [선택작품 요약카드]
+           → [회차별 등급 추이(선택 IP)] → [포지셔닝맵] → [전체표]
 
     사용 메트릭(고정):
-#       - 조회수: 회차합 시계열 -> 절대(평균), 상승(회귀 기울기)
-#       - 언급량: 회차합 시계열 -> 절대(평균), 상승(회귀 기울기)
-#       - F_Total(화제성 순위): 낮을수록 좋음 -> 부호 반전 후 **절대만** 등급화(상승은 미사용)
+      - 조회수: 회차합 시계열 → 절대(평균), 상승(회귀 기울기)
+      - 언급량: 회차합 시계열 → 절대(평균), 상승(회귀 기울기)
+      - F_Total(화제성 순위): 낮을수록 좋음 → 부호 반전 후 **절대만** 등급화(상승은 미사용)
     """
     import numpy as np
     import pandas as pd
@@ -3630,7 +3557,16 @@ def render_growth_score_digital():
         st.warning("IP 데이터가 없습니다."); return
 
     # 작은 스타일(요약카드 공통)
-    
+    st.markdown("""
+    <style>
+      .kpi-card{border-radius:16px;border:1px solid #e7ebf3;background:#fff;padding:12px 14px;
+                box-shadow:0 1px 2px rgba(0,0,0,0.04)}
+      .kpi-title{font-size:13px;color:#5b6b83;margin-bottom:4px;font-weight:600}
+      .kpi-value{font-weight:800;letter-spacing:-0.2px}
+      .centered-header .ag-header-cell-label{justify-content:center;}
+      .bold-header .ag-header-cell-text{font-weight:700;}
+    </style>
+    """, unsafe_allow_html=True)
 
     # ---------- 헤더(타이틀/선택) ----------
     _ep_display = st.session_state.get("growth_d_ep_cutoff", 4)
@@ -3651,8 +3587,8 @@ def render_growth_score_digital():
     with st.expander("ℹ️ 지표 기준 안내", expanded=False):
         st.markdown("""
 **디지털 지표 정의(고정)**
-# - **조회수, 언급량**: 회차별 합(에피소드 단위)을 사용 -> 1~N회 집계 시계열의 평균/회귀
-# - **F_Total(화제성 순위)**: 값이 **낮을수록 우수** -> 평균 산출 전 `-1` 곱해 상향 스케일로 변환  
+- **조회수, 언급량**: 회차별 합(에피소드 단위)을 사용 → 1~N회 집계 시계열의 평균/회귀
+- **F_Total(화제성 순위)**: 값이 **낮을수록 우수** → 평균 산출 전 `-1` 곱해 상향 스케일로 변환  
   *(※ 화제성은 **상승스코어 미사용**, 절대스코어만 등급화)*
 
 **등급 체계(공통)**
@@ -3702,8 +3638,8 @@ def render_growth_score_digital():
         if mtype == "sum":
             s = sub.groupby("회차_numeric", as_index=False)["value"].sum()
         elif mtype == "rank_inv":
-            s = sub.groupby("회차_numeric", as_index=False)["value"].mean()
-            s["value"] = -1 * s["value"]
+            s = sub.groupby("회차_numeric", as_index=False)["value"].mean()  # 순위 → 평균
+            s["value"] = -1 * s["value"]  # 낮을수록 좋음 → 상향 스케일
         else:
             s = sub.groupby("회차_numeric", as_index=False)["value"].mean()
         s = s.sort_values("회차_numeric")
@@ -3963,7 +3899,7 @@ def render_growth_score_digital():
         "조회수_종합","언급량_종합","화제성순위_절대등급"
     ]].copy()
 
-    # 정렬 키: 종합 절대 -> 종합 상승 -> IP
+    # 정렬 키: 종합 절대 → 종합 상승 → IP
     table["_abs_key"]   = table["종합_절대등급"].map(ABS_SCORE).fillna(0)
     table["_slope_key"] = table["종합_상승등급"].map(SLO_SCORE).fillna(0)
     table = table.sort_values(["_abs_key","_slope_key","IP"], ascending=[False, False, True])
