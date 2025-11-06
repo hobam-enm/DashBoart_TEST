@@ -2683,7 +2683,7 @@ def _render_kpi_card_comparison(
 def render_ip_vs_ip_comparison(df_all: pd.DataFrame, ip1: str, ip2: str, kpi_percentiles: pd.DataFrame):
     
     st.markdown(f"#### ⚖️ : <span style='color:#d93636;'>{ip1}</span> vs <span style='color:#2a61cc;'>{ip2}</span>", unsafe_allow_html=True)
-    with st.expander("ℹ️ 지표 기준 안내", expanded=False):
+# [중복 제거됨]     with st.expander("ℹ️ 지표 기준 안내", expanded=False):
         st.markdown("내용 기입 필요")
 
     st.divider()
@@ -2810,7 +2810,7 @@ def render_comparison():
 
     with filter_cols[0]:
         st.markdown("## ⚖️ IP간 비교분석")
-    with st.expander("ℹ️ 지표 기준 안내", expanded=False):
+# [중복 제거됨]     with st.expander("ℹ️ 지표 기준 안내", expanded=False):
         st.markdown("내용 기입 필요")
 
     with filter_cols[1]:
@@ -3696,7 +3696,7 @@ def render_growth_score_digital():
                                  key="growth_d_ep_cutoff", label_visibility="collapsed")
 
     # ---------- 지표 기준 안내 ----------
-    with st.expander("ℹ️ 지표 기준 안내", expanded=False):
+# [중복 제거됨]     with st.expander("ℹ️ 지표 기준 안내", expanded=False):
         st.markdown("""
 **디지털 지표 정의(고정)**
 - **조회수, 언급량**: 회차별 합(에피소드 단위)을 사용 → 1~N회 집계 시계열의 평균/회귀
