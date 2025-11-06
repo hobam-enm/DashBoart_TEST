@@ -849,13 +849,6 @@ COLOR_FEMALE = "#d93636"
 
 def render_gender_pyramid(container, title: str, df_src: pd.DataFrame, height: int = 260):
 
-    with st.expander("ℹ️ 지표 기준 안내", expanded=False):
-        st.markdown("내용 기입 필요")
-    """
-    지정된 컨테이너에 남/녀 피라미드 차트를 렌더링합니다.
-    """
-    container.markdown(f"<div class='sec-title'>{title}</div>", unsafe_allow_html=True)
-
     if df_src.empty:
         container.info("표시할 데이터가 없습니다.")
         return
@@ -1979,8 +1972,6 @@ function(params) {
 # ===== [페이지 3] AgGrid 테이블 렌더링 함수 =====
 def render_index_table(df_index: pd.DataFrame, title: str, height: int = 400):
     st.markdown(f"###### {title}")
-    with st.expander("ℹ️ 지표 기준 안내", expanded=False):
-        st.markdown("내용 기입 필요")
 
     if df_index.empty: st.info("비교할 데이터가 없습니다."); return
 
@@ -2015,8 +2006,6 @@ def render_heatmap(df_plot: pd.DataFrame, title: str):
     데이터프레임을 받아 Plotly 히트맵을 렌더링합니다.
     """
     st.markdown(f"###### {title}")
-    with st.expander("ℹ️ 지표 기준 안내", expanded=False):
-        st.markdown("내용 기입 필요")
 
     if df_plot.empty:
         st.info("비교할 데이터가 없습니다.")
@@ -2344,8 +2333,6 @@ def render_ip_vs_group_comparison(
 ):
     
 
-    with st.expander("ℹ️ 지표 기준 안내", expanded=False):
-        st.markdown("내용 기입 필요")
     # --- 데이터 준비 ---
     df_ip = df_all[df_all["IP"] == ip].copy()
     df_group = df_all.copy()
@@ -2674,8 +2661,6 @@ def _render_kpi_card_comparison(
 def render_ip_vs_ip_comparison(df_all: pd.DataFrame, ip1: str, ip2: str, kpi_percentiles: pd.DataFrame):
     
     st.markdown(f"#### ⚖️ : <span style='color:#d93636;'>{ip1}</span> vs <span style='color:#2a61cc;'>{ip2}</span>", unsafe_allow_html=True)
-    with st.expander("ℹ️ 지표 기준 안내", expanded=False):
-        st.markdown("내용 기입 필요")
 
     st.divider()
 
