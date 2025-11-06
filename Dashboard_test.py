@@ -400,13 +400,22 @@ section[data-testid="stSidebar"] .stButton > button{
       .bold-header .ag-header-cell-text{font-weight:700;}
 
 
-/* === Sidebar title size bump (safe) === */
-section[data-testid="stSidebar"] h1,
-section[data-testid="stSidebar"] h2,
-section[data-testid="stSidebar"] h3 { letter-spacing:-0.02em; }
-section[data-testid="stSidebar"] h2 { font-size: 24px; }
-section[data-testid="stSidebar"] h3 { font-size: 20px; }
-
+/* ==== Floating / Glass-lite card polish (override) ==== */
+.kpi-card, .block-card, .plotly-chart, .ag-theme-streamlit .ag-root-wrapper {
+  border-radius: 16px !important;
+  box-shadow: 0 8px 24px rgba(0,0,0,.10) !important;
+  border: 1px solid rgba(2,6,23,.06) !important;
+  background: rgba(255,255,255,.92) !important;
+  backdrop-filter: blur(6px);
+}
+.kpi-card:hover, .block-card:hover, .plotly-chart:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 16px 36px rgba(0,0,0,.14) !important;
+  transition: transform .18s ease, box-shadow .18s ease;
+}
+/* Sidebar title sizing (slightly larger) */
+section[data-testid="stSidebar"] h2 { font-size: 24px; letter-spacing: -0.02em; }
+section[data-testid="stSidebar"] h3 { font-size: 20px; letter-spacing: -0.02em; }
 </style>""", unsafe_allow_html=True)
 
 # ===== 네비게이션 아이템 정의 (v2.0) =====
@@ -669,16 +678,6 @@ def plot_episode_comparison(
 # =====================================================
 # (이 곳으로 공통 유틸 함수가 모입니다. 동작은 변경하지 않음)
 
-# ------------------------------------------------------------------
-# 공통: 지표기준 안내 블록 (모든 페이지에서 동일 UI, 각 페이지별 내용은 다르게)
-# ------------------------------------------------------------------
-def render_guideline_block(page_key: str, text: str = ""):
-    import streamlit as st
-    with st.expander("지표기준 안내", expanded=False):
-        # 지표기준 안내 수정: 각 페이지에 맞는 내용을 아래 text로 교체하세요.
-        st.markdown(text if text.strip() else "(*이 페이지의 지표 기준을 여기에 정리하세요.*)")
-
-
 
 # =====================================================
 # 현재 페이지 읽기(없으면 Overview)
@@ -708,6 +707,10 @@ def render_gradient_title(main_text: str, emoji: str = "🎬"):
 
 with st.sidebar:
     st.markdown('<div class="sidebar-hr"></div>', unsafe_allow_html=True)
+    with st.expander("지표기준 안내", expanded=False):
+        # 지표기준 안내 수정
+        st.markdown("")
+
     render_gradient_title("드라마 성과 대시보드", emoji="")
     st.markdown(
     "<p style='font-size:12px; color:gray;'>문의 : 미디어)디지털마케팅팀 데이터파트</p>",
@@ -1060,13 +1063,12 @@ def render_overview():
     filter_cols = st.columns(4) # [제목 | 편성필터 | 연도필터 | 월필터]
     
     with filter_cols[0]:
-        st.markdown("### 📊 Overview
-        render_guideline_block("render_overview", """
-        <!-- 지표기준 안내 수정 -->
-        해당 페이지의 지표 정의와 계산 로직 요약을 여기에 작성하세요.
-        """)
-")
+        st.markdown("### 📊 Overview")
     
+        with st.expander("지표기준 안내", expanded=False):
+            # 지표기준 안내 수정
+            st.markdown("")
+
     with filter_cols[1]:
         prog_sel = st.multiselect(
             "편성", 
@@ -1286,12 +1288,11 @@ def render_ip_detail():
 
     # ▼▼ 제목 표기 방식만 통일 ▼▼
     with filter_cols[0]:
-        st.markdown("<div class='page-title'>📈 IP 성과 자세히보기
-        render_guideline_block("render_ip_detail", """
-        <!-- 지표기준 안내 수정 -->
-        해당 페이지의 지표 정의와 계산 로직 요약을 여기에 작성하세요.
-        """)
-</div>", unsafe_allow_html=True)
+        st.markdown("<div class='page-title'>📈 IP 성과 자세히보기</div>", unsafe_allow_html=True)
+
+        with st.expander("지표기준 안내", expanded=False):
+            # 지표기준 안내 수정
+            st.markdown("")
 
     ip_options = sorted(df_full["IP"].dropna().unique().tolist())
     with filter_cols[1]:
@@ -2019,6 +2020,10 @@ function(params) {
 # ===== [페이지 3] AgGrid 테이블 렌더링 함수 =====
 def render_index_table(df_index: pd.DataFrame, title: str, height: int = 400):
     st.markdown(f"###### {title}")
+    with st.expander("지표기준 안내", expanded=False):
+        # 지표기준 안내 수정
+        st.markdown("")
+
     if df_index.empty: st.info("비교할 데이터가 없습니다."); return
 
     gb = GridOptionsBuilder.from_dataframe(df_index)
@@ -2052,6 +2057,10 @@ def render_heatmap(df_plot: pd.DataFrame, title: str):
     데이터프레임을 받아 Plotly 히트맵을 렌더링합니다.
     """
     st.markdown(f"###### {title}")
+    with st.expander("지표기준 안내", expanded=False):
+        # 지표기준 안내 수정
+        st.markdown("")
+
     if df_plot.empty:
         st.info("비교할 데이터가 없습니다.")
         return
@@ -2129,6 +2138,10 @@ def render_demographic():
     with filter_cols[0]:
         st.markdown("### 👥 IP 오디언스 히트맵")
     
+        with st.expander("지표기준 안내", expanded=False):
+            # 지표기준 안내 수정
+            st.markdown("")
+
     with filter_cols[1]:
         # [수정] st.radio -> st.selectbox
         comparison_mode = st.selectbox(
@@ -2681,6 +2694,10 @@ def render_ip_vs_group_comparison(
 def render_ip_vs_ip_comparison(df_all: pd.DataFrame, ip1: str, ip2: str, kpi_percentiles: pd.DataFrame):
     
     st.markdown(f"#### ⚖️ : <span style='color:#d93636;'>{ip1}</span> vs <span style='color:#2a61cc;'>{ip2}</span>", unsafe_allow_html=True)
+    with st.expander("지표기준 안내", expanded=False):
+        # 지표기준 안내 수정
+        st.markdown("")
+
     st.divider()
 
     # --- 데이터 준비 ---
@@ -2805,6 +2822,10 @@ def render_comparison():
 
     with filter_cols[0]:
         st.markdown("## ⚖️ IP간 비교분석")
+
+        with st.expander("지표기준 안내", expanded=False):
+            # 지표기준 안내 수정
+            st.markdown("")
 
     with filter_cols[1]:
         comparison_mode = st.radio(
@@ -2969,6 +2990,10 @@ def render_episode():
     with filter_cols[0]:
         st.markdown("## 🎬 회차별 비교 ")
         
+        with st.expander("지표기준 안내", expanded=False):
+            # 지표기준 안내 수정
+            st.markdown("")
+
     with filter_cols[1]:
         selected_base_ip = st.selectbox(
             "기준 IP (하이라이트)", 
@@ -3125,12 +3150,7 @@ def render_growth_score():
     head = st.columns([5, 3, 2])
     with head[0]:
         st.markdown(
-            f"## 🚀 성장스코어-방영지표
-        render_guideline_block("render_growth_score", """
-        <!-- 지표기준 안내 수정 -->
-        해당 페이지의 지표 정의와 계산 로직 요약을 여기에 작성하세요.
-        """)
- <span style='font-size:20px;color:#6b7b93'>(~{_ep_display}회 기준)</span>",
+            f"## 🚀 성장스코어-방영지표 <span style='font-size:20px;color:#6b7b93'>(~{_ep_display}회 기준)</span>",
             unsafe_allow_html=True
         )
     with head[1]:
@@ -3147,8 +3167,7 @@ def render_growth_score():
     # ---------- 지표 기준 안내 ----------
     # 헤더 다음, 요약카드 위에 배치 권장
     with st.expander("ℹ️ 지표 기준 안내", expanded=False):
-        with st.expander("지표기준 안내", expanded=False):
-            st.markdown("""
+        st.markdown("""
     **등급 체계**
 #     - **절대값 등급**: 각 지표의 절대 수준을 IP 간 백분위 20% 단위로 구분 -> `S / A / B / C / D`
 #     - **상승률 등급**: 동일 기간(선택 회차 범위) 내 회차-값 선형회귀 기울기(slope)를 IP 간 백분위 20% 단위로 구분 -> `+2 / +1 / 0 / -1 / -2`
@@ -3618,12 +3637,7 @@ def render_growth_score_digital():
     head = st.columns([5, 3, 2])
     with head[0]:
         st.markdown(
-            f"## 🛰️ 성장스코어-디지털
-        render_guideline_block("render_growth_score_digital", """
-        <!-- 지표기준 안내 수정 -->
-        해당 페이지의 지표 정의와 계산 로직 요약을 여기에 작성하세요.
-        """)
- <span style='font-size:20px;color:#6b7b93'>(~{_ep_display}회 기준)</span>",
+            f"## 🛰️ 성장스코어-디지털 <span style='font-size:20px;color:#6b7b93'>(~{_ep_display}회 기준)</span>",
             unsafe_allow_html=True
         )
     with head[1]:
@@ -3635,8 +3649,7 @@ def render_growth_score_digital():
 
     # ---------- 지표 기준 안내 ----------
     with st.expander("ℹ️ 지표 기준 안내", expanded=False):
-        with st.expander("지표기준 안내", expanded=False):
-            st.markdown("""
+        st.markdown("""
 **디지털 지표 정의(고정)**
 # - **조회수, 언급량**: 회차별 합(에피소드 단위)을 사용 -> 1~N회 집계 시계열의 평균/회귀
 # - **F_Total(화제성 순위)**: 값이 **낮을수록 우수** -> 평균 산출 전 `-1` 곱해 상향 스케일로 변환  
