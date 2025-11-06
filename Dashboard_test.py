@@ -2946,10 +2946,11 @@ def plot_episode_comparison(
         title=f"{selected_episode} - '{metric_label}' (기준: {base_ip})"
     )
 
+    # ⚠️ f-string을 쓰면 %{y}가 파이썬 포맷으로 해석됨 → 일반 문자열 결합 사용
     if selected_metric in ["T시청률", "H시청률"]:
-        hover_template = "<b>%{x}</b><br>" + f"{metric_label}: %{y:.2f}%"
+        hover_template = "<b>%{x}</b><br>" + metric_label + ": %{y:.2f}%"
     else:
-        hover_template = "<b>%{x}</b><br>" + f"{metric_label}: %{y:,}"
+        hover_template = "<b>%{x}</b><br>" + metric_label + ": %{y:,}"
 
     fig.update_traces(
         marker_color=colors,
@@ -2959,7 +2960,7 @@ def plot_episode_comparison(
 
     if selected_metric in ["T시청률", "H시청률"]:
         fig.update_traces(texttemplate='%{text:.2f}%')
-        fig.update_layout(yaxis_title=f"{metric_label} (%)")
+        fig.update_layout(yaxis_title=metric_label + " (%)")
     else:
         fig.update_traces(texttemplate='%{text:,0f}')
         fig.update_layout(yaxis_title=metric_label)
@@ -3078,6 +3079,7 @@ def render_episode():
                 st.error(f"차트 렌더링 오류({metric}): {e}")
 
 #endregion
+
 
 
 #region [ 13. 페이지 6: 성장스코어-방영성과  ]
