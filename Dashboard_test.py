@@ -3602,8 +3602,7 @@ def _grade_slope(x, y):
     if m >= -0.10: return "-1"
     return "-2"
 
-def 
-render_growth_score_digital():
+def _render_growth_score_digital():
 
     """
     레이아웃: [상단 헤더: 타이틀 | IP선택 | 회차기준] → [선택작품 요약카드]
