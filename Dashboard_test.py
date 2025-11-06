@@ -16,14 +16,6 @@ import plotly.express as px
 from plotly import graph_objects as go
 import plotly.io as pio
 import streamlit as st
-
-def _metric_note():
-    # 지표기준 안내 수정
-    with st.expander("ℹ️ 지표 기준 안내", expanded=False):
-        st.markdown("""
-- (여기에 지표 기준 안내를 작성하세요)
-""")
-
 from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode, JsCode
 import gspread
 from google.oauth2.service_account import Credentials
@@ -145,156 +137,268 @@ if not check_password_with_token():
 # =====================================================
 
 st.markdown("""<style>
-/* ====== Global Reset / Typography ====== */
-:root{
-  --radius-lg: 16px;
-  --radius-xl: 20px;
-  --shadow-sm: 0 2px 8px rgba(0,0,0,.08);
-  --shadow-md: 0 8px 24px rgba(0,0,0,.12);
-  --shadow-lg: 0 18px 48px rgba(0,0,0,.18);
-  --brand-1: #0ea5e9; /* cyan-500 */
-  --brand-2: #22c55e; /* emerald-500 */
-  --brand-3: #a855f7; /* violet-500 */
-  --ink-1: #0f172a;  /* slate-900 */
-  --ink-2: #334155;  /* slate-700 */
-  --ink-3: #64748b;  /* slate-500 */
-  --card-bg: rgba(255,255,255,.84);
-  --glass-bg: linear-gradient(180deg, rgba(255,255,255,.88), rgba(255,255,255,.74));
-  --grad-hero: radial-gradient(1200px 600px at 10% -20%, rgba(34,197,94,.12), transparent 60%),
-               radial-gradient(900px 480px at 100% 10%, rgba(14,165,233,.14), transparent 60%);
+/* === HOTFIX 2025-10-31 Title size + Box exceptions === */
+
+/* Boost title sizes globally */
+section[data-testid="stVerticalBlock"] h1,
+section[data-testid="stVerticalBlock"] h2,
+section[data-testid="stVerticalBlock"] h3 {
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    line-height: 1.25;
+}
+section[data-testid="stVerticalBlock"] h1 { font-size: clamp(28px, 2.8vw, 38px); }
+section[data-testid="stVerticalBlock"] h2 { font-size: clamp(24px, 2.4vw, 34px); }
+section[data-testid="stVerticalBlock"] h3 { font-size: clamp(22px, 2.0vw, 30px); }
+
+/* .page-title helper if used */
+.page-title {
+    font-size: clamp(26px, 2.4vw, 34px);
+    font-weight: 800;
+    line-height: 1.25;
+    letter-spacing: -0.02em;
+    margin: 6px 0 14px 0;
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
 }
 
-html, body {
-  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Apple SD Gothic Neo, Noto Sans KR, Arial, '맑은 고딕', sans-serif;
-  color: var(--ink-1);
+/* Remove box background/border/shadow for KPI, titles, filters, mode switchers */
+div[data-testid="stVerticalBlockBorderWrapper"]:has(.kpi-card),
+div[data-testid="stVerticalBlockBorderWrapper"]:has(.page-title),
+div[data-testid="stVerticalBlockBorderWrapper"]:has(h1),
+div[data-testid="stVerticalBlockBorderWrapper"]:has(h2),
+div[data-testid="stVerticalBlockBorderWrapper"]:has(h3),
+div[data-testid="stVerticalBlockBorderWrapper"]:has(div[data-testid="stSelectbox"]),
+div[data-testid="stVerticalBlockBorderWrapper"]:has(div[data-testid="stMultiSelect"]),
+div[data-testid="stVerticalBlockBorderWrapper"]:has(div[data-testid="stSlider"]),
+div[data-testid="stVerticalBlockBorderWrapper"]:has(div[data-testid="stRadio"]),
+div[data-testid="stVerticalBlockBorderWrapper"]:has(.filter-group),
+div[data-testid="stVerticalBlockBorderWrapper"]:has(.mode-switch) {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    margin-bottom: 0.5rem !important;
 }
 
-/* ====== Page Title (floating band) ====== */
-.page-title{
-  position: relative;
-  font-weight: 800;
-  font-size: 24px;
-  letter-spacing: -0.2px;
-  padding: 18px 18px;
-  margin: 0 0 14px 0;
-  border-radius: var(--radius-xl);
-  background: var(--glass-bg);
-  box-shadow: var(--shadow-sm);
-  backdrop-filter: blur(6px);
-}
-.page-title:before{
-  content: "";
-  position: absolute;
-  inset: -10px -10px auto -10px;
-  height: 60px;
-  z-index: -1;
-  background: var(--grad-hero);
-  filter: blur(6px);
-  opacity: .85;
-  border-radius: 28px;
+/* --- 전체 앱 배경 --- */
+[data-testid="stAppViewContainer"] {
+    background-color: #f8f9fa; /* 매우 연한 회색 배경 */
 }
 
-/* ====== KPI Card (glass-lite + subtle hover) ====== */
-.kpi-card{
-  background: var(--glass-bg);
-  border-radius: var(--radius-xl);
-  padding: 14px 16px;
-  box-shadow: var(--shadow-sm);
-  transition: transform .18s ease, box-shadow .18s ease;
-  border: 1px solid rgba(15,23,42,.06);
-}
-.kpi-card:hover{
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-md);
-}
-.kpi-title{
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: .2px;
-  color: var(--ink-3);
-  text-transform: uppercase;
-}
-.kpi-main{
-  display: flex; align-items: baseline; gap: 6px;
-  margin-top: 8px;
-}
-.kpi-value{
-  font-size: 26px;
-  font-weight: 800;
-  letter-spacing: -0.4px;
-}
-.kpi-sub{
-  font-size: 12px;
-  color: var(--ink-3);
+/* --- st.container(border=True) 카드 스타일 --- */
+div[data-testid="stVerticalBlockBorderWrapper"] {
+    background-color: #ffffff;
+    border: 1px solid #e9e9e9;
+    border-radius: 10px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.03);
+    padding: 1.25rem 1.25rem 1.5rem 1.25rem;
+    margin-bottom: 1.5rem;
 }
 
-/* ====== Section / Card ====== */
-.block-card{
-  background: var(--card-bg);
-  border-radius: var(--radius-xl);
-  padding: 18px 18px;
-  box-shadow: var(--shadow-sm);
-  border: 1px solid rgba(2,6,23,.06);
+/* --- Sidebar 배경/패딩 + 항상 펼침(폭 고정) --- */
+section[data-testid="stSidebar"] {
+    background: #ffffff;
+    border-right: 1px solid #e0e0e0;
+    padding-top: 1rem;
+    padding-left: 0.5rem;
+    padding-right: 0.5rem;
+    min-width:340px !important;
+    max-width:340px !important;
 }
-.block-card:hover{ box-shadow: var(--shadow-md); }
+/* 사이드바 접힘 토글 버튼 숨김 */
+div[data-testid="collapsedControl"] { display:none !important; }
 
-/* ====== Buttons / Pills (nav/filter) ====== */
-.btn, .pill{
-  display:inline-flex; align-items:center; gap:8px;
-  padding:8px 12px; border-radius: 999px;
-  background:#fff; border:1px solid rgba(15,23,42,.08);
-  box-shadow: var(--shadow-sm);
-  transition: box-shadow .16s ease, transform .16s ease, background .16s;
-  cursor:pointer;
-}
-.btn:hover, .pill:hover{ box-shadow: var(--shadow-md); transform: translateY(-1px); }
-.btn.icon{ padding:8px 10px; }
-
-/* ====== AgGrid polish ====== */
-.ag-theme-streamlit .ag-root-wrapper{
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-sm);
-}
-.ag-theme-streamlit .ag-row-hover{ background: rgba(14,165,233,.06) !important; }
-.ag-theme-streamlit .ag-header-cell-label{ font-weight:700; letter-spacing:.2px; }
-.ag-theme-streamlit .ag-cell{ border-bottom: 1px dashed rgba(2,6,23,.06) !important; }
-
-/* ====== Plotly container ====== */
-.plotly-chart{
-  background: #fff;
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-sm);
-  padding: 4px;
+/* --- 로고 --- */
+.sidebar-logo{
+    font-size: 28px;
+    font-weight: 700;
+    color: #1a1a1a;
+    text-align: center;
+    margin-bottom: 10px;
+    padding-top: 10px;
 }
 
-/* ====== Caption / Footer ====== */
-.caption-ghost{
-  color: var(--ink-3);
-  opacity: .9;
+/* --- (레거시) 네비게이션 앵커 아이템 --- */
+.nav-item{
+    display: block;
+    width: 100%;
+    padding: 12px 15px;
+    color: #333 !important;
+    background: #f1f3f5;
+    text-decoration: none !important;
+    font-weight: 600;
+    border-radius: 8px;
+    margin-bottom: 5px;
+    text-align: center;
+    transition: background-color 0.2s ease, color 0.2s ease;
+}
+.nav-item:hover{
+    background: #e9ecef;
+    color: #000 !important;
+    text-decoration: none;
+}
+.active{
+    background: #004a99;
+    color: #ffffff !important;
+    text-decoration: none;
+    font-weight: 700;
+}
+.active:hover{
+    background: #003d80;
+    color: #ffffff !important;
 }
 
-/* ====== Utilities ====== */
-.mt-1{ margin-top: 4px; } .mt-2{ margin-top: 8px; } .mt-3{ margin-top: 12px; }
-.mb-1{ margin-bottom: 4px; } .mb-2{ margin-bottom: 8px; } .mb-3{ margin-bottom: 12px; }
-.round-xl{ border-radius: var(--radius-xl); }
-.elev-1{ box-shadow: var(--shadow-sm); } .elev-2{ box-shadow: var(--shadow-md); }
+/* --- KPI 카드 --- */
+.kpi-card {
+  background: #ffffff;
+  border: 1px solid #e9e9e9;
+  border-radius: 10px;
+  padding: 20px 15px;
+  text-align: center;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.03);
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+.kpi-title { 
+    font-size: 15px; 
+    font-weight: 600; 
+    margin-bottom: 10px; 
+    color: #444; 
+}
+.kpi-value { 
+    font-size: 28px; 
+    font-weight: 700; 
+    color: #000; 
+    line-height: 1.2;
+}
 
-/* ===== Sidebar Brand (gradient text) ===== */
-.sidebar-hr{height:1px;background:linear-gradient(90deg, rgba(124,58,237,.35),rgba(236,72,153,.25),rgba(249,115,22,.35));margin:12px 0;border-radius:4px;}
-.page-title-wrap{display:flex;align-items:center;gap:8px;margin:6px 0 8px;}
-.page-title-emoji{font-size:18px;opacity:.9}
+/* --- KPI 서브 라인 --- */
+.kpi-subwrap { margin-top: 10px; line-height: 1.4; }
+.kpi-sublabel { font-size: 12px; font-weight: 500; color: #555; letter-spacing: 0.1px; margin-right: 6px; }
+.kpi-substrong { font-size: 14px; font-weight: 700; color: #111; }
+.kpi-subpct { font-size: 14px; font-weight: 700; }
+
+/* --- AgGrid 공통 --- */
+.ag-theme-streamlit { font-size: 13px; }
+.ag-theme-streamlit .ag-root-wrapper { border-radius: 8px; }
+.ag-theme-streamlit .ag-row-hover { background-color: #f5f8ff !important; }
+.ag-theme-streamlit .ag-header-cell-label { justify-content: center !important; }
+.ag-theme-streamlit .centered-header .ag-header-cell-label { justify-content: center !important; }
+.ag-theme-streamlit .centered-header .ag-sort-indicator-container { margin-left: 4px; }
+.ag-theme-streamlit .bold-header .ag-header-cell-text { 
+    font-weight: 700 !important; 
+    font-size: 13px; 
+    color: #111;
+}
+
+/* --- 페이지 내 섹션 타이틀 --- */
+.sec-title{ 
+    font-size: 20px; 
+    font-weight: 700; 
+    color: #111; 
+    margin: 0 0 10px 0;
+    padding-bottom: 0;
+    border-bottom: none;
+}
+
+/* --- Streamlit 기본 요소 미세 조정 --- */
+div[data-testid="stMultiSelect"], div[data-testid="stSelectbox"] { margin-top: -10px; }
+h3 { margin-top: -15px; margin-bottom: 10px; }
+h4 { font-weight: 700; color: #111; margin-top: 0rem; margin-bottom: 0.5rem; }
+hr { margin: 1.5rem 0; background-color: #e0e0e0; }
+
+/* =====================================================
+   버튼 기반 사이드바 네비게이션 스킨 (리로드 없는 내비)
+   기존 .nav-item 룩&필을 버튼에 이식
+   ===================================================== */
+section[data-testid="stSidebar"] .block-container { padding-top: 0.75rem; }
+
+/* 공통 버튼 스타일 */
+section[data-testid="stSidebar"] .stButton > button {
+  border-radius: 8px;
+  border: 1px solid var(--outline, #DCDCDC);
+  background: #f1f3f5;
+  color: #333;
+  font-weight: 600;
+  padding: 12px 15px;
+  margin: 6px 0 0 0;
+  box-shadow: none;
+  width: 100%;
+  transition: background-color .12s ease-in-out, border-color .12s ease-in-out, color .12s ease-in-out;
+}
+
+/* hover */
+section[data-testid="stSidebar"] .stButton > button:hover {
+  border-color: #B9B9B9;
+  background: #e9ecef;
+  color: #000;
+}
+
+/* 비활성(secondary) */
+section[data-testid="stSidebar"] .stButton [data-testid="baseButton-secondary"] {
+  border: 1px solid #E5E7EB;
+  background: #f1f3f5;
+  color: #333;
+}
+
+/* 활성(Primary) — 기존 .active 느낌 */
+section[data-testid="stSidebar"] .stButton [data-testid="baseButton-primary"] {
+  background: #004a99;
+  color: #fff;
+  border: 1px solid #004a99;
+  box-shadow: 0 4px 10px rgba(0, 74, 153, 0.25);
+}
+
+/* 활성 hover */
+section[data-testid="stSidebar"] .stButton [data-testid="baseButton-primary"]:hover {
+  filter: brightness(1.02);
+  background: #003d80;
+  border-color: #003d80;
+}
+
+/* 사이드바 구분선 */
+.sidebar-hr { margin: 8px 0 12px 0; border-top: 1px solid #E5E7EB; }
+
+/* ==== Sidebar Gradient Title: 1줄, 줄바꿈 없이, 폭 좁아도 예쁘게 ==== */
+.page-title-wrap{
+  display:flex; align-items:center; gap:8px; margin:4px 0 10px 0;
+}
+.page-title-emoji{ font-size:20px; line-height:1; }
 .page-title-main{
-  font-weight:900; font-size:18px; letter-spacing:-.2px;
-  background: linear-gradient(90deg, #7C3AED 0%, #EC4899 45%, #F97316 100%);
-  -webkit-background-clip: text; background-clip: text; color: transparent;
-  white-space:nowrap;
+  /* clamp(min, preferred, max) → 사이드바가 좁아도 자연스레 줄어듦 */
+  font-size: clamp(18px, 2.2vw, 24px);
+  font-weight: 800; letter-spacing:-0.2px; line-height:1.15;
+  background: linear-gradient(90deg,#6A5ACD 0%, #A663CC 40%, #FF7A8A 75%, #FF8A3D 100%);
+  -webkit-background-clip:text; background-clip:text; color:transparent;
+  white-space: nowrap;             /* 줄바꿈 금지 */
+  overflow: hidden;                /* 넘치면 숨김 */
+  text-overflow: ellipsis;         /* … 처리 */
+  max-width: 100%;                 /* 사이드바 폭에 맞춰 자르기 */
 }
 
-/* Page content title (neutral, no box) */
-.page-title{ 
-  background:none !important; box-shadow:none !important; 
-  border:none !important; padding:0 !important; margin:0 0 8px 0 !important;
+/* 사이드바 버튼도 약간 컴팩트하게(필요 시) */
+section[data-testid="stSidebar"] .stButton > button{
+  padding: 10px 12px; font-weight: 600;
 }
+
+.kpi-card{border-radius:16px;border:1px solid #e7ebf3;background:#fff;padding:12px 14px;
+                box-shadow:0 1px 2px rgba(0,0,0,0.04)}
+      .kpi-title{font-size:13px;color:#5b6b83;margin-bottom:4px;font-weight:600}
+      .kpi-value{font-weight:800;letter-spacing:-0.2px}
+      .centered-header .ag-header-cell-label{justify-content:center;}
+      .bold-header .ag-header-cell-text{font-weight:700;}
+
+.kpi-card{border-radius:16px;border:1px solid #e7ebf3;background:#fff;padding:12px 14px;
+                box-shadow:0 1px 2px rgba(0,0,0,0.04)}
+      .kpi-title{font-size:13px;color:#5b6b83;margin-bottom:4px;font-weight:600}
+      .kpi-value{font-weight:800;letter-spacing:-0.2px}
+      .centered-header .ag-header-cell-label{justify-content:center;}
+      .bold-header .ag-header-cell-text{font-weight:700;}
+
 </style>""", unsafe_allow_html=True)
 
 # ===== 네비게이션 아이템 정의 (v2.0) =====
@@ -931,6 +1035,13 @@ def get_avg_demo_pop_by_episode(df_src: pd.DataFrame, medias: List[str]) -> pd.D
 #region [ 8. 페이지 1: Overview ]
 # =====================================================
 def render_overview():
+
+
+# 지표기준 안내 수정
+with st.expander("ℹ️ 지표 기준 안내", expanded=False):
+    st.markdown("""
+    _이 페이지 전용 지표 기준 안내 내용을 여기에 작성하세요._
+    """)
     # ◀◀◀ [수정] load_data() 호출 방식 변경
     df = load_data()
   
@@ -938,8 +1049,6 @@ def render_overview():
     filter_cols = st.columns(4) # [제목 | 편성필터 | 연도필터 | 월필터]
     
     with filter_cols[0]:
-        _metric_note()
-
         st.markdown("### 📊 Overview")
     
     with filter_cols[1]:
@@ -1154,6 +1263,13 @@ def render_overview():
 # =====================================================
 def render_ip_detail():
 
+
+
+# 지표기준 안내 수정
+with st.expander("ℹ️ 지표 기준 안내", expanded=False):
+    st.markdown("""
+    _이 페이지 전용 지표 기준 안내 내용을 여기에 작성하세요._
+    """)
     # ◀◀◀ [변경 없음] 데이터 로드
     df_full = load_data()
 
@@ -1161,7 +1277,7 @@ def render_ip_detail():
 
     # ▼▼ 제목 표기 방식만 통일 ▼▼
     with filter_cols[0]:
-        st.markdown('### 📈 IP 성과 자세히보기')
+        st.markdown("<div class='page-title'>📈 IP 성과 자세히보기</div>", unsafe_allow_html=True)
 
     ip_options = sorted(df_full["IP"].dropna().unique().tolist())
     with filter_cols[1]:
@@ -1996,8 +2112,6 @@ def render_demographic():
     # [수정] 필터 순서 변경: [Title | Mode | Media | IP1 | IP2/Group]
     filter_cols = st.columns([3, 2, 2, 3, 3]) 
 
-    _metric_note()
-
     with filter_cols[0]:
         st.markdown("### 👥 IP 오디언스 히트맵")
     
@@ -2660,6 +2774,13 @@ def render_ip_vs_ip_comparison(df_all: pd.DataFrame, ip1: str, ip2: str, kpi_per
 
 # ===== [페이지 4] 메인 렌더링 함수 =====
 def render_comparison():
+
+
+# 지표기준 안내 수정
+with st.expander("ℹ️ 지표 기준 안내", expanded=False):
+    st.markdown("""
+    _이 페이지 전용 지표 기준 안내 내용을 여기에 작성하세요._
+    """)
     # ◀◀◀ [수정] load_data() 호출 방식 변경
     df_all = load_data()
     try: 
@@ -2928,8 +3049,6 @@ def render_episode():
 
     # --- 각 지표별 차트 렌더링 ---
     chart_cols = st.columns(2) 
-    _metric_note()
-
     col_idx = 0
     
     for metric in key_metrics:
@@ -2959,6 +3078,13 @@ def render_episode():
 # =====================================================
 
 def render_growth_score():
+
+
+# 지표기준 안내 수정
+with st.expander("ℹ️ 지표 기준 안내", expanded=False):
+    st.markdown("""
+    _이 페이지 전용 지표 기준 안내 내용을 여기에 작성하세요._
+    """)
     """
     레이아웃: [상단 헤더: '선택한 작품' | IP선택 | 회차기준] → [선택작품 요약카드] → [포지셔닝맵] → [전체표]
     변경사항 반영:
@@ -2997,8 +3123,6 @@ def render_growth_score():
     _ep_display = st.session_state.get("growth_ep_cutoff", 4)
 
     head = st.columns([5, 3, 2])
-    _metric_note()
-
     with head[0]:
         st.markdown(
             f"## 🚀 성장스코어-방영지표 <span style='font-size:20px;color:#6b7b93'>(~{_ep_display}회 기준)</span>",
@@ -3017,13 +3141,6 @@ def render_growth_score():
 
     # ---------- 지표 기준 안내 ----------
     # 헤더 다음, 요약카드 위에 배치 권장
-    with st.expander("ℹ️ 지표 기준 안내", expanded=False):
-        st.markdown("""
-    **등급 체계**
-    - **절대값 등급**: 각 지표의 절대 수준을 IP 간 백분위 20% 단위로 구분 → `S / A / B / C / D`
-    - **상승률 등급**: 동일 기간(선택 회차 범위) 내 회차-값 선형회귀 기울기(slope)를 IP 간 백분위 20% 단위로 구분 → `+2 / +1 / 0 / -1 / -2`
-    - **종합등급**: 절대값과 상승률 등급을 결합해 표기 (예: `A+2`).  
-      - 참고 규칙 예시: **절대값 상위 20%** ∧ **상승률 상위 40%** ⇒ `S+1` 처럼 상/중 상향 표기
 
     **회차 기준(~N회)**
     - 각 IP의 **1~N회** 데이터만 사용 (**적응형 지표**: 없는 회차는 자동 제외).
@@ -3441,6 +3558,20 @@ def render_growth_score():
 # =====================================================
 
 def render_growth_score_digital():
+
+
+
+
+selected_group_criteria = st.multiselect(
+    "비교 그룹 기준",
+    ["동일 편성", "방영 연도"],
+    default=["동일 편성"]
+)
+# 지표기준 안내 수정
+with st.expander("ℹ️ 지표 기준 안내", expanded=False):
+    st.markdown("""
+    _이 페이지 전용 지표 기준 안내 내용을 여기에 작성하세요._
+    """)
     """
     레이아웃: [상단 헤더: 타이틀 | IP선택 | 회차기준] → [선택작품 요약카드]
            → [회차별 등급 추이(선택 IP)] → [포지셔닝맵] → [전체표]
@@ -3486,17 +3617,6 @@ def render_growth_score_digital():
     # ---------- 헤더(타이틀/선택) ----------
     _ep_display = st.session_state.get("growth_d_ep_cutoff", 4)
     head = st.columns([5, 3, 2])
-    _metric_note()
-    # 비교 그룹 기준 (페이지2 스타일)
-    selected_group_criteria = st.multiselect(
-        "비교 그룹 기준",
-        ["동일 편성", "방영 연도"],
-        default=["동일 편성"], label_visibility="collapsed"
-    )
-
-
-    _metric_note()
-
     with head[0]:
         st.markdown(
             f"## 🛰️ 성장스코어-디지털 <span style='font-size:20px;color:#6b7b93'>(~{_ep_display}회 기준)</span>",
@@ -3510,8 +3630,6 @@ def render_growth_score_digital():
                                  key="growth_d_ep_cutoff", label_visibility="collapsed")
 
     # ---------- 지표 기준 안내 ----------
-    with st.expander("ℹ️ 지표 기준 안내", expanded=False):
-        st.markdown("""
 **디지털 지표 정의(고정)**
 - **조회수, 언급량**: 회차별 합(에피소드 단위)을 사용 → 1~N회 집계 시계열의 평균/회귀
 - **F_Total(화제성 순위)**: 값이 **낮을수록 우수** → 평균 산출 전 `-1` 곱해 상향 스케일로 변환  
