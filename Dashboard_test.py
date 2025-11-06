@@ -1185,8 +1185,6 @@ def render_overview():
             티빙QUICK=("value", lambda x: x[(f.loc[x.index, "매체"]=="TVING QUICK") & (f.loc[x.index,"metric"]=="시청인구")].sum()),
             티빙VOD_6Days=("value", lambda x: x[(f.loc[x.index, "매체"]=="TVING VOD") & (f.loc[x.index,"metric"]=="시청인구")].sum()),
             디지털조회수=("value", lambda x: x[(f.loc[x.index,"metric"]=="조회수") & ((f.loc[x.index,"매체"]!="유튜브") | (f.loc[x.index,"세부속성1"].isin(["PGC","UGC"])) )].sum()),
-            디지털언급량=("value", lambda x: x[(f.loc[x.index,"metric"]=="화제성점수")].sum()),
-            화제성점수=("value", lambda x: x[(f.loc[x.index,"metric"]=="F_Score")].min()),
             화제성점수=("value", lambda x: x[(f.loc[x.index,"metric"]=="F_Score")].mean()) # 추가된 부분
         )
         .reset_index()
