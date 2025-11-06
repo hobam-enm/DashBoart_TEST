@@ -399,6 +399,14 @@ section[data-testid="stSidebar"] .stButton > button{
       .centered-header .ag-header-cell-label{justify-content:center;}
       .bold-header .ag-header-cell-text{font-weight:700;}
 
+
+/* === Sidebar title size bump (safe) === */
+section[data-testid="stSidebar"] h1,
+section[data-testid="stSidebar"] h2,
+section[data-testid="stSidebar"] h3 { letter-spacing:-0.02em; }
+section[data-testid="stSidebar"] h2 { font-size: 24px; }
+section[data-testid="stSidebar"] h3 { font-size: 20px; }
+
 </style>""", unsafe_allow_html=True)
 
 # ===== 네비게이션 아이템 정의 (v2.0) =====
@@ -660,6 +668,16 @@ def plot_episode_comparison(
 
 # =====================================================
 # (이 곳으로 공통 유틸 함수가 모입니다. 동작은 변경하지 않음)
+
+# ------------------------------------------------------------------
+# 공통: 지표기준 안내 블록 (모든 페이지에서 동일 UI, 각 페이지별 내용은 다르게)
+# ------------------------------------------------------------------
+def render_guideline_block(page_key: str, text: str = ""):
+    import streamlit as st
+    with st.expander("지표기준 안내", expanded=False):
+        # 지표기준 안내 수정: 각 페이지에 맞는 내용을 아래 text로 교체하세요.
+        st.markdown(text if text.strip() else "(*이 페이지의 지표 기준을 여기에 정리하세요.*)")
+
 
 
 # =====================================================
@@ -1042,7 +1060,12 @@ def render_overview():
     filter_cols = st.columns(4) # [제목 | 편성필터 | 연도필터 | 월필터]
     
     with filter_cols[0]:
-        st.markdown("### 📊 Overview")
+        st.markdown("### 📊 Overview
+        render_guideline_block("render_overview", """
+        <!-- 지표기준 안내 수정 -->
+        해당 페이지의 지표 정의와 계산 로직 요약을 여기에 작성하세요.
+        """)
+")
     
     with filter_cols[1]:
         prog_sel = st.multiselect(
@@ -1263,7 +1286,12 @@ def render_ip_detail():
 
     # ▼▼ 제목 표기 방식만 통일 ▼▼
     with filter_cols[0]:
-        st.markdown("<div class='page-title'>📈 IP 성과 자세히보기</div>", unsafe_allow_html=True)
+        st.markdown("<div class='page-title'>📈 IP 성과 자세히보기
+        render_guideline_block("render_ip_detail", """
+        <!-- 지표기준 안내 수정 -->
+        해당 페이지의 지표 정의와 계산 로직 요약을 여기에 작성하세요.
+        """)
+</div>", unsafe_allow_html=True)
 
     ip_options = sorted(df_full["IP"].dropna().unique().tolist())
     with filter_cols[1]:
@@ -3097,7 +3125,12 @@ def render_growth_score():
     head = st.columns([5, 3, 2])
     with head[0]:
         st.markdown(
-            f"## 🚀 성장스코어-방영지표 <span style='font-size:20px;color:#6b7b93'>(~{_ep_display}회 기준)</span>",
+            f"## 🚀 성장스코어-방영지표
+        render_guideline_block("render_growth_score", """
+        <!-- 지표기준 안내 수정 -->
+        해당 페이지의 지표 정의와 계산 로직 요약을 여기에 작성하세요.
+        """)
+ <span style='font-size:20px;color:#6b7b93'>(~{_ep_display}회 기준)</span>",
             unsafe_allow_html=True
         )
     with head[1]:
@@ -3114,7 +3147,8 @@ def render_growth_score():
     # ---------- 지표 기준 안내 ----------
     # 헤더 다음, 요약카드 위에 배치 권장
     with st.expander("ℹ️ 지표 기준 안내", expanded=False):
-        st.markdown("""
+        with st.expander("지표기준 안내", expanded=False):
+            st.markdown("""
     **등급 체계**
 #     - **절대값 등급**: 각 지표의 절대 수준을 IP 간 백분위 20% 단위로 구분 -> `S / A / B / C / D`
 #     - **상승률 등급**: 동일 기간(선택 회차 범위) 내 회차-값 선형회귀 기울기(slope)를 IP 간 백분위 20% 단위로 구분 -> `+2 / +1 / 0 / -1 / -2`
@@ -3584,7 +3618,12 @@ def render_growth_score_digital():
     head = st.columns([5, 3, 2])
     with head[0]:
         st.markdown(
-            f"## 🛰️ 성장스코어-디지털 <span style='font-size:20px;color:#6b7b93'>(~{_ep_display}회 기준)</span>",
+            f"## 🛰️ 성장스코어-디지털
+        render_guideline_block("render_growth_score_digital", """
+        <!-- 지표기준 안내 수정 -->
+        해당 페이지의 지표 정의와 계산 로직 요약을 여기에 작성하세요.
+        """)
+ <span style='font-size:20px;color:#6b7b93'>(~{_ep_display}회 기준)</span>",
             unsafe_allow_html=True
         )
     with head[1]:
@@ -3596,7 +3635,8 @@ def render_growth_score_digital():
 
     # ---------- 지표 기준 안내 ----------
     with st.expander("ℹ️ 지표 기준 안내", expanded=False):
-        st.markdown("""
+        with st.expander("지표기준 안내", expanded=False):
+            st.markdown("""
 **디지털 지표 정의(고정)**
 # - **조회수, 언급량**: 회차별 합(에피소드 단위)을 사용 -> 1~N회 집계 시계열의 평균/회귀
 # - **F_Total(화제성 순위)**: 값이 **낮을수록 우수** -> 평균 산출 전 `-1` 곱해 상향 스케일로 변환  
