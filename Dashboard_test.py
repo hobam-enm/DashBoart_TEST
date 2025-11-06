@@ -696,8 +696,6 @@ def render_gradient_title(main_text: str, emoji: str = "🎬"):
 
 with st.sidebar:
     st.markdown('<div class="sidebar-hr"></div>', unsafe_allow_html=True)
-    with st.expander("ℹ️ 지표 기준 안내", expanded=False):
-        st.markdown("내용 기입 필요")
 
     render_gradient_title("드라마 성과 대시보드", emoji="")
     st.markdown(
