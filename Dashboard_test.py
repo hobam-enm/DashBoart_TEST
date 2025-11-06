@@ -2177,6 +2177,7 @@ def render_demographic():
     # (기존 'with st.sidebar:' 블록은 삭제됨)
 
     # --- 메인 페이지 렌더링 ---
+    st.caption(f"선택된 두 대상의 회차별 데모 시청인구 비교 ( {media_list_label} / 비교대상 대비 % 증감 )") # 새 캡션
     st.divider()
 
     # --- 입력값 유효성 검사 ---
@@ -2454,7 +2455,7 @@ def render_ip_vs_group_comparison(
     # --- 2. 성과 시그니처 (Radar) + 주요 지표 편차 (Bar) ---
     st.markdown(f"#### 2. 성과 포지셔닝 ({group_name} 대비)")
     
-    col_radar, col_dev = st.columns(1) 
+    col_radar, col_dev = st.columns(2) 
 
     # 왼쪽: Radar Chart
     with col_radar:
@@ -2831,6 +2832,7 @@ def render_comparison():
     # (기존 'with st.sidebar:' 블록 삭제)
 
     # ===== 메인 페이지 라우팅 =====
+    # (기존 타이틀 'st.markdown("## ⚖️ IP간 비교분석")' 삭제)
     
     if comparison_mode == "IP vs 그룹 평균": 
         if selected_ip1 and selected_group_criteria and not kpi_percentiles.empty: 
