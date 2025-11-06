@@ -4108,3 +4108,20 @@ div[data-testid="stVerticalBlockBorderWrapper"] { /* emulate ._liftable */
 """, unsafe_allow_html=True)
 # =========================================================================
 
+
+
+
+# === [SIDEBAR NAV CARD REMOVAL • 2025-11-06] ===============================
+# 사이드 네비 영역(링크/버튼)만 카드 박스 제거: 배경/테두리/그림자 OFF, 패딩 최소화
+st.markdown("""
+<style>
+section[data-testid="stSidebar"] div[data-testid="stVerticalBlockBorderWrapper"]:has(.nav-item) {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    margin-bottom: .5rem !important;
+}
+</style>
+""", unsafe_allow_html=True)
+# ==========================================================================
