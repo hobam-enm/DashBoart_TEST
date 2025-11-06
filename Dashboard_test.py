@@ -212,6 +212,36 @@ div[data-testid="stVerticalBlockBorderWrapper"]:hover{
     box-shadow: 0 14px 36px rgba(16, 24, 40, 0.14), 0 4px 12px rgba(16, 24, 40, 0.08) !important;
     z-index: 2;
 }
+
+/* === Hover scope fix === */
+/* 1) Cancel global wrapper hover (page shouldn't 'bounce') */
+div[data-testid="stVerticalBlockBorderWrapper"]:hover{
+  transform: none !important;
+  box-shadow: inherit !important;
+  z-index: auto !important;
+}
+
+/* 2) Sidebar: no hover lift at all */
+section[data-testid="stSidebar"] .kpi-card:hover,
+section[data-testid="stSidebar"] .block-card:hover,
+section[data-testid="stSidebar"] .stPlotlyChart:hover,
+section[data-testid="stSidebar"] .ag-theme-streamlit .ag-root-wrapper:hover{
+  transform: none !important;
+  box-shadow: inherit !important;
+}
+
+/* 3) Only cards/content areas get hover lift */
+.kpi-card, .block-card, .stPlotlyChart, .ag-theme-streamlit .ag-root-wrapper{
+  transition: transform .18s ease, box-shadow .18s ease;
+  will-change: transform, box-shadow;
+  backface-visibility: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+.kpi-card:hover, .block-card:hover, .stPlotlyChart:hover, .ag-theme-streamlit .ag-root-wrapper:hover{
+  transform: translateY(-2px);
+  box-shadow: 0 14px 36px rgba(16,24,40,.14), 0 4px 12px rgba(16,24,40,.08);
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -2917,10 +2947,9 @@ def render_episode():
     df_all = load_data()
     
     # --- [수정] 필터 메인 영역으로 이동 ---
-    # [제목 | 기준IP | 회차 | 비교그룹기준] 한 행 구성
-    filter_cols = st.columns([3, 3, 2, 2])  # 기존 [3,3,2] → [3,3,2,2]
+    filter_cols = st.columns([3, 3, 2]) # [Title | Base IP | Episode]
     ip_options_main = sorted(df_all["IP"].dropna().unique().tolist()) 
-    episode_options_main = get_episode_options(df_all)  # 공통 유틸
+    episode_options_main = get_episode_options(df_all) # 공통 유틸
     selected_base_ip = None
     selected_episode = None
 
@@ -2944,53 +2973,51 @@ def render_episode():
             label_visibility="collapsed", 
             key="ep_selected_episode_main" 
         )
+        
+    # (기존 'with st.sidebar:' 블록 삭제)
 
-    # ── [교체] 비교대상 그룹: 라디오/버튼 제거 → 멀티셀렉트 추가 ────────────────
-    with filter_cols[3]:
-        selected_group_criteria = st.multiselect(
-            "비교 그룹 기준",
-            ["동일 편성", "방영 연도"],
-            default=["동일 편성"],
-            label_visibility="collapsed",
-            key="ep_group_criteria"
-        )
+    # --- 메인 페이지 렌더링 ---
+    # st.markdown("## 🎬 회차별 비교 ") # 위로 이동
+
+    # --- 비교 대상 그룹 선택 (페이지 내 필터) ---
+    comparison_group = st.radio(
+        "비교 대상 그룹",
+        options=["전체 IP", "동일 편성", "방영 연도", "동일 편성 & 연도"],
+        index=0, 
+        key="ep_comp_group",
+        horizontal=True 
+    )
+    st.divider()
 
     # --- 입력값 유효성 검사 ---
-    if not selected_base_ip:
-        st.warning("필터에서 기준 IP를 선택해주세요.")
-        return
-    if not selected_episode:
-        st.warning("필터에서 회차를 선택해주세요.")
-        return
+    if not selected_base_ip: st.warning("필터에서 기준 IP를 선택해주세요."); return # '사이드바' -> '필터'
+    if not selected_episode: st.warning("필터에서 회차를 선택해주세요."); return # '사이드바' -> '필터'
 
     # --- 필터 적용된 데이터 생성 ---
     df_filtered_main = df_all.copy() 
-    group_filter_applied = []  # 설명 표시용
-    group_label = "전체 IP" if not selected_group_criteria else " + ".join(selected_group_criteria)
+    group_filter_applied = [] 
 
-    if selected_group_criteria:
+    if comparison_group != "전체 IP":
         base_ip_info_rows = df_all[df_all["IP"] == selected_base_ip] 
         if not base_ip_info_rows.empty:
             base_ip_prog = base_ip_info_rows["편성"].dropna().mode().iloc[0] if not base_ip_info_rows["편성"].dropna().empty else None
             date_col = "방영시작일" if "방영시작일" in df_all.columns and df_all["방영시작일"].notna().any() else "주차시작일"
             base_ip_year = base_ip_info_rows[date_col].dropna().dt.year.mode().iloc[0] if not base_ip_info_rows[date_col].dropna().empty else None
 
-            if "동일 편성" in selected_group_criteria:
+            if "동일 편성" in comparison_group:
                 if base_ip_prog:
                     df_filtered_main = df_filtered_main[df_filtered_main["편성"] == base_ip_prog]
                     group_filter_applied.append(f"편성='{base_ip_prog}'")
-                else:
-                    st.warning(f"기준 IP '{selected_base_ip}'의 편성 정보 없음")
+                else: st.warning(f"기준 IP '{selected_base_ip}'의 편성 정보 없음")
                      
-            if "방영 연도" in selected_group_criteria:
+            if "방영 연도" in comparison_group: 
                 if base_ip_year:
-                    df_filtered_main = df_filtered_main[df_filtered_main[date_col].dt.year == int(base_ip_year)]
-                    group_filter_applied.append(f"연도={int(base_ip_year)}")
-                else:
-                    st.warning(f"기준 IP '{selected_base_ip}'의 연도 정보 없음")
+                     df_filtered_main = df_filtered_main[df_filtered_main[date_col].dt.year == int(base_ip_year)]
+                     group_filter_applied.append(f"연도={int(base_ip_year)}")
+                else: st.warning(f"기준 IP '{selected_base_ip}'의 연도 정보 없음")
         else:
-            st.warning(f"기준 IP '{selected_base_ip}' 정보를 찾을 수 없습니다.")
-            df_filtered_main = pd.DataFrame()  # 필터링 결과 없음
+             st.warning(f"기준 IP '{selected_base_ip}' 정보를 찾을 수 없습니다.")
+             df_filtered_main = pd.DataFrame() # 필터링 결과 없음
 
     # --- 필터링 후 데이터 유효성 검사 ---
     if df_filtered_main.empty:
@@ -2998,7 +3025,7 @@ def render_episode():
         return
         
     if selected_base_ip not in df_filtered_main["IP"].unique():
-        st.warning(f"선택하신 그룹 '{group_label}'에 기준 IP '{selected_base_ip}'가 포함되지 않습니다.")
+        st.warning(f"선택하신 그룹 '{comparison_group}'에 기준 IP '{selected_base_ip}'가 포함되지 않습니다.")
         return 
 
     # --- 주요 지표 목록 정의 ---
@@ -3040,7 +3067,6 @@ def render_episode():
                 st.markdown("---") 
         col_idx += 1
 #endregion
-
 
 #region [ 13. 페이지 6: 성장스코어-방영성과  ]
 # =====================================================
