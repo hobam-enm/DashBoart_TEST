@@ -3584,7 +3584,7 @@ def render_growth_score_digital():
 
     사용 메트릭(고정):
       - 조회수: 회차합 시계열 → 절대(평균), 상승(회귀 기울기)
-      - 화제성(F_Score): 회차합 시계열 → 절대(평균), 상승(회귀 기울기)
+      - 화제성: 회차합 시계열 → 절대(평균), 상승(회귀 기울기)
     """
     import numpy as np
     import pandas as pd
@@ -3953,7 +3953,7 @@ def render_growth_score_digital():
     # ---------- [전체표] ----------
     table = base[[
         "IP","종합_절대등급","종합_상승등급","종합등급",
-        "조회수_종합","화제성(F_Score)_종합"
+        "조회수_종합","화제성_종합"
     ]].copy()
 
     # 정렬 키: 종합 절대 → 종합 상승 → IP
@@ -3967,7 +3967,7 @@ def render_growth_score_digital():
     ]].rename(columns={
         "종합등급":"종합",
         "조회수_종합":"조회수",
-        "화제성(F_Score)_종합":"화제성(F_Score)",
+        "화제성_종합":"화제성",
     })
 
     from st_aggrid import GridOptionsBuilder, AgGrid, GridUpdateMode, JsCode
@@ -3988,7 +3988,7 @@ def render_growth_score_digital():
                                 headerClass='centered-header bold-header',
                                 cellStyle={'textAlign':'center'})
     gb.configure_column("IP", pinned='left', cellStyle={'textAlign':'left','fontWeight':'700'})
-    for colname in ["종합","조회수","화제성(F_Score)"]:
+    for colname in ["종합","조회수","화제성"]:
         gb.configure_column(colname, cellStyle=grade_cell, width=120)
     grid_options = gb.build()
 
