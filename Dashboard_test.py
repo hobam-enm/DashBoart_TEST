@@ -837,6 +837,9 @@ COLOR_MALE = "#2a61cc"
 COLOR_FEMALE = "#d93636"
 
 def render_gender_pyramid(container, title: str, df_src: pd.DataFrame, height: int = 260):
+
+    with st.expander("ℹ️ 지표 기준 안내", expanded=False):
+        st.markdown("내용 기입 필요")
     """
     지정된 컨테이너에 남/녀 피라미드 차트를 렌더링합니다.
     """
@@ -995,9 +998,8 @@ def render_overview():
     
     with filter_cols[0]:
         st.markdown("### 📊 Overview")
-    
-        with st.expander("ℹ️ 지표 기준 안내", expanded=False):
-            st.markdown("내용 기입 필요")
+    with st.expander("ℹ️ 지표 기준 안내", expanded=False):
+        st.markdown("내용 기입 필요")
 
     with filter_cols[1]:
         prog_sel = st.multiselect(
@@ -1219,9 +1221,8 @@ def render_ip_detail():
     # ▼▼ 제목 표기 방식만 통일 ▼▼
     with filter_cols[0]:
         st.markdown("<div class='page-title'>📈 IP 성과 자세히보기</div>", unsafe_allow_html=True)
-
-        with st.expander("ℹ️ 지표 기준 안내", expanded=False):
-            st.markdown("내용 기입 필요")
+    with st.expander("ℹ️ 지표 기준 안내", expanded=False):
+        st.markdown("내용 기입 필요")
 
     ip_options = sorted(df_full["IP"].dropna().unique().tolist())
     with filter_cols[1]:
@@ -2067,9 +2068,8 @@ def render_demographic():
 
     with filter_cols[0]:
         st.markdown("### 👥 IP 오디언스 히트맵")
-    
-        with st.expander("ℹ️ 지표 기준 안내", expanded=False):
-            st.markdown("내용 기입 필요")
+    with st.expander("ℹ️ 지표 기준 안내", expanded=False):
+        st.markdown("내용 기입 필요")
 
     with filter_cols[1]:
         # [수정] st.radio -> st.selectbox
@@ -2317,6 +2317,9 @@ def render_ip_vs_group_comparison(
     kpi_percentiles: pd.DataFrame 
 ):
     
+
+    with st.expander("ℹ️ 지표 기준 안내", expanded=False):
+        st.markdown("내용 기입 필요")
     # --- 데이터 준비 ---
     df_ip = df_all[df_all["IP"] == ip].copy()
     df_group = df_all.copy()
@@ -2772,9 +2775,8 @@ def render_comparison():
 
     with filter_cols[0]:
         st.markdown("## ⚖️ IP간 비교분석")
-
-        with st.expander("ℹ️ 지표 기준 안내", expanded=False):
-            st.markdown("내용 기입 필요")
+    with st.expander("ℹ️ 지표 기준 안내", expanded=False):
+        st.markdown("내용 기입 필요")
 
     with filter_cols[1]:
         comparison_mode = st.radio(
@@ -2979,9 +2981,8 @@ def render_episode():
 
     with filter_cols[0]:
         st.markdown("## 🎬 회차별 비교 ")
-        
-        with st.expander("ℹ️ 지표 기준 안내", expanded=False):
-            st.markdown("내용 기입 필요")
+    with st.expander("ℹ️ 지표 기준 안내", expanded=False):
+        st.markdown("내용 기입 필요")
 
     with filter_cols[1]:
         selected_base_ip = st.selectbox(
@@ -3590,6 +3591,9 @@ def render_growth_score():
 # =====================================================
 
 def render_growth_score_digital():
+
+    with st.expander("ℹ️ 지표 기준 안내", expanded=False):
+        st.markdown("내용 기입 필요")
     """
     레이아웃: [상단 헤더: 타이틀 | IP선택 | 회차기준] → [선택작품 요약카드]
            → [회차별 등급 추이(선택 IP)] → [포지셔닝맵] → [전체표]
