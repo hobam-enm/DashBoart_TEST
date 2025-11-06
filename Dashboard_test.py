@@ -4109,19 +4109,41 @@ div[data-testid="stVerticalBlockBorderWrapper"] { /* emulate ._liftable */
 # =========================================================================
 
 
-
-
-# === [SIDEBAR NAV CARD REMOVAL • 2025-11-06] ===============================
-# 사이드 네비 영역(링크/버튼)만 카드 박스 제거: 배경/테두리/그림자 OFF, 패딩 최소화
+# === [SIDEBAR CARD STRIP • v2 • 2025-11-06] ==================================
+# 사이드바 내부의 모든 카드 박스(배경/보더/섀도우/패딩) 제거 + hover 효과 무력화
 st.markdown("""
 <style>
-section[data-testid="stSidebar"] div[data-testid="stVerticalBlockBorderWrapper"]:has(.nav-item) {
-    background: transparent !important;
-    border: none !important;
-    box-shadow: none !important;
-    padding: 0 !important;
-    margin-bottom: .5rem !important;
+/* 1) 사이드바 안의 '모든' 카드형 래퍼 박스 제거 */
+section[data-testid="stSidebar"] div[data-testid="stVerticalBlockBorderWrapper"] {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+}
+
+/* 2) 사이드바 카드 hover 효과 제거 */
+section[data-testid="stSidebar"] div[data-testid="stVerticalBlockBorderWrapper"]:hover {
+  transform: none !important;
+  box-shadow: none !important;
+}
+
+/* 3) 흔히 감싸는 추가 wrapper들에 대한 여유 규칙 */
+section[data-testid="stSidebar"] [data-testid="stVerticalBlock"] > div {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+/* 4) 사이드바 기본 컨텐츠 컨테이너의 여백 정리(과도한 패딩 제거) */
+section[data-testid="stSidebar"] .block-container, 
+section[data-testid="stSidebar"] [data-testid="stSidebarContent"] {
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+  box-shadow: none !important;
+  border: none !important;
+  background: transparent !important;
 }
 </style>
 """, unsafe_allow_html=True)
-# ==========================================================================
+# ============================================================================
+
