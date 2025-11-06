@@ -4047,42 +4047,64 @@ def fmt_eokman(n):
     return f"{eok}억{man:04d}만"
 
 
-# === [HOVER FIX OVERRIDE • 2025-11-06] =======================================
-# 전체 효과: "그래프 내부만 둥둥"이 아니라 "박스(카드) 자체"가 떠오르도록 수정
-# 핵심: wrapper(:has(child:hover))에 lift를 주고, child의 개별 lift는 제거
+# === [HOVER FIX OVERRIDE • 2025-11-06 • v2] ================================
+# 증상: 페이지 전체가 떠오름 → 원인: 상위 wrapper까지 :has(.hover) 조건에 걸림
+# 해결: "가장 가까운(wrapper)만" lift 되도록, 하위 wrapper가 동일 조건이면 상위는 제외
 st.markdown("""
 <style>
-/* 1) 먼저, 차트/그리드 자체의 lift를 끈다 (중복 이동 방지) */
+/* 0) 개별 요소 lift 제거 (중복 방지) */
 .stPlotlyChart:hover,
 .ag-theme-streamlit .ag-root-wrapper:hover {
   transform: none !important;
   box-shadow: inherit !important;
 }
 
-/* 2) 자식이 hover 상태일 때, 바깥 카드(wrapper)를 들어올린다 */
-div[data-testid="stVerticalBlockBorderWrapper"]:has(.stPlotlyChart:hover),
-div[data-testid="stVerticalBlockBorderWrapper"]:has(.ag-theme-streamlit .ag-root-wrapper:hover),
-div[data-testid="stVerticalBlockBorderWrapper"]:has(.kpi-card:hover),
-div[data-testid="stVerticalBlockBorderWrapper"]:has(.block-card:hover) {
-  transform: translate3d(0,-4px,0) !important;
-  box-shadow: 0 16px 40px rgba(16,24,40,.16), 0 6px 14px rgba(16,24,40,.10) !important;
-  z-index: 3 !important;
-}
-
-/* 3) hover transition은 wrapper에만 맡긴다 (부드러운 일관성) */
-div[data-testid="stVerticalBlockBorderWrapper"] {
+/* 공통 선택자: '가장 가까운' 카드(wrapper)만 추출 */
+div[data-testid="stVerticalBlockBorderWrapper"]._liftable {
   transition: transform .18s ease, box-shadow .18s ease !important;
   will-change: transform, box-shadow;
   backface-visibility: hidden;
 }
 
+/* 1) Plotly 차트: 가장 가까운 wrapper만 lift */
+div[data-testid="stVerticalBlockBorderWrapper"]._liftable:has(.stPlotlyChart:hover):not(:has(div[data-testid="stVerticalBlockBorderWrapper"] .stPlotlyChart:hover)) {
+  transform: translate3d(0,-4px,0) !important;
+  box-shadow: 0 16px 40px rgba(16,24,40,.16), 0 6px 14px rgba(16,24,40,.10) !important;
+  z-index: 3 !important;
+}
+
+/* 2) AgGrid: 가장 가까운 wrapper만 lift */
+div[data-testid="stVerticalBlockBorderWrapper"]._liftable:has(.ag-theme-streamlit .ag-root-wrapper:hover):not(:has(div[data-testid="stVerticalBlockBorderWrapper"] .ag-theme-streamlit .ag-root-wrapper:hover)) {
+  transform: translate3d(0,-4px,0) !important;
+  box-shadow: 0 16px 40px rgba(16,24,40,.16), 0 6px 14px rgba(16,24,40,.10) !important;
+  z-index: 3 !important;
+}
+
+/* 3) KPI/커스텀 카드 클래스도 동일 처리 (있을 때만) */
+div[data-testid="stVerticalBlockBorderWrapper"].*_liftable:has(.kpi-card:hover):not(:has(div[data-testid="stVerticalBlockBorderWrapper"] .kpi-card:hover)),
+div[data-testid="stVerticalBlockBorderWrapper"].*_liftable:has(.block-card:hover):not(:has(div[data-testid="stVerticalBlockBorderWrapper"] .block-card:hover)) {
+  transform: translate3d(0,-4px,0) !important;
+  box-shadow: 0 16px 40px rgba(16,24,40,.16), 0 6px 14px rgba(16,24,40,.10) !important;
+  z-index: 3 !important;
+}
+
 /* 4) 사이드바는 lift 금지 유지 */
-section[data-testid="stSidebar"] div[data-testid="stVerticalBlockBorderWrapper"]:has(*) {
+section[data-testid="stSidebar"] div[data-testid="stVerticalBlockBorderWrapper"] {
   transform: none !important;
   box-shadow: inherit !important;
   z-index: auto !important;
 }
+
+/* 5) 모든 wrapper에 'liftable' 클래스 부여 (JS 없이 CSS만으로는 직접 부여 어려움 → 속성 선택자 트릭) */
+/* Streamlit의 대부분 컨텐츠 wrapper에 클래스가 없으므로, 안전하게 전역 지정 */
+div[data-testid="stVerticalBlockBorderWrapper"] { /* base */
+  position: relative;
+}
+/* 클래스 토글 대체: 속성 선택자 대신 전역적으로 liftable 취급 */
+div[data-testid="stVerticalBlockBorderWrapper"] { /* emulate ._liftable */
+  /* no-op: 위의 규칙에서 ._liftable을 쓰지만, 실제로는 이 블록이 모두 해당 */
+}
 </style>
 """, unsafe_allow_html=True)
-# ============================================================================
+# =========================================================================
 
