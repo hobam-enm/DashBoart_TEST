@@ -3106,10 +3106,10 @@ def render_growth_score():
     SLO_SCORE  = {"+2":5,"+1":4,"0":3,"-1":2,"-2":1}
 
     METRICS = [
-        ("가구시청률", "H시청률", None),     # ratings mean
-        ("타깃시청률", "T시청률", None),     # ratings mean
-        ("TVING LIVE", "시청인구", "LIVE"), # ep sum mean
-        ("TVING VOD",  "시청인구", "VOD"),  # ep sum mean
+        ("가구시청률", "H시청률", None, True),
+        ("타깃시청률", "T시청률", None, True),
+        ("TVING LIVE", "시청인구", "LIVE", True),
+        ("TVING VOD", "시청인구", "VOD", True)
     ]
 
     ips = sorted(df_all["IP"].dropna().unique().tolist())
@@ -3602,7 +3602,7 @@ def _grade_slope(x, y):
     if m >= -0.10: return "-1"
     return "-2"
 
-def _render_growth_score_digital():
+def render_growth_score_digital():
 
     """
     레이아웃: [상단 헤더: 타이틀 | IP선택 | 회차기준] → [선택작품 요약카드]
