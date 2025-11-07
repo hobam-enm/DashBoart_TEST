@@ -122,7 +122,6 @@ if not check_password_with_token():
 
 #endregion
 
-
 #region [ 2. 공통 스타일 통합 ]
 # =====================================================
 # 모든 CSS <style> 블록을 하나로 통합
@@ -448,7 +447,7 @@ div[data-testid="stVerticalBlockBorderWrapper"] {
 </style>
 """, unsafe_allow_html=True)
 #endregion
-
+    
 
 #region [ 2.1. 기본 설정 및 공통 상수 ]
 # =====================================================
