@@ -600,7 +600,12 @@ hr { margin: 1.5rem 0; background-color: #e0e0e0; }
    버튼 기반 사이드바 네비게이션 스킨 (리로드 없는 내비)
    ★ 풀폭 + 무간격 + 희미한 구분선 + 확실한 호버/선택(블루/화이트)
    ===================================================== */
-section[data-testid="stSidebar"] .block-container { padding-top: 0.75rem; }
+
+/* [간격 0] — 사이드바 내 버튼 래퍼 여백 제거 */
+section[data-testid="stSidebar"] .block-container{padding-top:0.75rem;}
+section[data-testid="stSidebar"] div[data-testid="stVerticalBlock"]{margin:0 !important; padding:0 !important;}
+section[data-testid="stSidebar"] .stButton{margin:0 !important; padding:0 !important;}
+section[data-testid="stSidebar"] .stButton > button{margin:0 !important;}
 
 /* 공통 버튼 — 꽉 차게, 간격 0, 구분선만 남김 */
 section[data-testid="stSidebar"] .stButton > button {
@@ -608,7 +613,6 @@ section[data-testid="stSidebar"] .stButton > button {
   box-sizing: border-box;
   text-align: left;
   padding: 12px 14px;
-  margin: 0;                               /* 간격 없음 */
   border-radius: 0;                         /* 모서리 0 */
   border: none;
   border-bottom: 1px solid #E5E7EB;         /* 희미한 구분선 */
@@ -625,38 +629,46 @@ section[data-testid="stSidebar"] .stButton > button:hover {
   color: #000;
 }
 
-/* 비활성(secondary) — 기본은 투명 배경 유지 */
-section[data-testid="stSidebar"] [data-testid="baseButton-secondary"] > button {
+/* 비활성(secondary) — 투명 유지 */
+section[data-testid="stSidebar"] [data-testid="baseButton-secondary"] > button,
+section[data-testid="stSidebar"] .stButton > button[kind="secondary"] {
   background: transparent;
   color: #333;
 }
 
 /* ===== 활성(Primary) — 체크 제거 + 블루 배경/흰 글씨 ===== */
-section[data-testid="stSidebar"] [data-testid="baseButton-primary"] > button {
-  background: #0b61ff !important;          /* 블루 배경 */
-  color: #ffffff !important;               /* 흰 글씨 */
-  border-bottom: 1px solid #0b61ff;        /* 경계선 색 맞춤 */
-  position: relative;
-  box-shadow: none;
-  padding-left: 14px !important;           /* 아이콘 자리 여백 제거 */
+/* (1) 새 DOM: baseButton-primary 래퍼 */
+section[data-testid="stSidebar"] [data-testid="baseButton-primary"] > button{
+  background: #0b61ff !important;
+  color: #ffffff !important;
+  border-bottom: 1px solid #0b61ff;
+}
+/* (2) 구 DOM: kind="primary" 속성 */
+section[data-testid="stSidebar"] .stButton > button[kind="primary"]{
+  background: #0b61ff !important;
+  color: #ffffff !important;
+  border-bottom: 1px solid #0b61ff;
+}
+/* (3) 보강: nav-active 래퍼를 쓴 경우 */
+section[data-testid="stSidebar"] .nav-active .stButton > button{
+  background: #0b61ff !important;
+  color: #ffffff !important;
+  border-bottom: 1px solid #0b61ff;
 }
 
 /* 활성 hover — 조금 더 진한 블루 */
-section[data-testid="stSidebar"] [data-testid="baseButton-primary"] > button:hover {
+section[data-testid="stSidebar"] [data-testid="baseButton-primary"] > button:hover,
+section[data-testid="stSidebar"] .stButton > button[kind="primary"]:hover,
+section[data-testid="stSidebar"] .nav-active .stButton > button:hover{
   background: #0a56e5 !important;
   border-color: #0a56e5 !important;
 }
 
 /* (핵심) 활성 버튼 내부의 아이콘/체크 SVG 강제 숨김 */
 section[data-testid="stSidebar"] [data-testid="baseButton-primary"] > button svg,
-section[data-testid="stSidebar"] [data-testid="baseButton-primary"] > button [data-testid="stIcon"] {
+section[data-testid="stSidebar"] .stButton > button[kind="primary"] svg,
+section[data-testid="stSidebar"] .nav-active .stButton > button svg{
   display: none !important;
-}
-
-/* (방어) 혹시 ::before/::after로 체크를 붙였던 경우 제거 */
-section[data-testid="stSidebar"] [data-testid="baseButton-primary"] > button::before,
-section[data-testid="stSidebar"] [data-testid="baseButton-primary"] > button::after {
-  content: none !important;
 }
 
 /* 사이드바 구분선 */
@@ -700,7 +712,6 @@ section[data-testid="stSidebar"] .stButton > button{
 """, unsafe_allow_html=True)
 #endregion
 
-
 #region [ 5. 사이드바 네비게이션 ]
 # =====================================================
 # 현재 페이지 읽기(없으면 Overview)
@@ -740,16 +751,24 @@ with st.sidebar:
     st.markdown("<hr style='border:1px solid #eee; margin:0px 0;'>", unsafe_allow_html=True)
 
     # 🔹 네비게이션 버튼 (리로드 없이 전환)
+    # NAV_ITEMS는 dict 가정 (key=페이지키, value=표시라벨)
     for key, label in NAV_ITEMS.items():
         is_active = (current_page == key)
-        btn_label = label  # ✅ 체크 아이콘 완전 제거
+
+        # 체크/이모지 자동 부착 로직은 완전 제거 — label 그대로 사용
+        wrapper_cls = "nav-active" if is_active else "nav-inactive"
+        st.markdown(f'<div class="{wrapper_cls}">', unsafe_allow_html=True)
+
+        # type은 secondary로 고정 → 색상은 CSS에서 .nav-active 또는 primary 선택자가 강제
         clicked = st.button(
-            btn_label,
+            label,
             key=f"navbtn__{key}",
             use_container_width=True,
-            type=("primary" if is_active else "secondary")  # 활성: 파란배경/흰글씨
+            type=("primary" if is_active else "secondary")
         )
-        if clicked:
+        st.markdown('</div>', unsafe_allow_html=True)
+
+        if clicked and not is_active:
             st.session_state["page"] = key
             _set_page_query_param(key)
             if hasattr(st, "rerun"): st.rerun()
