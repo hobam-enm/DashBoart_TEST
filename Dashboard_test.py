@@ -231,7 +231,7 @@ section[data-testid="stSidebar"] .ag-theme-streamlit .ag-root-wrapper:hover{
 
 /* --- [기본] 앱 배경 / 카드 스타일 --- */
 [data-testid="stAppViewContainer"] {
-    background-color: #f8f9fa;
+    background-color: #f8f9fa; /* 매우 연한 회색 배경 */
 }
 div[data-testid="stVerticalBlockBorderWrapper"] {
     background-color: #ffffff;
@@ -329,7 +329,7 @@ section[data-testid="stSidebar"] div[data-testid="stVerticalBlockBorderWrapper"]
   border: none !important;
   box-shadow: none !important;
   padding: 0 !important;
-  margin-bottom: 0 !important;
+  margin-bottom: 0 !important; /* [수정] 네비게이션 버튼 간격 제거 */
 }
 section[data-testid="stSidebar"] div[data-testid="stVerticalBlockBorderWrapper"]:hover {
   transform: none !important;
@@ -428,23 +428,33 @@ div[data-testid="stVerticalBlockBorderWrapper"]._liftable:has(.ag-theme-streamli
   box-shadow: 0 16px 40px rgba(16,24,40,.16), 0 6px 14px rgba(16,24,40,.10) !important;
   z-index: 3 !important;
 }
+div[data-testid="stVerticalBlockBorderWrapper"].*_liftable:has(.kpi-card:hover):not(:has(div[data-testid="stVerticalBlockBorderWrapper"] .kpi-card:hover)),
+div[data-testid="stVerticalBlockBorderWrapper"].*_liftable:has(.block-card:hover):not(:has(div[data-testid="stVerticalBlockBorderWrapper"] .block-card:hover)) {
+  transform: translate3d(0,-4px,0) !important;
+  box-shadow: 0 16px 40px rgba(16,24,40,.16), 0 6px 14px rgba(16,24,40,.10) !important;
+  z-index: 3 !important;
+}
 section[data-testid="stSidebar"] div[data-testid="stVerticalBlockBorderWrapper"] {
   transform: none !important;
   box-shadow: inherit !important;
   z-index: auto !important;
 }
-div[data-testid="stVerticalBlockBorderWrapper"] { position: relative; }
-
+div[data-testid="stVerticalBlockBorderWrapper"] {
+  position: relative;
+}
+div[data-testid="stVerticalBlockBorderWrapper"] {
+  /* emulate ._liftable */
+}
+            
 /* ===== Sidebar compact spacing (tunable) ===== */
 [data-testid="stSidebar"]{
-  --sb-gap: 6px;               /* 블록 간 간격 */
-  --sb-pad-y: 8px;             /* 사이드바 상하 패딩 */
-  --sb-pad-x: 10px;            /* 사이드바 좌우 패딩 */
-  --btn-pad-y: 8px;            /* 버튼 상하 패딩 */
-  --btn-pad-x: 12px;           /* 버튼 좌우 패딩 */
-  --item-gap: 4px;             /* nav 아이템 간격 */
+  --sb-gap: 6px;               /* 블록 간 간격(기존 4px → 6px로 살짝 띄움) */
+  --sb-pad-y: 8px;             /* 사이드바 컨테이너 상하 패딩 */
+  --sb-pad-x: 10px;            /* 사이드바 컨테이너 좌우 패딩 */
+  --btn-pad-y: 8px;            /* 버튼/링크 상하 패딩(기존 6px → 8px) */
+  --btn-pad-x: 12px;           /* 버튼/링크 좌우 패딩(기존 10px → 12px) */
+  --item-gap: 4px;             /* nav 아이템끼리 간격(기존 2px → 4px) */
   --label-gap: 3px;            /* 라벨/텍스트 아래 여백 */
-  --title-first-gap: 14px;     /* ★ 제목 ↔ 첫 버튼 간격 */
 }
 
 /* 컨테이너 패딩 */
@@ -515,21 +525,13 @@ div[data-testid="stVerticalBlockBorderWrapper"] { position: relative; }
 /* nav 래퍼 여백 */
 .nav-active, .nav-inactive{ margin: 0 !important; padding: 0 !important; }
 
-/* ★ 제목(캡션/HR) 다음에 오는 "첫 내비 항목"만 여백 추가 */
-section[data-testid="stSidebar"] hr + .nav-active,
-section[data-testid="stSidebar"] hr + .nav-inactive{
-  margin-top: var(--title-first-gap) !important;
-}
-/* (page_link 버전 대응) */
-section[data-testid="stSidebar"] hr + a[data-testid="stPageLink-NavLink"]{
-  margin-top: var(--title-first-gap) !important;
-}
-
 /* Hover 시 높이 변형 방지 */
 [data-testid="stSidebar"] .stButton > button:hover,
 [data-testid="stSidebar"] a[data-testid="stPageLink-NavLink"]:hover{
   transform: none !important;
 }
+
+
 </style>
 """, unsafe_allow_html=True)
 #endregion
@@ -771,13 +773,13 @@ current_page = get_current_page_default("Overview")
 st.session_state["page"] = current_page
 
 with st.sidebar:
-    st.markdown('<div class="sidebar-hr"></div>', unsafe_allow_html=True)
 
     render_gradient_title("드라마 성과 대시보드", emoji="")
     st.markdown(
         "<p class='sidebar-contact' style='font-size:12px; color:gray;'>문의 : 미디어)디지털마케팅팀 데이터파트</p>",
         unsafe_allow_html=True
     )
+    st.markdown("<hr style='border:1px solid #eee; margin:0px 0;'>", unsafe_allow_html=True)
 
     for key, label in NAV_ITEMS.items():
         is_active = (current_page == key)
