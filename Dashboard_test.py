@@ -669,22 +669,6 @@ section[data-testid="stSidebar"] .sidebar-logo{text-align:center;}
 section[data-testid="stSidebar"] [data-testid="stCaptionContainer"],
 section[data-testid="stSidebar"] .stCaption,
 section[data-testid="stSidebar"] .stMarkdown p.sidebar-contact{ text-align:center !important; }
-
-/* === Active nav wrapper overrides (robust across Streamlit versions) === */
-section[data-testid="stSidebar"] .nav-active .stButton > button {
-  background: #0b61ff !important;
-  color: #ffffff !important;
-  border-bottom-color: #0b61ff !important;
-}
-section[data-testid="stSidebar"] .nav-active .stButton > button:hover {
-  background: #0a56e5 !important;
-  border-bottom-color: #0a56e5 !important;
-}
-/* hide any button svg/icon inside active nav */
-section[data-testid="stSidebar"] .nav-active .stButton > button svg,
-section[data-testid="stSidebar"] .nav-active .stButton > button [data-testid="stIcon"] {
-  display: none !important;
-}
 </style>
 """, unsafe_allow_html=True)
 
@@ -747,6 +731,7 @@ def render_gradient_title(main_text: str, emoji: str = "🎬"):
 with st.sidebar:
     st.markdown('<div class="sidebar-hr"></div>', unsafe_allow_html=True)
 
+    # 제목/문의 — 리젼4 CSS로 중앙정렬됨
     render_gradient_title("드라마 성과 대시보드", emoji="")
     st.markdown(
         "<p class='sidebar-contact' style='font-size:12px; color:gray;'>문의 : 미디어)디지털마케팅팀 데이터파트</p>",
@@ -754,27 +739,22 @@ with st.sidebar:
     )
     st.markdown("<hr style='border:1px solid #eee; margin:0px 0;'>", unsafe_allow_html=True)
 
-    # 🔹 네비게이션 버튼 (리로드 없이 전환) — 활성 버튼은 래퍼 클래스로 스타일링
+    # 🔹 네비게이션 버튼 (리로드 없이 전환)
     for key, label in NAV_ITEMS.items():
         is_active = (current_page == key)
-        wrapper_class = "nav-active" if is_active else "nav-inactive"
-        st.markdown(f'<div class="{wrapper_class}">', unsafe_allow_html=True)
+        btn_label = label  # ✅ 체크 아이콘 완전 제거
         clicked = st.button(
-            label,  # ✅ 체크 이모지 제거
+            btn_label,
             key=f"navbtn__{key}",
             use_container_width=True,
-            type="secondary"  # 시각 강조는 CSS(.nav-active)로 처리
+            type=("primary" if is_active else "secondary")  # 활성: 파란배경/흰글씨
         )
-        st.markdown('</div>', unsafe_allow_html=True)
-        if clicked and not is_active:
+        if clicked:
             st.session_state["page"] = key
             _set_page_query_param(key)
-            if hasattr(st, "rerun"):
-                st.rerun()
-            else:
-                st.experimental_rerun()
-#endregion#endregion
-
+            if hasattr(st, "rerun"): st.rerun()
+            else: st.experimental_rerun()
+#endregion
 
 
 #region [ 6. 공통 집계 유틸: KPI 계산 ]
