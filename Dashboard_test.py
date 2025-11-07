@@ -3,7 +3,7 @@
 
 #region [ 1. 라이브러리 임포트 ]
 # =====================================================
-# [수정] gspread, google.oauth2, os, datetime 제거
+# [수정] 미사용 라이브러리 (os, datetime) 제거
 import re
 from typing import List, Dict, Any, Optional 
 import time, uuid
@@ -16,7 +16,10 @@ from plotly import graph_objects as go
 import plotly.io as pio
 import streamlit as st
 from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode, JsCode
-# [수정] gspread, Credentials 임포트 제거
+
+# [수정] gspread 관련 라이브러리 복구
+import gspread
+from google.oauth2.service_account import Credentials
 #endregion
 
 
