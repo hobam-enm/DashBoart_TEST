@@ -329,6 +329,7 @@ section[data-testid="stSidebar"] div[data-testid="stVerticalBlockBorderWrapper"]
   border: none !important;
   box-shadow: none !important;
   padding: 0 !important;
+  margin-bottom: 0 !important; /* [수정] 네비게이션 버튼 간격 제거 */
 }
 section[data-testid="stSidebar"] div[data-testid="stVerticalBlockBorderWrapper"]:hover {
   transform: none !important;
@@ -689,10 +690,10 @@ with st.sidebar:
 
     render_gradient_title("드라마 성과 대시보드", emoji="")
     st.markdown(
-        "<p class='sidebar-contact' style={{}}>문의 : 미디어)디지털마케팅팀 데이터파트</p>",
+        "<p class='sidebar-contact' style='font-size:12px; color:gray;'>문의 : 미디어)디지털마케팅팀 데이터파트</p>",
         unsafe_allow_html=True
     )
-    st.markdown("<hr style={{}}>", unsafe_allow_html=True)
+    st.markdown("<hr style='border:1px solid #eee; margin:0px 0;'>", unsafe_allow_html=True)
 
     for key, label in NAV_ITEMS.items():
         is_active = (current_page == key)
@@ -1070,7 +1071,7 @@ def render_overview():
     st.caption('▶ IP별 평균')
 
     c1, c2, c3, c4, c5 = st.columns(5)
-    st.markdown("<div style={{}}></div>", unsafe_allow_html=True)
+    st.markdown("<div style='margin-top:20px'></div>", unsafe_allow_html=True)
     c6, c7, c8, c9, c10 = st.columns(5)
 
     t_rating   = avg_of_ip_means("T시청률")
@@ -1502,13 +1503,13 @@ def render_ip_detail():
             "<span class='kpi-sublabel'>그룹 內</span> "
             f"<span class='kpi-substrong'>{rank_label}</span><br/>"
             "<span class='kpi-sublabel'>그룹 평균比</span> "
-            f"<span class='kpi-subpct' style={{}}>{pct_txt}</span>"
+            f"<span class='kpi-subpct' style='color:{col};'>{pct_txt}</span>"
             "</div>"
         )
 
     def sublines_dummy():
         return (
-            "<div class='kpi-subwrap' style={{}}>"
+            "<div class='kpi-subwrap' style='visibility:hidden;'>"
             "<span class='kpi-sublabel'>_</span> <span class='kpi-substrong'>_</span><br/>"
             "<span class='kpi-sublabel'>_</span> <span class='kpi-subpct'>_</span>"
             "</div>"
@@ -1532,8 +1533,8 @@ def render_ip_detail():
         with col:
             st.markdown(
                 "<div class='kpi-card'>"
-                "<div class='kpi-title' style={{}}>_</div>"
-                "<div class='kpi-value' style={{}}>_</div>"
+                "<div class='kpi-title' style='visibility:hidden;'>_</div>"
+                "<div class='kpi-value' style='visibility:hidden;'>_</div>"
                 f"{sublines_dummy()}"
                 "</div>",
                 unsafe_allow_html=True
@@ -2314,7 +2315,7 @@ def render_ip_vs_group_comparison(
     group_name = " & ".join(group_name_parts) + " 평균"
     
     st.markdown(
-        f"#### ⚖️  <span style={{}}>{ip}</span> vs <span style={{}}>{group_name}</span>", 
+        f"#### ⚖️  <span style='color:#d93636;'>{ip}</span> vs <span style='color:#2a61cc;'>{group_name}</span>", 
         unsafe_allow_html=True
     )
     st.divider()
@@ -2553,19 +2554,19 @@ def _render_kpi_card_comparison(
             if val1 < val2: winner = 1
             elif val2 < val1: winner = 2
 
-    val1_style={{}} if winner == 1 else ("color:#888; font-weight: 400;" if winner == 2 else "color:#333; font-weight: 400;")
-    val2_style={{}} if winner == 2 else ("color:#888; font-weight: 400;" if winner == 1 else "color:#333; font-weight: 400;")
+    val1_style = "color:#d93636; font-weight: 700;" if winner == 1 else ("color:#888; font-weight: 400;" if winner == 2 else "color:#333; font-weight: 400;")
+    val2_style = "color:#2a61cc; font-weight: 700;" if winner == 2 else ("color:#888; font-weight: 400;" if winner == 1 else "color:#333; font-weight: 400;")
 
     st.markdown(f"""
-    <div class="kpi-card" style={{}}>
+    <div class="kpi-card" style="height: 100px; display: flex; flex-direction: column; justify-content: center;">
         <div class="kpi-title">{title}</div>
-        <div class="kpi_value" style={{}}>
-            <span style={{}}>
-                <span style={{}}>{ip1_name}:</span> {val1_disp}
+        <div class="kpi_value" style="font-size: 1.1rem; line-height: 1.4; margin-top: 5px;">
+            <span style="{val1_style}">
+                <span style="font-size: 0.8em; color: #d93636;">{ip1_name}:</span> {val1_disp}
             </span>
             <br>
-            <span style={{}}>
-                <span style={{}}>{ip2_name}:</span> {val2_disp}
+            <span style="{val2_style}">
+                <span style="font-size: 0.8em; color: #2a61cc;">{ip2_name}:</span> {val2_disp}
             </span>
         </div>
     </div>
@@ -2573,7 +2574,7 @@ def _render_kpi_card_comparison(
 
 def render_ip_vs_ip_comparison(df_all: pd.DataFrame, ip1: str, ip2: str, kpi_percentiles: pd.DataFrame):
     
-    st.markdown(f"#### ⚖️ : <span style={{}}>{ip1}</span> vs <span style={{}}>{ip2}</span>", unsafe_allow_html=True)
+    st.markdown(f"#### ⚖️ : <span style='color:#d93636;'>{ip1}</span> vs <span style='color:#2a61cc;'>{ip2}</span>", unsafe_allow_html=True)
     st.divider()
 
     df1 = df_all[df_all["IP"] == ip1].copy()
@@ -2589,7 +2590,7 @@ def render_ip_vs_ip_comparison(df_all: pd.DataFrame, ip1: str, ip2: str, kpi_per
     with kpi_cols_1[2]: _render_kpi_card_comparison("⚡ 티빙 라이브+QUICK", kpis1.get("TVING 라이브+QUICK"), kpis2.get("TVING 라이브+QUICK"), ip1, ip2, "{:,.0f}")
     with kpi_cols_1[3]: _render_kpi_card_comparison("▶️ 티빙 VOD", kpis1.get("TVING VOD"), kpis2.get("TVING VOD"), ip1, ip2, "{:,.0f}")
     
-    st.markdown("<div style={{}}></div>", unsafe_allow_html=True)
+    st.markdown("<div style='margin-top: 10px;'></div>", unsafe_allow_html=True)
     kpi_cols_2 = st.columns(4)
     with kpi_cols_2[0]: _render_kpi_card_comparison("👀 디지털 조회수", kpis1.get("디지털 조회수"), kpis2.get("디지털 조회수"), ip1, ip2, "{:,.0f}")
     with kpi_cols_2[1]: _render_kpi_card_comparison("💬 디지털 언급량", kpis1.get("디지털 언급량"), kpis2.get("디지털 언급량"), ip1, ip2, "{:,.0f}")
@@ -2764,7 +2765,6 @@ def filter_data_for_episode_comparison(
     except ValueError:
         return pd.DataFrame({'IP': df_all_filtered["IP"].unique(), 'value': 0})
 
-    # --- 해당 회차 데이터 필터링 ---
     if "회차_numeric" in df_all_filtered.columns:
         base_filtered = df_all_filtered[df_all_filtered["회차_numeric"] == target_episode_num].copy()
     else:
@@ -2774,7 +2774,6 @@ def filter_data_for_episode_comparison(
         mask = df_all_filtered["회차"].isin(possible_strs)
         base_filtered = df_all_filtered[mask].copy()
 
-    # --- 지표별 집계 ---
     result_df = pd.DataFrame(columns=["IP", "value"])
 
     if not base_filtered.empty:
@@ -2796,21 +2795,23 @@ def filter_data_for_episode_comparison(
                 (base_filtered["매체"] == "TVING VOD")]
             if not df_vod.empty:
                 result_df = df_vod.groupby("IP")["value"].sum().reset_index()
-
-        elif selected_metric in ["조회수", "언급량"]:
-            filtered = base_filtered[base_filtered["metric"] == selected_metric]
-            if selected_metric == "조회수" and not filtered.empty:
-                if "세부속성1" in filtered.columns: # [수정] 세부속성1 없을 경우 대비
-                    filtered = filtered[(filtered["매체"] != "유튜브") | (filtered["세부속성1"].isin(["PGC", "UGC"]))]
+        
+        # [수정] 피드백 3번 반영: _get_view_data 함수 사용
+        elif selected_metric == "조회수":
+            filtered = _get_view_data(base_filtered) # [3. 공통 함수]
             if not filtered.empty:
                 result_df = filtered.groupby("IP")["value"].sum().reset_index()
 
-        else:  # 기타 지표
+        elif selected_metric == "언급량":
+            filtered = base_filtered[base_filtered["metric"] == selected_metric]
+            if not filtered.empty:
+                result_df = filtered.groupby("IP")["value"].sum().reset_index()
+
+        else:  # 기타 지표 (F_Score, F_Total 등)
             filtered = base_filtered[base_filtered["metric"] == selected_metric]
             if not filtered.empty:
                 result_df = filtered.groupby("IP")["value"].mean().reset_index()
 
-    # --- 모든 IP 포함 및 정렬 ---
     all_ips_in_filter = df_all_filtered["IP"].unique()
     if result_df.empty:
         result_df = pd.DataFrame({'IP': all_ips_in_filter, 'value': 0})
@@ -2840,9 +2841,9 @@ def plot_episode_comparison(
     )
 
     if selected_metric in ["T시청률", "H시청률"]:
-        hover_template = "<b>%{x}</b><br>" + metric_label + ": %{y:.2f}%<extra></extra>" # [수정] extra 제거
+        hover_template = "<b>%{x}</b><br>" + metric_label + ": %{y:.2f}%<extra></extra>"
     else:
-        hover_template = "<b>%{x}</b><br>" + metric_label + ": %{y:,}<extra></extra>" # [수정] extra 제거
+        hover_template = "<b>%{x}</b><br>" + metric_label + ": %{y:,}<extra></extra>"
 
     fig.update_traces(
         marker_color=colors,
@@ -2870,7 +2871,6 @@ def plot_episode_comparison(
 def render_episode():
     df_all = load_data() # [3. 공통 함수]
 
-    # --- 필터 ---
     filter_cols = st.columns([3, 3, 2, 3])
     ip_options_main = sorted(df_all["IP"].dropna().unique().tolist())
     episode_options_main = get_episode_options(df_all)  # [3. 공통 함수]
@@ -2911,7 +2911,6 @@ def render_episode():
         st.warning("필터에서 기준 IP와 회차를 선택해주세요.")
         return
 
-    # --- 다중 기준 적용 로직 ---
     df_filtered_main = df_all.copy()
     group_filter_applied = []
 
@@ -2945,7 +2944,6 @@ def render_episode():
         st.warning("선택하신 그룹 조건에 기준 IP가 포함되지 않습니다.")
         return
 
-    # --- 차트 렌더링 ---
     key_metrics = ["T시청률", "H시청률", "TVING 라이브+QUICK", "TVING VOD", "조회수", "언급량"]
     filter_desc = " (" + ", ".join(group_filter_applied) + ")" if group_filter_applied else " (전체 IP)"
     st.markdown(f"#### {selected_episode} 성과 비교{filter_desc} (기준 IP: {selected_base_ip})")
@@ -2969,7 +2967,6 @@ def render_episode():
                 st.error(f"차트 렌더링 오류({metric}): {e}")
 
 #endregion
-
 
 
 #region [ 12. 페이지 6: 성장스코어-방영성과 ]
@@ -3020,7 +3017,7 @@ def render_growth_score():
     head = st.columns([5, 3, 2])
     with head[0]:
         st.markdown(
-            f"## 🚀 성장스코어-방영지표 <span style={{}}>(~{_ep_display}회 기준)</span>",
+            f"## 🚀 성장스코어-방영지표 <span style='font-size:20px;color:#6b7b93'>(~{_ep_display}회 기준)</span>",
             unsafe_allow_html=True
         )
     with head[1]:
@@ -3046,7 +3043,7 @@ def render_growth_score():
     - **0/비정상값 제외**: 숫자 변환 실패/0은 `NaN` 처리 후 평균/회귀에서 제외.
             """)
 
-    st.markdown(f"#### {selected_ip} <span style={{}}>자세히보기</span>",
+    st.markdown(f"#### {selected_ip} <span style='font-size:16px;color:#6b7b93'>자세히보기</span>",
             unsafe_allow_html=True
         )
 
@@ -3143,9 +3140,9 @@ def render_growth_score():
     with card_cols[0]:
         st.markdown(
             f"""
-            <div class="kpi-card" style={{}}>
-              <div class="kpi-title" style={{}}>종합등급</div>
-              <div class="kpi-value" style={{}}>{focus['종합등급'] if pd.notna(focus['종합등급']) else '–'}</div>
+            <div class="kpi-card" style="height:110px;border:2px solid #004a99;background:linear-gradient(180deg,#e8f0ff, #ffffff);">
+              <div class="kpi-title" style="font-size:15px;color:#003d80;">종합등급</div>
+              <div class="kpi-value" style="font-size:40px;color:#003d80;">{focus['종합등급'] if pd.notna(focus['종합등급']) else '–'}</div>
             </div>
             """,
             unsafe_allow_html=True
@@ -3154,9 +3151,9 @@ def render_growth_score():
         with col:
             st.markdown(
                 f"""
-                <div class="kpi-card" style={{}}>
+                <div class="kpi-card" style="height:110px;">
                   <div class="kpi-title">{title}</div>
-                  <div class="kpi-value" style={{}}>{val if pd.notna(val) else '–'}</div>
+                  <div class="kpi-value" style="font-size:28px;">{val if pd.notna(val) else '–'}</div>
                 </div>
                 """,
                 unsafe_allow_html=True
@@ -3167,7 +3164,7 @@ def render_growth_score():
     _grade_card(card_cols[4], "TVING VOD 등급",  focus["TVING VOD_종합"])
     st.markdown("</div>", unsafe_allow_html=True)
 
-    st.markdown("<div style={{}}></div>", unsafe_allow_html=True)
+    st.markdown("<div style='height:16px'></div>", unsafe_allow_html=True)
     
     # ===== [회차별 등급 추이: 선택 IP] =====
     _ip_all = df_all[df_all["IP"] == selected_ip].copy()
@@ -3309,7 +3306,7 @@ def render_growth_score():
 
             fig.add_annotation(
                 x=cc, y=rr, xref="x", yref="y",
-                text=f"<b style={{}}>{rr}{cc}</b>",
+                text=f"<b style='letter-spacing:0.5px'>{rr}{cc}</b>",
                 showarrow=False,
                 font=dict(size=22, color=color, family="sans-serif"),
                 xanchor="center", yanchor="top",
@@ -3319,7 +3316,7 @@ def render_growth_score():
             if names:
                 fig.add_annotation(
                     x=cc, y=rr, xref="x", yref="y",
-                    text=f"<span style={{}}>{'<br>'.join(names)}</span>",
+                    text=f"<span style='line-height:1.04'>{'<br>'.join(names)}</span>",
                     showarrow=False,
                     font=dict(size=12, color=color, family="sans-serif"),
                     xanchor="center", yanchor="middle",
@@ -3418,7 +3415,7 @@ def render_growth_score_digital():
     head = st.columns([5, 3, 2])
     with head[0]:
         st.markdown(
-            f"## 🛰️ 성장스코어-디지털 <span style={{}}>(~{_ep_display}회 기준)</span>",
+            f"## 🛰️ 성장스코어-디지털 <span style='font-size:20px;color:#6b7b93'>(~{_ep_display}회 기준)</span>",
             unsafe_allow_html=True
         )
     with head[1]:
@@ -3446,7 +3443,7 @@ def render_growth_score_digital():
         """)
 
     st.markdown(
-        f"#### {selected_ip} <span style={{}}>자세히보기</span>",
+        f"#### {selected_ip} <span style='font-size:16px;color:#6b7b93'>자세히보기</span>",
         unsafe_allow_html=True
     )
 
@@ -3555,9 +3552,9 @@ def render_growth_score_digital():
     with card_cols[0]:
         st.markdown(
             f"""
-            <div class="kpi-card" style={{}}>
-              <div class="kpi-title" style={{}}>종합등급</div>
-              <div class="kpi-value" style={{}}>{focus['종합등급'] if pd.notna(focus['종합등급']) else '–'}</div>
+            <div class="kpi-card" style="height:110px;border:2px solid #004a99;background:linear-gradient(180deg,#e8f0ff, #ffffff);">
+              <div class="kpi-title" style="font-size:15px;color:#003d80;">종합등급</div>
+              <div class="kpi-value" style="font-size:40px;color:#003d80;">{focus['종합등급'] if pd.notna(focus['종합등급']) else '–'}</div>
             </div>
             """, unsafe_allow_html=True
         )
@@ -3565,9 +3562,9 @@ def render_growth_score_digital():
         with col:
             st.markdown(
                 f"""
-                <div class="kpi-card" style={{}}>
+                <div class="kpi-card" style="height:110px;">
                   <div class="kpi-title">{title}</div>
-                  <div class="kpi-value" style={{}}>{val if pd.notna(val) else '–'}</div>
+                  <div class="kpi-value" style="font-size:28px;">{val if pd.notna(val) else '–'}</div>
                 </div>
                 """,
                 unsafe_allow_html=True
@@ -3578,7 +3575,7 @@ def render_growth_score_digital():
     _grade_card(card_cols[4], " ",  " ")
     st.markdown("</div>", unsafe_allow_html=True)
 
-    st.markdown("<div style={{}}></div>", unsafe_allow_html=True)
+    st.markdown("<div style='height:16px'></div>", unsafe_allow_html=True)
 
     # ===== [회차별 등급 추이: 선택 IP] =====
     _ip_all = df_all[df_all["IP"] == selected_ip].copy()
@@ -3718,7 +3715,7 @@ def render_growth_score_digital():
 
             fig.add_annotation(
                 x=cc, y=rr, xref="x", yref="y",
-                text=f"<b style={{}}>{rr}{cc}</b>",
+                text=f"<b style='letter-spacing:0.5px'>{rr}{cc}</b>",
                 showarrow=False, font=dict(size=22, color=color, family="sans-serif"),
                 xanchor="center", yanchor="top",
                 xshift=0, yshift=80, align="left"
@@ -3726,7 +3723,7 @@ def render_growth_score_digital():
             if names:
                 fig.add_annotation(
                     x=cc, y=rr, xref="x", yref="y",
-                    text=f"<span style={{}}>{'<br>'.join(names)}</span>",
+                    text=f"<span style='line-height:1.04'>{'<br>'.join(names)}</span>",
                     showarrow=False, font=dict(size=12, color=color, family="sans-serif"),
                     xanchor="center", yanchor="middle",
                     yshift=6
