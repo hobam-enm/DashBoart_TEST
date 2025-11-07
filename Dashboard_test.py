@@ -459,225 +459,144 @@ st.markdown("""
 .gd-guideline ul { margin: .2rem 0 .6rem 1.1rem; padding: 0; }
 .gd-guideline li { margin: .15rem 0; }
 .gd-guideline b, .gd-guideline strong { font-weight: 600; }
-/* 백틱(`...`) 인라인 코드 느낌: 작고, 살짝 녹색 칩 */
 .gd-guideline code{
   background: rgba(16,185,129,.10);
   color: #16a34a;
   padding: 1px 6px;
   border-radius: 6px;
-  font-size: .92em;   /* 본문보다 더 작게 */
-}
-/* --- 전체 앱 배경 --- */
-[data-testid="stAppViewContainer"] {
-    background-color: #f8f9fa; /* 매우 연한 회색 배경 */
+  font-size: .92em;
 }
 
+/* --- 전체 앱 배경 --- */
+[data-testid="stAppViewContainer"] { background-color: #f8f9fa; }
+
 /* --- st.container(border=True) 카드 스타일 --- */
-div[data-testid="stVerticalBlockBorderWrapper"] {
-    background-color: #ffffff;
-    border: 1px solid #e9e9e9;
-    border-radius: 10px;
-    box-shadow: 0 2px 5px rgba(0,0,0,0.03);
-    padding: 1.25rem 1.25rem 1.5rem 1.25rem;
-    margin-bottom: 1.5rem;
+div[data-testid="stVerticalBlockBorderWrapper"]{
+  background-color:#ffffff; border:1px solid #e9e9e9; border-radius:10px;
+  box-shadow:0 2px 5px rgba(0,0,0,0.03); padding:1.25rem 1.25rem 1.5rem; margin-bottom:1.5rem;
 }
 
 /* --- Sidebar 배경/패딩 + 항상 펼침(폭 고정) --- */
-section[data-testid="stSidebar"] {
-    background: #ffffff;
-    border-right: 1px solid #e0e0e0;
-    padding-top: 1rem;
-    padding-left: 0.5rem;
-    padding-right: 0.5rem;
-    min-width:340px !important;
-    max-width:340px !important;
+section[data-testid="stSidebar"]{
+  background:#ffffff; border-right:1px solid #e0e0e0;
+  padding-top:1rem; padding-left:.5rem; padding-right:.5rem;
+  min-width:340px !important; max-width:340px !important;
 }
 /* 사이드바 접힘 토글 버튼 숨김 */
-div[data-testid="collapsedControl"] { display:none !important; }
+div[data-testid="collapsedControl"]{ display:none !important; }
 
 /* --- 로고 --- */
 .sidebar-logo{
-    font-size: 28px;
-    font-weight: 700;
-    color: #1a1a1a;
-    text-align: center;
-    margin-bottom: 10px;
-    padding-top: 10px;
+  font-size:28px; font-weight:700; color:#1a1a1a; text-align:center; margin-bottom:10px; padding-top:10px;
 }
 
 /* --- (레거시) 네비게이션 앵커 아이템 --- */
 .nav-item{
-    display: block;
-    width: 100%;
-    padding: 12px 15px;
-    color: #333 !important;
-    background: #f1f3f5;
-    text-decoration: none !important;
-    font-weight: 600;
-    border-radius: 8px;
-    margin-bottom: 5px;
-    text-align: center;
-    transition: background-color 0.2s ease, color 0.2s ease;
+  display:block; width:100%; padding:12px 15px; color:#333 !important; background:#f1f3f5;
+  text-decoration:none !important; font-weight:600; border-radius:8px; margin-bottom:5px; text-align:center;
+  transition:background-color .2s ease, color .2s ease;
 }
-.nav-item:hover{
-    background: #e9ecef;
-    color: #000 !important;
-    text-decoration: none;
-}
-.active{
-    background: #004a99;
-    color: #ffffff !important;
-    text-decoration: none;
-    font-weight: 700;
-}
-.active:hover{
-    background: #003d80;
-    color: #ffffff !important;
-}
+.nav-item:hover{ background:#e9ecef; color:#000 !important; text-decoration:none; }
+.active{ background:#004a99; color:#ffffff !important; text-decoration:none; font-weight:700; }
+.active:hover{ background:#003d80; color:#ffffff !important; }
 
 /* --- KPI 카드 --- */
-.kpi-card {
-  background: #ffffff;
-  border: 1px solid #e9e9e9;
-  border-radius: 10px;
-  padding: 20px 15px;
-  text-align: center;
-  box-shadow: 0 2px 5px rgba(0,0,0,0.03);
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
+.kpi-card{
+  background:#ffffff; border:1px solid #e9e9e9; border-radius:10px; padding:20px 15px; text-align:center;
+  box-shadow:0 2px 5px rgba(0,0,0,0.03); height:100%; display:flex; flex-direction:column; justify-content:center;
 }
-.kpi-title { 
-    font-size: 15px; 
-    font-weight: 600; 
-    margin-bottom: 10px; 
-    color: #444; 
-}
-.kpi-value { 
-    font-size: 28px; 
-    font-weight: 700; 
-    color: #000; 
-    line-height: 1.2;
-}
+.kpi-title{ font-size:15px; font-weight:600; margin-bottom:10px; color:#444; }
+.kpi-value{ font-size:28px; font-weight:700; color:#000; line-height:1.2; }
 
 /* --- KPI 서브 라인 --- */
-.kpi-subwrap { margin-top: 10px; line-height: 1.4; }
-.kpi-sublabel { font-size: 12px; font-weight: 500; color: #555; letter-spacing: 0.1px; margin-right: 6px; }
-.kpi-substrong { font-size: 14px; font-weight: 700; color: #111; }
-.kpi-subpct { font-size: 14px; font-weight: 700; }
+.kpi-subwrap{ margin-top:10px; line-height:1.4; }
+.kpi-sublabel{ font-size:12px; font-weight:500; color:#555; letter-spacing:.1px; margin-right:6px; }
+.kpi-substrong{ font-size:14px; font-weight:700; color:#111; }
+.kpi-subpct{ font-size:14px; font-weight:700; }
 
 /* --- AgGrid 공통 --- */
-.ag-theme-streamlit { font-size: 13px; }
-.ag-theme-streamlit .ag-root-wrapper { border-radius: 8px; }
-.ag-theme-streamlit .ag-row-hover { background-color: #f5f8ff !important; }
-.ag-theme-streamlit .ag-header-cell-label { justify-content: center !important; }
-.ag-theme-streamlit .centered-header .ag-header-cell-label { justify-content: center !important; }
-.ag-theme-streamlit .centered-header .ag-sort-indicator-container { margin-left: 4px; }
-.ag-theme-streamlit .bold-header .ag-header-cell-text { 
-    font-weight: 700 !important; 
-    font-size: 13px; 
-    color: #111;
-}
+.ag-theme-streamlit{ font-size:13px; }
+.ag-theme-streamlit .ag-root-wrapper{ border-radius:8px; }
+.ag-theme-streamlit .ag-row-hover{ background-color:#f5f8ff !important; }
+.ag-theme-streamlit .ag-header-cell-label{ justify-content:center !important; }
+.ag-theme-streamlit .centered-header .ag-header-cell-label{ justify-content:center !important; }
+.ag-theme-streamlit .centered-header .ag-sort-indicator-container{ margin-left:4px; }
+.ag-theme-streamlit .bold-header .ag-header-cell-text{ font-weight:700 !important; font-size:13px; color:#111; }
 
 /* --- 페이지 내 섹션 타이틀 --- */
-.sec-title{ 
-    font-size: 20px; 
-    font-weight: 700; 
-    color: #111; 
-    margin: 0 0 10px 0;
-    padding-bottom: 0;
-    border-bottom: none;
-}
+.sec-title{ font-size:20px; font-weight:700; color:#111; margin:0 0 10px 0; padding-bottom:0; border-bottom:none; }
 
 /* --- Streamlit 기본 요소 미세 조정 --- */
-div[data-testid="stMultiSelect"], div[data-testid="stSelectbox"] { margin-top: -10px; }
-h3 { margin-top: -15px; margin-bottom: 10px; }
-h4 { font-weight: 700; color: #111; margin-top: 0rem; margin-bottom: 0.5rem; }
-hr { margin: 1.5rem 0; background-color: #e0e0e0; }
+div[data-testid="stMultiSelect"], div[data-testid="stSelectbox"]{ margin-top:-10px; }
+h3{ margin-top:-15px; margin-bottom:10px; }
+h4{ font-weight:700; color:#111; margin-top:0rem; margin-bottom:.5rem; }
+hr{ margin:1.5rem 0; background-color:#e0e0e0; }
 
 /* =====================================================
    버튼 기반 사이드바 네비게이션 스킨 (리로드 없는 내비)
    ★ 풀폭 + 무간격 + 희미한 구분선 + 확실한 호버/선택(블루/화이트)
    ===================================================== */
 
-/* [간격 0] — 사이드바 내 버튼 래퍼 여백 제거 */
-section[data-testid="stSidebar"] .block-container{padding-top:0.75rem;}
-section[data-testid="stSidebar"] div[data-testid="stVerticalBlock"]{margin:0 !important; padding:0 !important;}
-section[data-testid="stSidebar"] .stButton{margin:0 !important; padding:0 !important;}
-section[data-testid="stSidebar"] .stButton > button{margin:0 !important;}
+/* [간격 0] — 사이드바 내 모든 버튼 래퍼 여백 제거 */
+section[data-testid="stSidebar"] .block-container{ padding-top:.75rem; }
+section[data-testid="stSidebar"] div[data-testid="stVerticalBlock"]{ margin:0 !important; padding:0 !important; }
+section[data-testid="stSidebar"] div[data-testid="element-container"]{ margin:0 !important; padding:0 !important; }
+section[data-testid="stSidebar"] .stButton{ margin:0 !important; padding:0 !important; }
+section[data-testid="stSidebar"] .stButton > button{ margin:0 !important; line-height:1.15; }
 
-/* 공통 버튼 — 꽉 차게, 간격 0, 구분선만 남김 */
-section[data-testid="stSidebar"] .stButton > button {
-  width: 100%;
-  box-sizing: border-box;
-  text-align: left;
-  padding: 12px 14px;
-  border-radius: 0;                         /* 모서리 0 */
-  border: none;
-  border-bottom: 1px solid #E5E7EB;         /* 희미한 구분선 */
-  background: transparent;
-  color: #333;
-  font-weight: 600;
-  box-shadow: none;
-  transition: background-color .12s ease, color .12s ease;
+/* 공통 버튼 — 꽉 차게, 구분선만 남김 */
+section[data-testid="stSidebar"] .stButton > button{
+  width:100%; box-sizing:border-box; text-align:left;
+  padding:12px 14px; border-radius:0; border:none;
+  border-bottom:1px solid #E5E7EB; background:transparent;
+  color:#333; font-weight:600; box-shadow:none;
+  transition:background-color .12s ease, color .12s ease;
 }
 
-/* hover — 연한 블루 톤 하이라이트 */
-section[data-testid="stSidebar"] .stButton > button:hover {
-  background: rgba(11, 97, 255, 0.08);
-  color: #000;
+/* hover — 연한 블루 하이라이트 (유지) */
+section[data-testid="stSidebar"] .stButton > button:hover{
+  background:rgba(11,97,255,0.08); color:#000;
 }
 
 /* 비활성(secondary) — 투명 유지 */
 section[data-testid="stSidebar"] [data-testid="baseButton-secondary"] > button,
-section[data-testid="stSidebar"] .stButton > button[kind="secondary"] {
-  background: transparent;
-  color: #333;
+section[data-testid="stSidebar"] .stButton > button[kind="secondary"]{
+  background:transparent; color:#333;
 }
 
-/* ===== 활성(Primary) — 체크 제거 + 블루 배경/흰 글씨 ===== */
+/* ===== 활성(Primary) — 블루 배경/흰 글씨 + 체크 아이콘 숨김 ===== */
 /* (1) 새 DOM: baseButton-primary 래퍼 */
 section[data-testid="stSidebar"] [data-testid="baseButton-primary"] > button{
-  background: #0b61ff !important;
-  color: #ffffff !important;
-  border-bottom: 1px solid #0b61ff;
+  background:#0b61ff !important; color:#ffffff !important; border-bottom:1px solid #0b61ff;
 }
 /* (2) 구 DOM: kind="primary" 속성 */
 section[data-testid="stSidebar"] .stButton > button[kind="primary"]{
-  background: #0b61ff !important;
-  color: #ffffff !important;
-  border-bottom: 1px solid #0b61ff;
+  background:#0b61ff !important; color:#ffffff !important; border-bottom:1px solid #0b61ff;
 }
 /* (3) 보강: nav-active 래퍼를 쓴 경우 */
 section[data-testid="stSidebar"] .nav-active .stButton > button{
-  background: #0b61ff !important;
-  color: #ffffff !important;
-  border-bottom: 1px solid #0b61ff;
+  background:#0b61ff !important; color:#ffffff !important; border-bottom:1px solid #0b61ff;
 }
 
 /* 활성 hover — 조금 더 진한 블루 */
 section[data-testid="stSidebar"] [data-testid="baseButton-primary"] > button:hover,
 section[data-testid="stSidebar"] .stButton > button[kind="primary"]:hover,
 section[data-testid="stSidebar"] .nav-active .stButton > button:hover{
-  background: #0a56e5 !important;
-  border-color: #0a56e5 !important;
+  background:#0a56e5 !important; border-color:#0a56e5 !important;
 }
 
-/* (핵심) 활성 버튼 내부의 아이콘/체크 SVG 강제 숨김 */
+/* 활성 버튼 내부의 아이콘/체크 SVG 보이는 경우 숨김 */
 section[data-testid="stSidebar"] [data-testid="baseButton-primary"] > button svg,
 section[data-testid="stSidebar"] .stButton > button[kind="primary"] svg,
-section[data-testid="stSidebar"] .nav-active .stButton > button svg{
-  display: none !important;
-}
+section[data-testid="stSidebar"] .nav-active .stButton > button svg{ display:none !important; }
 
 /* 사이드바 구분선 */
-.sidebar-hr { margin: 0; border-top: 1px solid #E5E7EB; }
+.sidebar-hr{ margin:0; border-top:1px solid #E5E7EB; }
 
 /* --- Sidebar: Title/문의처 중앙정렬 --- */
-section[data-testid="stSidebar"] .page-title-wrap{justify-content:center;text-align:center;}
-section[data-testid="stSidebar"] .page-title-main{display:block;text-align:center;}
-section[data-testid="stSidebar"] .sidebar-logo{text-align:center;}
+section[data-testid="stSidebar"] .page-title-wrap{ justify-content:center; text-align:center; }
+section[data-testid="stSidebar"] .page-title-main{ display:block; text-align:center; }
+section[data-testid="stSidebar"] .sidebar-logo{ text-align:center; }
 section[data-testid="stSidebar"] [data-testid="stCaptionContainer"],
 section[data-testid="stSidebar"] .stCaption,
 section[data-testid="stSidebar"] .stMarkdown p.sidebar-contact{ text-align:center !important; }
@@ -688,29 +607,21 @@ section[data-testid="stSidebar"] .stMarkdown p.sidebar-contact{ text-align:cente
 st.markdown("""
 <style>
 /* ==== Sidebar Gradient Title: 1줄, 줄바꿈 없이, 폭 좁아도 예쁘게 ==== */
-.page-title-wrap{
-  display:flex; align-items:center; gap:8px; margin:4px 0 10px 0;
-}
+.page-title-wrap{ display:flex; align-items:center; gap:8px; margin:4px 0 10px 0; }
 .page-title-emoji{ font-size:20px; line-height:1; }
 .page-title-main{
-  /* clamp(min, preferred, max) → 사이드바가 좁아도 자연스레 줄어듦 */
-  font-size: clamp(18px, 2.2vw, 24px);
-  font-weight: 800; letter-spacing:-0.2px; line-height:1.15;
-  background: linear-gradient(90deg,#6A5ACD 0%, #A663CC 40%, #FF7A8A 75%, #FF8A3D 100%);
+  font-size:clamp(18px, 2.2vw, 24px); font-weight:800; letter-spacing:-0.2px; line-height:1.15;
+  background:linear-gradient(90deg,#6A5ACD 0%, #A663CC 40%, #FF7A8A 75%, #FF8A3D 100%);
   -webkit-background-clip:text; background-clip:text; color:transparent;
-  white-space: nowrap;             /* 줄바꿈 금지 */
-  overflow: hidden;                /* 넘치면 숨김 */
-  text-overflow: ellipsis;         /* … 처리 */
-  max-width: 100%;                 /* 사이드바 폭에 맞춰 자르기 */
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%;
 }
 
-/* 사이드바 버튼도 약간 컴팩트하게(필요 시) */
-section[data-testid="stSidebar"] .stButton > button{
-  padding: 12px 14px; font-weight: 600;   /* 위에서 정의값과 동일 유지 */
-}
+/* 사이드바 버튼 컴팩트(동일 정의 유지) */
+section[data-testid="stSidebar"] .stButton > button{ padding:12px 14px; font-weight:600; }
 </style>
 """, unsafe_allow_html=True)
 #endregion
+
 
 #region [ 5. 사이드바 네비게이션 ]
 # =====================================================
