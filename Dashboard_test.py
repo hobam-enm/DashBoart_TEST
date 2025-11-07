@@ -1352,7 +1352,10 @@ def render_overview():
         headerClass='centered-header'
     )
     gb.configure_grid_options(rowHeight=34, suppressMenuHide=True, domLayout='normal')
-    gb.configure_column('IP', header_name='IP', cellStyle={'textAlign':'left'}, width=200) # [수정] 너비 고정
+    
+    # [수정] 'IP' 컬럼 너비 고정 제거 (width=200 삭제)
+    gb.configure_column('IP', header_name='IP', cellStyle={'textAlign':'left'}) 
+    
     gb.configure_column('타깃시청률', valueFormatter=fmt_fixed3, sort='desc')
     gb.configure_column('가구시청률', valueFormatter=fmt_fixed3)
     gb.configure_column('티빙LIVE', valueFormatter=fmt_thousands)
@@ -1370,7 +1373,7 @@ def render_overview():
         gridOptions=grid_options,
         theme="streamlit",
         height=300,
-        fit_columns_on_grid_load=False, # [수정] IP 컬럼 너비를 고정했으므로 False
+        fit_columns_on_grid_load=True, # [수정] True로 변경하여 화면에 맞춤
         update_mode=GridUpdateMode.NO_UPDATE,
         allow_unsafe_jscode=True
     )
