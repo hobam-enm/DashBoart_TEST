@@ -3735,7 +3735,7 @@ def fmt_eokman(n):
 from __future__ import annotations
 import re as _re, math as _math, numpy as _np, pandas as _pd
 from typing import Dict as _Dict, Any as _Any, Iterable as _Iterable, Optional as _Optional
-import streamlit as st as _st
+import streamlit as _st
 from st_aggrid import GridOptionsBuilder as _GridOptionsBuilder, JsCode as _JsCode
 
 ROW_LABELS = ["S","A","B","C","D"]
