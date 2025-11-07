@@ -22,6 +22,45 @@ from google.oauth2.service_account import Credentials
 #endregion
 
 
+
+#region [ 3-1. AgGrid Wrapper (자동 옵션 생성) ]
+try:
+    from st_aggrid import AgGrid as __AgGrid_raw
+except Exception:
+    __AgGrid_raw = None
+
+def __AgGrid_wrapped(df, gridOptions=None, *, format_map=None, cell_renderer_map=None, center=True, default_sortable=True, **kwargs):
+    """
+    drop-in 대체:
+    - 기존 AgGrid(df, gridOptions=...)은 그대로 동작
+    - gridOptions 미지정 시, build_aggrid_options()로 자동 생성
+    """
+    try:
+        from st_aggrid import GridUpdateMode  # just to ensure import path exists
+        pass
+    except Exception:
+        pass
+
+    if gridOptions is None:
+        try:
+            gridOptions = build_aggrid_options(
+                df,
+                center=center,
+                default_sortable=default_sortable,
+                format_map=(format_map or {}),
+                cell_renderer_map=(cell_renderer_map or {}),
+            )
+        except Exception:
+            # 실패 시 최소 옵션으로 폴백
+            gridOptions = None
+    if __AgGrid_raw is None:
+        raise RuntimeError("st_aggrid.AgGrid 가용하지 않음")
+    return __AgGrid_raw(df, gridOptions=gridOptions, **kwargs)
+
+# 기존 이름으로 바인딩 (기존 호출부 수정 없이도 동작)
+AgGrid = __AgGrid_wrapped
+#endregion
+
 #region [ 1-0. 페이지 설정 — 반드시 첫 번째 Streamlit 명령 ]
 # =====================================================
 st.set_page_config(
@@ -137,114 +176,7 @@ if not check_password_with_token():
 #region [ 2. 기본 설정 및 공통 상수 ]
 # =====================================================
 
-st.markdown("""
-<style>
-/* Hover foundation for floating cards */
-div[data-testid="stVerticalBlockBorderWrapper"]{
-    transition: transform .18s ease, box-shadow .18s ease !important;
-    will-change: transform, box-shadow;
-    overflow: visible !important;
-    position: relative;
-    pointer-events: auto;
-}
 
-/* === HOTFIX 2025-10-31 Title size + Box exceptions === */
-
-/* Boost title sizes globally */
-section[data-testid="stVerticalBlock"] h1,
-section[data-testid="stVerticalBlock"] h2,
-section[data-testid="stVerticalBlock"] h3 {
-    font-weight: 800;
-    letter-spacing: -0.02em;
-    line-height: 1.25;
-}
-section[data-testid="stVerticalBlock"] h1 { font-size: clamp(28px, 2.8vw, 38px); }
-section[data-testid="stVerticalBlock"] h2 { font-size: clamp(24px, 2.4vw, 34px); }
-section[data-testid="stVerticalBlock"] h3 { font-size: clamp(22px, 2.0vw, 30px); }
-
-/* .page-title helper if used */
-.page-title {
-    font-size: clamp(26px, 2.4vw, 34px);
-    font-weight: 800;
-    line-height: 1.25;
-    letter-spacing: -0.02em;
-    margin: 6px 0 14px 0;
-    display: inline-flex;
-    align-items: center;
-    gap: 10px;
-}
-
-/* Remove box background/border/shadow for KPI, titles, filters, mode switchers */
-div[data-testid="stVerticalBlockBorderWrapper"]:has(.kpi-card),
-div[data-testid="stVerticalBlockBorderWrapper"]:has(.page-title),
-div[data-testid="stVerticalBlockBorderWrapper"]:has(h1),
-div[data-testid="stVerticalBlockBorderWrapper"]:has(h2),
-div[data-testid="stVerticalBlockBorderWrapper"]:has(h3),
-div[data-testid="stVerticalBlockBorderWrapper"]:has(div[data-testid="stSelectbox"]),
-div[data-testid="stVerticalBlockBorderWrapper"]:has(div[data-testid="stMultiSelect"]),
-div[data-testid="stVerticalBlockBorderWrapper"]:has(div[data-testid="stSlider"]),
-div[data-testid="stVerticalBlockBorderWrapper"]:has(div[data-testid="stRadio"]),
-div[data-testid="stVerticalBlockBorderWrapper"]:has(.filter-group),
-div[data-testid="stVerticalBlockBorderWrapper"]:has(.mode-switch) {
-    background: transparent !important;
-    border: none !important;
-    box-shadow: none !important;
-    padding: 0 !important;
-    margin-bottom: 0.5rem !important;
-}
-
-
-/* Hov
-/* Subtle background gradient to enhance floating effect */
-[data-testid="stAppViewContainer"] {
-    background: radial-gradient(1200px 500px at 10% -10%, rgba(99, 102, 241, 0.05), transparent 40%),
-                radial-gradient(1200px 500px at 90% -20%, rgba(236, 72, 153, 0.05), transparent 40%),
-                #f7f8fb;
-}
-er lift for floating cards */
-div[data-testid="stVerticalBlockBorderWrapper"]:hover{
-    transform: translateY(-2px);
-    box-shadow: 0 14px 36px rgba(16, 24, 40, 0.14), 0 4px 12px rgba(16, 24, 40, 0.08);
-}
-
-/* Hover lift for floating cards (strong) */
-div[data-testid="stVerticalBlockBorderWrapper"]:hover{
-    transform: translate3d(0, -2px, 0) !important;
-    box-shadow: 0 14px 36px rgba(16, 24, 40, 0.14), 0 4px 12px rgba(16, 24, 40, 0.08) !important;
-    z-index: 2;
-}
-
-/* === Hover scope fix === */
-/* 1) Cancel global wrapper hover (page shouldn't 'bounce') */
-div[data-testid="stVerticalBlockBorderWrapper"]:hover{
-  transform: none !important;
-  box-shadow: inherit !important;
-  z-index: auto !important;
-}
-
-/* 2) Sidebar: no hover lift at all */
-section[data-testid="stSidebar"] .kpi-card:hover,
-section[data-testid="stSidebar"] .block-card:hover,
-section[data-testid="stSidebar"] .stPlotlyChart:hover,
-section[data-testid="stSidebar"] .ag-theme-streamlit .ag-root-wrapper:hover{
-  transform: none !important;
-  box-shadow: inherit !important;
-}
-
-/* 3) Only cards/content areas get hover lift */
-.kpi-card, .block-card, .stPlotlyChart, .ag-theme-streamlit .ag-root-wrapper{
-  transition: transform .18s ease, box-shadow .18s ease;
-  will-change: transform, box-shadow;
-  backface-visibility: hidden;
-  -webkit-font-smoothing: antialiased;
-}
-
-.kpi-card:hover, .block-card:hover, .stPlotlyChart:hover, .ag-theme-streamlit .ag-root-wrapper:hover{
-  transform: translateY(-2px);
-  box-shadow: 0 14px 36px rgba(16,24,40,.14), 0 4px 12px rgba(16,24,40,.08);
-}
-</style>
-""", unsafe_allow_html=True)
 
 # ===== 네비게이션 아이템 정의 (v2.0) =====
 NAV_ITEMS = {
@@ -452,264 +384,10 @@ def get_episode_options(df: pd.DataFrame) -> List[str]:
 #region [ 4. 공통 스타일 ]
 # =====================================================
 # CSS 수정: 전체적인 색상 톤, 폰트, 카드 디자인, 네비 버튼 스킨
-st.markdown("""
-<style>
-/* 지표기준안내 전용 타이포 + 인라인코드 스타일 */
-.gd-guideline { font-size: 13px; line-height: 1.35; }
-.gd-guideline ul { margin: .2rem 0 .6rem 1.1rem; padding: 0; }
-.gd-guideline li { margin: .15rem 0; }
-.gd-guideline b, .gd-guideline strong { font-weight: 600; }
-/* 백틱(`...`) 인라인 코드 느낌: 작고, 살짝 녹색 칩 */
-.gd-guideline code{
-  background: rgba(16,185,129,.10);
-  color: #16a34a;
-  padding: 1px 6px;
-  border-radius: 6px;
-  font-size: .92em;   /* 본문보다 더 작게 */
-}
-/* --- 전체 앱 배경 --- */
-[data-testid="stAppViewContainer"] {
-    background-color: #f8f9fa; /* 매우 연한 회색 배경 */
-}
 
-/* --- st.container(border=True) 카드 스타일 --- */
-div[data-testid="stVerticalBlockBorderWrapper"] {
-    background-color: #ffffff;
-    border: 1px solid #e9e9e9;
-    border-radius: 10px;
-    box-shadow: 0 2px 5px rgba(0,0,0,0.03);
-    padding: 1.25rem 1.25rem 1.5rem 1.25rem;
-    margin-bottom: 1.5rem;
-}
-
-/* --- Sidebar 배경/패딩 + 항상 펼침(폭 고정) --- */
-section[data-testid="stSidebar"] {
-    background: #ffffff;
-    border-right: 1px solid #e0e0e0;
-    padding-top: 1rem;
-    padding-left: 0.5rem;
-    padding-right: 0.5rem;
-    min-width:340px !important;
-    max-width:340px !important;
-}
-/* 사이드바 접힘 토글 버튼 숨김 */
-div[data-testid="collapsedControl"] { display:none !important; }
-
-/* --- 로고 --- */
-.sidebar-logo{
-    font-size: 28px;
-    font-weight: 700;
-    color: #1a1a1a;
-    text-align: center;
-    margin-bottom: 10px;
-    padding-top: 10px;
-}
-
-/* --- (레거시) 네비게이션 앵커 아이템 --- */
-.nav-item{
-    display: block;
-    width: 100%;
-    padding: 12px 15px;
-    color: #333 !important;
-    background: #f1f3f5;
-    text-decoration: none !important;
-    font-weight: 600;
-    border-radius: 8px;
-    margin-bottom: 5px;
-    text-align: center;
-    transition: background-color 0.2s ease, color 0.2s ease;
-}
-.nav-item:hover{
-    background: #e9ecef;
-    color: #000 !important;
-    text-decoration: none;
-}
-.active{
-    background: #004a99;
-    color: #ffffff !important;
-    text-decoration: none;
-    font-weight: 700;
-}
-.active:hover{
-    background: #003d80;
-    color: #ffffff !important;
-}
-
-/* --- KPI 카드 --- */
-.kpi-card {
-  background: #ffffff;
-  border: 1px solid #e9e9e9;
-  border-radius: 10px;
-  padding: 20px 15px;
-  text-align: center;
-  box-shadow: 0 2px 5px rgba(0,0,0,0.03);
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-}
-.kpi-title { 
-    font-size: 15px; 
-    font-weight: 600; 
-    margin-bottom: 10px; 
-    color: #444; 
-}
-.kpi-value { 
-    font-size: 28px; 
-    font-weight: 700; 
-    color: #000; 
-    line-height: 1.2;
-}
-
-/* --- KPI 서브 라인 --- */
-.kpi-subwrap { margin-top: 10px; line-height: 1.4; }
-.kpi-sublabel { font-size: 12px; font-weight: 500; color: #555; letter-spacing: 0.1px; margin-right: 6px; }
-.kpi-substrong { font-size: 14px; font-weight: 700; color: #111; }
-.kpi-subpct { font-size: 14px; font-weight: 700; }
-
-/* --- AgGrid 공통 --- */
-.ag-theme-streamlit { font-size: 13px; }
-.ag-theme-streamlit .ag-root-wrapper { border-radius: 8px; }
-.ag-theme-streamlit .ag-row-hover { background-color: #f5f8ff !important; }
-.ag-theme-streamlit .ag-header-cell-label { justify-content: center !important; }
-.ag-theme-streamlit .centered-header .ag-header-cell-label { justify-content: center !important; }
-.ag-theme-streamlit .centered-header .ag-sort-indicator-container { margin-left: 4px; }
-.ag-theme-streamlit .bold-header .ag-header-cell-text { 
-    font-weight: 700 !important; 
-    font-size: 13px; 
-    color: #111;
-}
-
-/* --- 페이지 내 섹션 타이틀 --- */
-.sec-title{ 
-    font-size: 20px; 
-    font-weight: 700; 
-    color: #111; 
-    margin: 0 0 10px 0;
-    padding-bottom: 0;
-    border-bottom: none;
-}
-
-/* --- Streamlit 기본 요소 미세 조정 --- */
-div[data-testid="stMultiSelect"], div[data-testid="stSelectbox"] { margin-top: -10px; }
-h3 { margin-top: -15px; margin-bottom: 10px; }
-h4 { font-weight: 700; color: #111; margin-top: 0rem; margin-bottom: 0.5rem; }
-hr { margin: 1.5rem 0; background-color: #e0e0e0; }
-
-/* =====================================================
-   버튼 기반 사이드바 네비게이션 스킨 (리로드 없는 내비)
-   ★ 풀폭 + 무간격 + 희미한 구분선 + 확실한 호버/선택(블루/화이트)
-   ===================================================== */
-
-/* [간격 0] — 사이드바 내 버튼 래퍼 여백 제거 */
-section[data-testid="stSidebar"] .block-container{padding-top:0.75rem;}
-section[data-testid="stSidebar"] div[data-testid="stVerticalBlock"]{margin:0 !important; padding:0 !important;}
-section[data-testid="stSidebar"] .stButton{margin:0 !important; padding:0 !important;}
-section[data-testid="stSidebar"] .stButton > button{margin:0 !important;}
-
-/* 공통 버튼 — 꽉 차게, 간격 0, 구분선만 남김 */
-section[data-testid="stSidebar"] .stButton > button {
-  width: 100%;
-  box-sizing: border-box;
-  text-align: left;
-  padding: 12px 14px;
-  border-radius: 0;                         /* 모서리 0 */
-  border: none;
-  border-bottom: 1px solid #E5E7EB;         /* 희미한 구분선 */
-  background: transparent;
-  color: #333;
-  font-weight: 600;
-  box-shadow: none;
-  transition: background-color .12s ease, color .12s ease;
-}
-
-/* hover — 연한 블루 톤 하이라이트 */
-section[data-testid="stSidebar"] .stButton > button:hover {
-  background: rgba(11, 97, 255, 0.08);
-  color: #000;
-}
-
-/* 비활성(secondary) — 투명 유지 */
-section[data-testid="stSidebar"] [data-testid="baseButton-secondary"] > button,
-section[data-testid="stSidebar"] .stButton > button[kind="secondary"] {
-  background: transparent;
-  color: #333;
-}
-
-/* ===== 활성(Primary) — 체크 제거 + 블루 배경/흰 글씨 ===== */
-/* (1) 새 DOM: baseButton-primary 래퍼 */
-section[data-testid="stSidebar"] [data-testid="baseButton-primary"] > button{
-  background: #0b61ff !important;
-  color: #ffffff !important;
-  border-bottom: 1px solid #0b61ff;
-}
-/* (2) 구 DOM: kind="primary" 속성 */
-section[data-testid="stSidebar"] .stButton > button[kind="primary"]{
-  background: #0b61ff !important;
-  color: #ffffff !important;
-  border-bottom: 1px solid #0b61ff;
-}
-/* (3) 보강: nav-active 래퍼를 쓴 경우 */
-section[data-testid="stSidebar"] .nav-active .stButton > button{
-  background: #0b61ff !important;
-  color: #ffffff !important;
-  border-bottom: 1px solid #0b61ff;
-}
-
-/* 활성 hover — 조금 더 진한 블루 */
-section[data-testid="stSidebar"] [data-testid="baseButton-primary"] > button:hover,
-section[data-testid="stSidebar"] .stButton > button[kind="primary"]:hover,
-section[data-testid="stSidebar"] .nav-active .stButton > button:hover{
-  background: #0a56e5 !important;
-  border-color: #0a56e5 !important;
-}
-
-/* (핵심) 활성 버튼 내부의 아이콘/체크 SVG 강제 숨김 */
-section[data-testid="stSidebar"] [data-testid="baseButton-primary"] > button svg,
-section[data-testid="stSidebar"] .stButton > button[kind="primary"] svg,
-section[data-testid="stSidebar"] .nav-active .stButton > button svg{
-  display: none !important;
-}
-
-/* 사이드바 구분선 */
-.sidebar-hr { margin: 0; border-top: 1px solid #E5E7EB; }
-
-/* --- Sidebar: Title/문의처 중앙정렬 --- */
-section[data-testid="stSidebar"] .page-title-wrap{justify-content:center;text-align:center;}
-section[data-testid="stSidebar"] .page-title-main{display:block;text-align:center;}
-section[data-testid="stSidebar"] .sidebar-logo{text-align:center;}
-section[data-testid="stSidebar"] [data-testid="stCaptionContainer"],
-section[data-testid="stSidebar"] .stCaption,
-section[data-testid="stSidebar"] .stMarkdown p.sidebar-contact{ text-align:center !important; }
-</style>
-""", unsafe_allow_html=True)
 
 # [ 4. 공통 스타일 ] 맨 아래쪽에 이 블록을 추가(또는 기존 page-title 스타일을 교체)
-st.markdown("""
-<style>
-/* ==== Sidebar Gradient Title: 1줄, 줄바꿈 없이, 폭 좁아도 예쁘게 ==== */
-.page-title-wrap{
-  display:flex; align-items:center; gap:8px; margin:4px 0 10px 0;
-}
-.page-title-emoji{ font-size:20px; line-height:1; }
-.page-title-main{
-  /* clamp(min, preferred, max) → 사이드바가 좁아도 자연스레 줄어듦 */
-  font-size: clamp(18px, 2.2vw, 24px);
-  font-weight: 800; letter-spacing:-0.2px; line-height:1.15;
-  background: linear-gradient(90deg,#6A5ACD 0%, #A663CC 40%, #FF7A8A 75%, #FF8A3D 100%);
-  -webkit-background-clip:text; background-clip:text; color:transparent;
-  white-space: nowrap;             /* 줄바꿈 금지 */
-  overflow: hidden;                /* 넘치면 숨김 */
-  text-overflow: ellipsis;         /* … 처리 */
-  max-width: 100%;                 /* 사이드바 폭에 맞춰 자르기 */
-}
 
-/* 사이드바 버튼도 약간 컴팩트하게(필요 시) */
-section[data-testid="stSidebar"] .stButton > button{
-  padding: 12px 14px; font-weight: 600;   /* 위에서 정의값과 동일 유지 */
-}
-</style>
-""", unsafe_allow_html=True)
 #endregion
 
 
@@ -3161,16 +2839,7 @@ def render_growth_score():
         st.warning("IP 데이터가 없습니다."); return
 
     # 작은 스타일(요약카드 공통)
-    st.markdown("""
-    <style>
-      .kpi-card{border-radius:16px;border:1px solid #e7ebf3;background:#fff;padding:12px 14px;
-                box-shadow:0 1px 2px rgba(0,0,0,0.04)}
-      .kpi-title{font-size:13px;color:#5b6b83;margin-bottom:4px;font-weight:600}
-      .kpi-value{font-weight:800;letter-spacing:-0.2px}
-      .centered-header .ag-header-cell-label{justify-content:center;}
-      .bold-header .ag-header-cell-text{font-weight:700;}
-    </style>
-    """, unsafe_allow_html=True)
+    
 
     # ---------- 헤더(타이틀/선택) ----------
     _ep_display = st.session_state.get("growth_ep_cutoff", 4)
@@ -3654,16 +3323,7 @@ def render_growth_score_digital():
         st.warning("IP 데이터가 없습니다."); return
 
     # 작은 스타일(요약카드 공통)
-    st.markdown("""
-    <style>
-      .kpi-card{border-radius:16px;border:1px solid #e7ebf3;background:#fff;padding:12px 14px;
-                box-shadow:0 1px 2px rgba(0,0,0,0.04)}
-      .kpi-title{font-size:13px;color:#5b6b83;margin-bottom:4px;font-weight:600}
-      .kpi-value{font-weight:800;letter-spacing:-0.2px}
-      .centered-header .ag-header-cell-label{justify-content:center;}
-      .bold-header .ag-header-cell-text{font-weight:700;}
-    </style>
-    """, unsafe_allow_html=True)
+    
 
     # ---------- 헤더(타이틀/선택) ----------
     _ep_display = st.session_state.get("growth_d_ep_cutoff", 4)
@@ -4069,6 +3729,103 @@ else:
 def fmt_eokman(n):
     """정수 n을 '#억####만' 형식으로 (만 이하 절삭) 표현"""
     import math
+
+#region [ 3. 공통 유틸 & 상수 (Refactor Kit) ]
+# =====================================================
+from __future__ import annotations
+import re as _re, math as _math, numpy as _np, pandas as _pd
+from typing import Dict as _Dict, Any as _Any, Iterable as _Iterable, Optional as _Optional
+import streamlit as st as _st
+from st_aggrid import GridOptionsBuilder as _GridOptionsBuilder, JsCode as _JsCode
+
+ROW_LABELS = ["S","A","B","C","D"]
+COL_LABELS = ["+2","+1","0","-1","-2"]
+ABS_SCORE  = {"S":5,"A":4,"B":3,"C":2,"D":1}
+SLO_SCORE  = {"+2":5,"+1":4,"0":3,"-1":2,"-2":1}
+
+def inject_global_css() -> None:
+    _
+
+def kpi_card(title: str, value: _Optional[float|int|str], sub: _Optional[str]=None, intlike=False, digits=3):
+    main = (
+        f"{value:,.0f}" if (intlike and value is not None and not _pd.isna(value))
+        else (f"{value:.{digits}f}" if (value is not None and not _pd.isna(value)) else "–")
+    )
+    _st.markdown(
+        f"<div class='kpi-card'><div class='kpi-title'>{title}</div><div class='kpi-value'>{main}</div>"
+        + (f"<div class='kpi-sub'>{sub}</div>" if sub else "") + "</div>", unsafe_allow_html=True
+    )
+
+def to_numeric_clean(s: "_pd.Series") -> "_pd.Series":
+    s2 = _pd.to_numeric(s, errors="coerce")
+    s2 = s2.replace(0, _np.nan)
+    return s2
+
+def episode_col(df: "_pd.DataFrame") -> str:
+    return "회차_numeric" if "회차_numeric" in df.columns else ("회차_num" if "회차_num" in df.columns else "회차")
+
+def get_current_page_default(default_key: str) -> str:
+    try:
+        qp = _st.query_params
+        p = str(qp.get("page") or default_key)
+        return p
+    except Exception:
+        return default_key
+
+def set_page_query_param(page_key: str) -> None:
+    try:
+        qp = _st.query_params; qp["page"] = page_key; _st.query_params = qp
+    except Exception:
+        _st.experimental_set_query_params(page=page_key)
+
+def render_sidebar_nav(NAV_ITEMS: "_Dict[str, str]", current_page: str) -> str:
+    with _st.sidebar:
+        _st.markdown('<div class="sidebar-hr"></div>', unsafe_allow_html=True)
+        _st.markdown(
+            """<div class='page-title-wrap'><span class='page-title-main'>드라마 성과 대시보드</span></div>""",
+            unsafe_allow_html=True
+        )
+        _st.markdown("<hr style='border:1px solid #eee; margin:0;'>", unsafe_allow_html=True)
+        for key, label in NAV_ITEMS.items():
+            is_active = (current_page == key)
+            wrapper_cls = "nav-active" if is_active else "nav-inactive"
+            _st.markdown(f'<div class="{wrapper_cls}">', unsafe_allow_html=True)
+            clicked = _st.button(label, key=f"navbtn__{key}", use_container_width=True, type=("primary" if is_active else "secondary"))
+            _st.markdown('</div>', unsafe_allow_html=True)
+            if clicked and not is_active:
+                _st.session_state["page"] = key
+                set_page_query_param(key)
+                if hasattr(_st, "rerun"): _st.rerun()
+                else: _st.experimental_rerun()
+    return current_page
+
+FMT_FIXED3   = _JsCode("function(p){ if(p.value==null||isNaN(p.value)) return ''; return Number(p.value).toFixed(3);}")
+FMT_THOUSANDS= _JsCode("function(p){ if(p.value==null||isNaN(p.value)) return ''; return Math.round(p.value).toLocaleString();}")
+FMT_RANK     = _JsCode("function(p){ if(p.value==null||isNaN(p.value)) return ''; return Math.round(p.value)+'위';}")
+
+def build_aggrid_options(df: "_pd.DataFrame", *, center=True, default_sortable=True,
+                         format_map: "_Optional[dict[str, str]]"=None,
+                         cell_renderer_map: "_Optional[dict[str, _JsCode]]"=None):
+    gb = _GridOptionsBuilder.from_dataframe(df)
+    gb.configure_grid_options(rowHeight=34, suppressMenuHide=True, domLayout='normal')
+    gb.configure_default_column(
+        sortable=default_sortable, resizable=True, filter=False,
+        cellStyle={'textAlign': 'center' if center else 'left'},
+        headerClass='centered-header bold-header' if center else 'bold-header'
+    )
+    fmts = {"fixed3": FMT_FIXED3, "thousands": FMT_THOUSANDS, "rank": FMT_RANK}
+    format_map = format_map or {}
+    cell_renderer_map = cell_renderer_map or {}
+    for col, kind in format_map.items():
+        if col in df.columns and kind in fmts:
+            gb.configure_column(col, valueFormatter=fmts[kind])
+    for col, renderer in cell_renderer_map.items():
+        if col in df.columns:
+            gb.configure_column(col, cellRenderer=renderer)
+    return gb.build()
+#endregion
+
+
     try:
         if n is None:
             return "–"
@@ -4083,99 +3840,11 @@ def fmt_eokman(n):
 # === [HOVER FIX OVERRIDE • 2025-11-06 • v2] ================================
 # 증상: 페이지 전체가 떠오름 → 원인: 상위 wrapper까지 :has(.hover) 조건에 걸림
 # 해결: "가장 가까운(wrapper)만" lift 되도록, 하위 wrapper가 동일 조건이면 상위는 제외
-st.markdown("""
-<style>
-/* 0) 개별 요소 lift 제거 (중복 방지) */
-.stPlotlyChart:hover,
-.ag-theme-streamlit .ag-root-wrapper:hover {
-  transform: none !important;
-  box-shadow: inherit !important;
-}
 
-/* 공통 선택자: '가장 가까운' 카드(wrapper)만 추출 */
-div[data-testid="stVerticalBlockBorderWrapper"]._liftable {
-  transition: transform .18s ease, box-shadow .18s ease !important;
-  will-change: transform, box-shadow;
-  backface-visibility: hidden;
-}
-
-/* 1) Plotly 차트: 가장 가까운 wrapper만 lift */
-div[data-testid="stVerticalBlockBorderWrapper"]._liftable:has(.stPlotlyChart:hover):not(:has(div[data-testid="stVerticalBlockBorderWrapper"] .stPlotlyChart:hover)) {
-  transform: translate3d(0,-4px,0) !important;
-  box-shadow: 0 16px 40px rgba(16,24,40,.16), 0 6px 14px rgba(16,24,40,.10) !important;
-  z-index: 3 !important;
-}
-
-/* 2) AgGrid: 가장 가까운 wrapper만 lift */
-div[data-testid="stVerticalBlockBorderWrapper"]._liftable:has(.ag-theme-streamlit .ag-root-wrapper:hover):not(:has(div[data-testid="stVerticalBlockBorderWrapper"] .ag-theme-streamlit .ag-root-wrapper:hover)) {
-  transform: translate3d(0,-4px,0) !important;
-  box-shadow: 0 16px 40px rgba(16,24,40,.16), 0 6px 14px rgba(16,24,40,.10) !important;
-  z-index: 3 !important;
-}
-
-/* 3) KPI/커스텀 카드 클래스도 동일 처리 (있을 때만) */
-div[data-testid="stVerticalBlockBorderWrapper"].*_liftable:has(.kpi-card:hover):not(:has(div[data-testid="stVerticalBlockBorderWrapper"] .kpi-card:hover)),
-div[data-testid="stVerticalBlockBorderWrapper"].*_liftable:has(.block-card:hover):not(:has(div[data-testid="stVerticalBlockBorderWrapper"] .block-card:hover)) {
-  transform: translate3d(0,-4px,0) !important;
-  box-shadow: 0 16px 40px rgba(16,24,40,.16), 0 6px 14px rgba(16,24,40,.10) !important;
-  z-index: 3 !important;
-}
-
-/* 4) 사이드바는 lift 금지 유지 */
-section[data-testid="stSidebar"] div[data-testid="stVerticalBlockBorderWrapper"] {
-  transform: none !important;
-  box-shadow: inherit !important;
-  z-index: auto !important;
-}
-
-/* 5) 모든 wrapper에 'liftable' 클래스 부여 (JS 없이 CSS만으로는 직접 부여 어려움 → 속성 선택자 트릭) */
-/* Streamlit의 대부분 컨텐츠 wrapper에 클래스가 없으므로, 안전하게 전역 지정 */
-div[data-testid="stVerticalBlockBorderWrapper"] { /* base */
-  position: relative;
-}
-/* 클래스 토글 대체: 속성 선택자 대신 전역적으로 liftable 취급 */
-div[data-testid="stVerticalBlockBorderWrapper"] { /* emulate ._liftable */
-  /* no-op: 위의 규칙에서 ._liftable을 쓰지만, 실제로는 이 블록이 모두 해당 */
-}
-</style>
-""", unsafe_allow_html=True)
 # =========================================================================
 
 
 # === [SIDEBAR CARD STRIP • v2 • 2025-11-06] ==================================
 # 사이드바 내부의 모든 카드 박스(배경/보더/섀도우/패딩) 제거 + hover 효과 무력화
-st.markdown("""
-<style>
-/* 1) 사이드바 안의 '모든' 카드형 래퍼 박스 제거 */
-section[data-testid="stSidebar"] div[data-testid="stVerticalBlockBorderWrapper"] {
-  background: transparent !important;
-  border: none !important;
-  box-shadow: none !important;
-  padding: 0 !important;
-}
 
-/* 2) 사이드바 카드 hover 효과 제거 */
-section[data-testid="stSidebar"] div[data-testid="stVerticalBlockBorderWrapper"]:hover {
-  transform: none !important;
-  box-shadow: none !important;
-}
-
-/* 3) 흔히 감싸는 추가 wrapper들에 대한 여유 규칙 */
-section[data-testid="stSidebar"] [data-testid="stVerticalBlock"] > div {
-  background: transparent !important;
-  border: none !important;
-  box-shadow: none !important;
-}
-
-/* 4) 사이드바 기본 컨텐츠 컨테이너의 여백 정리(과도한 패딩 제거) */
-section[data-testid="stSidebar"] .block-container, 
-section[data-testid="stSidebar"] [data-testid="stSidebarContent"] {
-  padding-left: 0 !important;
-  padding-right: 0 !important;
-  box-shadow: none !important;
-  border: none !important;
-  background: transparent !important;
-}
-</style>
-""", unsafe_allow_html=True)
 # ============================================================================
