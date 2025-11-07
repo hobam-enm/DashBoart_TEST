@@ -275,6 +275,11 @@ section[data-testid="stSidebar"] .stCaption,
 section[data-testid="stSidebar"] .stMarkdown p.sidebar-contact{ text-align:center !important; }
 
 /* --- [사이드바] 네비게이션 버튼 (v2) --- */
+/* [수정] 버튼을 포함하는 래퍼의 마진을 0으로 강제 */
+section[data-testid="stSidebar"] div[data-testid="stVerticalBlockBorderWrapper"]:has(div[data-testid="stButton"]) {
+  margin-bottom: 0 !important;
+}
+
 section[data-testid="stSidebar"] .block-container{padding-top:0.75rem;}
 section[data-testid="stSidebar"] div[data-testid="stVerticalBlock"]{margin:0 !important; padding:0 !important;}
 section[data-testid="stSidebar"] .stButton{margin:0 !important; padding:0 !important;}
@@ -328,7 +333,7 @@ section[data-testid="stSidebar"] div[data-testid="stVerticalBlockBorderWrapper"]
   border: none !important;
   box-shadow: none !important;
   padding: 0 !important;
-  margin-bottom: 0 !important; /* [수정] 네비게이션 버튼 간격 제거 */
+  margin-bottom: 0 !important; /* [수정] 네비게이션 버튼 간격 제거 (유지) */
 }
 section[data-testid="stSidebar"] div[data-testid="stVerticalBlockBorderWrapper"]:hover {
   transform: none !important;
