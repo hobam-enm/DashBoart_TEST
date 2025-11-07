@@ -412,23 +412,28 @@ hr { margin: 1.5rem 0; background-color: #e0e0e0; }
   transform: none !important;
   box-shadow: inherit !important;
 }
-div[data-testid="stVerticalBlockBorderWrapper"]._liftable {
+
+/* [수정] ._liftable 클래스 의존성 제거 및 중복 규칙 통합 */
+div[data-testid="stVerticalBlockBorderWrapper"] {
   transition: transform .18s ease, box-shadow .18s ease !important;
   will-change: transform, box-shadow;
   backface-visibility: hidden;
+  position: relative;
+  /* emulate ._liftable (원본 주석 유지) */
 }
-div[data-testid="stVerticalBlockBorderWrapper"]._liftable:has(.stPlotlyChart:hover):not(:has(div[data-testid="stVerticalBlockBorderWrapper"] .stPlotlyChart:hover)) {
+
+div[data-testid="stVerticalBlockBorderWrapper"]:has(.stPlotlyChart:hover):not(:has(div[data-testid="stVerticalBlockBorderWrapper"] .stPlotlyChart:hover)) { /* [수정] ._liftable 제거 */
   transform: translate3d(0,-4px,0) !important;
   box-shadow: 0 16px 40px rgba(16,24,40,.16), 0 6px 14px rgba(16,24,40,.10) !important;
   z-index: 3 !important;
 }
-div[data-testid="stVerticalBlockBorderWrapper"]._liftable:has(.ag-theme-streamlit .ag-root-wrapper:hover):not(:has(div[data-testid="stVerticalBlockBorderWrapper"] .ag-theme-streamlit .ag-root-wrapper:hover)) {
+div[data-testid="stVerticalBlockBorderWrapper"]:has(.ag-theme-streamlit .ag-root-wrapper:hover):not(:has(div[data-testid="stVerticalBlockBorderWrapper"] .ag-theme-streamlit .ag-root-wrapper:hover)) { /* [수정] ._liftable 제거 */
   transform: translate3d(0,-4px,0) !important;
   box-shadow: 0 16px 40px rgba(16,24,40,.16), 0 6px 14px rgba(16,24,40,.10) !important;
   z-index: 3 !important;
 }
-div[data-testid="stVerticalBlockBorderWrapper"].*_liftable:has(.kpi-card:hover):not(:has(div[data-testid="stVerticalBlockBorderWrapper"] .kpi-card:hover)),
-div[data-testid="stVerticalBlockBorderWrapper"].*_liftable:has(.block-card:hover):not(:has(div[data-testid="stVerticalBlockBorderWrapper"] .block-card:hover)) {
+div[data-testid="stVerticalBlockBorderWrapper"]:has(.kpi-card:hover):not(:has(div[data-testid="stVerticalBlockBorderWrapper"] .kpi-card:hover)), /* [수정] .*_liftable 제거 */
+div[data-testid="stVerticalBlockBorderWrapper"]:has(.block-card:hover):not(:has(div[data-testid="stVerticalBlockBorderWrapper"] .block-card:hover)) { /* [수정] .*_liftable 제거 */
   transform: translate3d(0,-4px,0) !important;
   box-shadow: 0 16px 40px rgba(16,24,40,.16), 0 6px 14px rgba(16,24,40,.10) !important;
   z-index: 3 !important;
@@ -437,13 +442,18 @@ section[data-testid="stSidebar"] div[data-testid="stVerticalBlockBorderWrapper"]
   transform: none !important;
   box-shadow: inherit !important;
   z-index: auto !important;
+  /* [추가] 사이드바에서는 트랜지션 효과 제거 */
+  transition: none !important; 
 }
+/* [수정] 아래의 중복 규칙들은 위의 통합 규칙으로 병합됨 */
+/*
 div[data-testid="stVerticalBlockBorderWrapper"] {
   position: relative;
 }
 div[data-testid="stVerticalBlockBorderWrapper"] {
   /* emulate ._liftable */
-}
+/*}
+*/
             
 /* ===== Sidebar compact spacing (tunable) ===== */
 [data-testid="stSidebar"]{
