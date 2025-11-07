@@ -446,67 +446,86 @@ div[data-testid="stVerticalBlockBorderWrapper"] {
   /* emulate ._liftable */
 }
             
-/* ===== Sidebar compact spacing (리젼2에만 유지) ===== */
+/* ===== Sidebar compact spacing (tunable) ===== */
+[data-testid="stSidebar"]{
+  --sb-gap: 6px;               /* 블록 간 간격(기존 4px → 6px로 살짝 띄움) */
+  --sb-pad-y: 8px;             /* 사이드바 컨테이너 상하 패딩 */
+  --sb-pad-x: 10px;            /* 사이드바 컨테이너 좌우 패딩 */
+  --btn-pad-y: 8px;            /* 버튼/링크 상하 패딩(기존 6px → 8px) */
+  --btn-pad-x: 12px;           /* 버튼/링크 좌우 패딩(기존 10px → 12px) */
+  --item-gap: 4px;             /* nav 아이템끼리 간격(기존 2px → 4px) */
+  --label-gap: 3px;            /* 라벨/텍스트 아래 여백 */
+}
+
+/* 컨테이너 패딩 */
 [data-testid="stSidebar"] .block-container{
-  padding-top: 6px !important;
-  padding-bottom: 6px !important;
-  padding-left: 8px !important;
-  padding-right: 8px !important;
+  padding: var(--sb-pad-y) var(--sb-pad-x) !important;
 }
+
+/* 수직 스택 기본 gap */
 [data-testid="stSidebar"] [data-testid="stVerticalBlock"]{
-  gap: 4px !important;
+  gap: var(--sb-gap) !important;
 }
+
+/* 텍스트/헤더 여백 */
 [data-testid="stSidebar"] h1, 
 [data-testid="stSidebar"] h2, 
 [data-testid="stSidebar"] h3, 
 [data-testid="stSidebar"] h4, 
 [data-testid="stSidebar"] h5, 
 [data-testid="stSidebar"] h6{
-  margin: 2px 0 4px !important;
+  margin: 2px 0 calc(var(--label-gap)+1px) !important;
 }
 [data-testid="stSidebar"] .stMarkdown, 
 [data-testid="stSidebar"] label{
-  margin: 0 0 2px !important;
-  line-height: 1.15 !important;
+  margin: 0 0 var(--label-gap) !important;
+  line-height: 1.18 !important;
 }
-[data-testid="stSidebar"] .stButton{ 
-  margin: 0 !important;
-}
+
+/* 버튼 */
+[data-testid="stSidebar"] .stButton{ margin: 0 !important; }
 [data-testid="stSidebar"] .stButton > button{
-  padding: 6px 10px !important;
+  padding: var(--btn-pad-y) var(--btn-pad-x) !important;
   margin: 0 !important;
   min-height: auto !important;
-  line-height: 1.1 !important;
+  line-height: 1.15 !important;
   border-radius: 8px !important;
 }
+
+/* 페이지 링크(nav) */
 [data-testid="stSidebar"] a[data-testid="stPageLink-NavLink"]{
   display: block;
-  padding: 6px 10px !important;
+  padding: var(--btn-pad-y) var(--btn-pad-x) !important;
   margin: 0 !important;
-  line-height: 1.1 !important;
+  line-height: 1.15 !important;
   border-radius: 8px !important;
 }
 [data-testid="stSidebar"] a[data-testid="stPageLink-NavLink"] + a{
-  margin-top: 2px !important;
+  margin-top: var(--item-gap) !important;
 }
-[data-testid="stSidebar"] div[role="radiogroup"]{
-  gap: 2px !important;
-}
+
+/* 라디오 옵션 */
+[data-testid="stSidebar"] div[role="radiogroup"]{ gap: 3px !important; }
 [data-testid="stSidebar"] div[role="radiogroup"] label{
-  padding: 2px 6px !important;
+  padding: 4px 8px !important;
   margin: 0 !important;
-  line-height: 1.1 !important;
+  line-height: 1.12 !important;
 }
+
+/* 셀렉트류 아래 여백 */
 [data-testid="stSidebar"] .stSelectbox,
 [data-testid="stSidebar"] .stMultiSelect{
-  margin-bottom: 4px !important;
+  margin-bottom: 6px !important;
 }
-.sidebar-hr{ height: 4px; margin: 6px 0 !important; }
-.sidebar-contact{ margin: 2px 0 6px !important; line-height: 1.2 !important; }
-.nav-active, .nav-inactive{
-  margin: 0 !important;
-  padding: 0 !important;
-}
+
+/* 커스텀 구분선/문의문구 */
+.sidebar-hr{ height: 4px; margin: 8px 0 !important; }
+.sidebar-contact{ margin: 2px 0 8px !important; line-height: 1.2 !important; }
+
+/* nav 래퍼 여백 */
+.nav-active, .nav-inactive{ margin: 0 !important; padding: 0 !important; }
+
+/* Hover 시 높이 변형 방지 */
 [data-testid="stSidebar"] .stButton > button:hover,
 [data-testid="stSidebar"] a[data-testid="stPageLink-NavLink"]:hover{
   transform: none !important;
