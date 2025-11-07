@@ -1248,33 +1248,75 @@ def render_overview():
     st.markdown("#### 🎬 전체 작품 RAW")
 
     # [수정] 피드백 4번 반영: 비효율적인 lambda 집계 방식 최적화
+    # [수정] 2025-11-07: TVING/화제성 지표를 '회차합의 평균'으로, 디지털/언급량은 '총합'으로 수정
     def calculate_overview_performance(df):
         all_ips = df["IP"].unique()
         if len(all_ips) == 0:
             return pd.DataFrame()
 
-        # 1. metric/매체별로 데이터를 미리 피벗
-        pvt = pd.pivot_table(df, values="value", index="IP", columns=["metric", "매체"], aggfunc="sum")
+        # 0. episode-aware helper
+        ep_col = _episode_col(df) # [5. 공통 함수]
+        
+        # Helper to get "mean of episode sums"
+        def _get_mean_of_ep_sums(df, metric_name, media_list=None):
+            sub = df[df["metric"] == metric_name]
+            if media_list:
+                sub = sub[sub["매체"].isin(media_list)]
+            
+            # [수정] ep_col이 df에 없을 수 있으므로 확인 (e.g. df가 비었을 때)
+            if sub.empty or ep_col not in sub.columns: 
+                return pd.Series(dtype=float).reindex(all_ips).fillna(0)
+            
+            sub = sub.dropna(subset=[ep_col]).copy()
+            sub["value"] = pd.to_numeric(sub["value"], errors="coerce").replace(0, np.nan)
+            sub = sub.dropna(subset=["value"])
+
+            if sub.empty: # [수정] dropna 후 비었는지 확인
+                return pd.Series(dtype=float).reindex(all_ips).fillna(0)
+
+            ep_sum = sub.groupby(["IP", ep_col], as_index=False)["value"].sum()
+            per_ip_mean = ep_sum.groupby("IP")["value"].mean()
+            return per_ip_mean.reindex(all_ips).fillna(0) # Reindex to align all IPs
+
+        # Helper to get "mean of episode means" (for ratings)
+        def _get_mean_of_ep_means(df, metric_name):
+            sub = df[df["metric"] == metric_name]
+            
+            if sub.empty or ep_col not in sub.columns:
+                return pd.Series(dtype=float).reindex(all_ips).fillna(0)
+            
+            sub = sub.dropna(subset=[ep_col]).copy()
+            sub["value"] = pd.to_numeric(sub["value"], errors="coerce").replace(0, np.nan)
+            sub = sub.dropna(subset=["value"])
+
+            if sub.empty:
+                return pd.Series(dtype=float).reindex(all_ips).fillna(0)
+            
+            ep_mean = sub.groupby(["IP", ep_col], as_index=False)["value"].mean()
+            per_ip_mean = ep_mean.groupby("IP")["value"].mean()
+            return per_ip_mean.reindex(all_ips).fillna(0)
         
         # 2. 필요한 집계 정의
         aggs = {}
         
-        # 시청률 (평균)
-        aggs["타깃시청률"] = df[df["metric"] == "T시청률"].groupby("IP")["value"].mean()
-        aggs["가구시청률"] = df[df["metric"] == "H시청률"].groupby("IP")["value"].mean()
+        # 시청률 (회차평균의 평균)
+        aggs["타깃시청률"] = _get_mean_of_ep_means(df, "T시청률")
+        aggs["가구시청률"] = _get_mean_of_ep_means(df, "H시청률")
         
-        # TVING (합계)
-        aggs["티빙LIVE"] = pvt.get(("시청인구", "TVING LIVE"), pd.Series(0, index=all_ips))
-        aggs["티빙QUICK"] = pvt.get(("시청인구", "TVING QUICK"), pd.Series(0, index=all_ips))
-        aggs["티빙VOD_6Days"] = pvt.get(("시청인구", "TVING VOD"), pd.Series(0, index=all_ips))
+        # TVING (회차합의 평균) - [USER REQUEST]
+        aggs["티빙LIVE"] = _get_mean_of_ep_sums(df, "시청인구", ["TVING LIVE"])
+        aggs["티빙QUICK"] = _get_mean_of_ep_sums(df, "시청인구", ["TVING QUICK"])
+        aggs["티빙VOD_6Days"] = _get_mean_of_ep_sums(df, "시청인구", ["TVING VOD"])
         
-        # 디지털 (합계)
-        aggs["디지털언급량"] = df[df["metric"] == "언급량"].groupby("IP")["value"].sum()
-        aggs["디지털조회수"] = _get_view_data(df).groupby("IP")["value"].sum() # [3. 공통 함수]
+        # 디지털 (총합) - [USER REQUEST]
+        aggs["디지털언급량"] = df[df["metric"] == "언급량"].groupby("IP")["value"].sum().reindex(all_ips).fillna(0)
+        aggs["디지털조회수"] = _get_view_data(df).groupby("IP")["value"].sum().reindex(all_ips).fillna(0) # [3. 공통 함수]
         
         # 화제성 (최소/평균)
-        aggs["화제성순위"] = df[df["metric"] == "F_Total"].groupby("IP")["value"].min()
-        aggs["화제성점수"] = df[df["metric"] == "F_Score"].groupby("IP")["value"].mean()
+        aggs["화제성순위"] = df[df["metric"] == "F_Total"].groupby("IP")["value"].min().reindex(all_ips).fillna(0)
+        
+        # 화제성점수 (회차합의 평균) - [USER REQUEST]
+        aggs["화제성점수"] = _get_mean_of_ep_sums(df, "F_Score", media_list=None)
 
         # 3. 데이터프레임 결합
         df_perf = pd.DataFrame(aggs).fillna(0).reset_index().rename(columns={"index": "IP"})
