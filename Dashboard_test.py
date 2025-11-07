@@ -1231,7 +1231,11 @@ def render_overview():
                 title_font=dict(size=20)
             )
             fig.update_traces(texttemplate='%{text:,.0f}', textposition="inside")
-            st.plotly_chart(fig, use_container_width=True)
+            
+            # [수정] st.columns(1)로 감싸서 독립된 카드로 만듭니다.
+            c_trend, = st.columns(1)
+            with c_trend:
+                st.plotly_chart(fig, use_container_width=True)
         else:
             st.info("주차별 시청자수 트렌드 데이터가 없습니다.")
     else:
@@ -2137,7 +2141,10 @@ def render_heatmap(df_plot: pd.DataFrame, title: str):
         xaxis=dict(side="top"),
     )
     
-    st.plotly_chart(fig, use_container_width=True)
+    # [수정] st.columns(1)로 감싸서 독립된 카드로 만듭니다.
+    c_heatmap, = st.columns(1)
+    with c_heatmap:
+        st.plotly_chart(fig, use_container_width=True)
 
 
 # ===== 9.4. [페이지 3] 메인 렌더링 함수 =====
@@ -3058,18 +3065,21 @@ def render_episode():
     chart_cols = st.columns(2)
     for i, metric in enumerate(key_metrics):
         with chart_cols[i % 2]:
-            try:
-                df_result = filter_data_for_episode_comparison(df_filtered_main, selected_episode, metric) # [11.1. 함수]
-                if df_result.empty or df_result['value'].isnull().all() or (df_result['value'] == 0).all():
-                    metric_label = metric.replace("T시청률", "타깃").replace("H시청률", "가구")
-                    st.markdown(f"###### {selected_episode} - '{metric_label}'")
-                    st.info("데이터 없음")
-                    st.markdown("---")
-                else:
-                    plot_episode_comparison(df_result, metric, selected_episode, selected_base_ip) # [11.2. 함수]
-                    st.markdown("---")
-            except Exception as e:
-                st.error(f"차트 렌더링 오류({metric}): {e}")
+            # [수정] 각 차트 항목을 별도의 1-column 레이아웃으로 감싸 (stVerticalBlockBorderWrapper를 강제로 생성)
+            inner_col, = st.columns(1)
+            with inner_col:
+                try:
+                    df_result = filter_data_for_episode_comparison(df_filtered_main, selected_episode, metric) # [11.1. 함수]
+                    if df_result.empty or df_result['value'].isnull().all() or (df_result['value'] == 0).all():
+                        metric_label = metric.replace("T시청률", "타깃").replace("H시청률", "가구")
+                        st.markdown(f"###### {selected_episode} - '{metric_label}'")
+                        st.info("데이터 없음")
+                        st.markdown("---")
+                    else:
+                        plot_episode_comparison(df_result, metric, selected_episode, selected_base_ip) # [11.2. 함수]
+                        st.markdown("---")
+                except Exception as e:
+                    st.error(f"차트 렌더링 오류({metric}): {e}")
 
 #endregion
 
@@ -3426,8 +3436,11 @@ def render_growth_score():
                     xanchor="center", yanchor="middle",
                     yshift=6
                 )
-
-    st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+    
+    # [수정] st.columns(1)로 감싸서 독립된 카드로 만듭니다.
+    c_posmap, = st.columns(1)
+    with c_posmap:
+        st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
 
     # ---------- [전체표] ----------
     table = base[[
@@ -3460,7 +3473,7 @@ def render_growth_score():
         let bg=null, color=null, fw='700';
         if (/^[SABCD]/.test(v)) {
           if (v.startsWith('S')) { bg='rgba(0,91,187,0.14)'; color='#003d80'; }
-          else if (v.startsWith('A')) { bg='rgba(0,91,187,0.08)'; color:'#004a99'; }
+          else if (v.startsWith('A')) { bg='rgba(0,91,187,0.08)'; color='#004a99'; }
           else if (v.startsWith('B')) { bg='rgba(0,0,0,0.03)'; color:'#333'; fw='600'; }
           else if (v.startsWith('C')) { bg='rgba(42,97,204,0.08)'; color:'#2a61cc'; }
           else if (v.startsWith('D')) { bg='rgba(42,97,204,0.14)'; color:'#1a44a3'; }
@@ -3842,7 +3855,10 @@ def render_growth_score_digital():
                     yshift=6
                 )
 
-    st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+    # [수정] st.columns(1)로 감싸서 독립된 카드로 만듭니다.
+    c_posmap_d, = st.columns(1)
+    with c_posmap_d:
+        st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
 
     # ---------- [전체표] ----------
     table = base[[
@@ -3873,7 +3889,7 @@ def render_growth_score_digital():
         let bg=null, color=null, fw='700';
         if (/^[SABCD]/.test(v)) {
           if (v.startsWith('S')) { bg='rgba(0,91,187,0.14)'; color='#003d80'; }
-          else if (v.startsWith('A')) { bg='rgba(0,91,187,0.08)'; color:'#004a99'; }
+          else if (v.startsWith('A')) { bg='rgba(0,91,187,0.08)'; color='#004a99'; }
           else if (v.startsWith('B')) { bg='rgba(0,0,0,0.03)'; color:'#333'; fw='600'; }
           else if (v.startsWith('C')) { bg='rgba(42,97,204,0.08)'; color:'#2a61cc'; }
           else if (v.startsWith('D')) { bg='rgba(42,97,204,0.14)'; color:'#1a44a3'; }
@@ -3905,7 +3921,6 @@ def render_growth_score_digital():
         allow_unsafe_jscode=True
     )
 #endregion
-
 
 #region [ 14. 메인 라우터 ]
 # =====================================================
