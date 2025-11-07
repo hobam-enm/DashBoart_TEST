@@ -3347,15 +3347,25 @@ def render_growth_score():
 
     grade_cell = JsCode("""
     function(params){
-      const v = (params.value || '').toString();
-      if (v === '–' || v === 'nan') return '–';
-      let bg='#fff', color='#111', fw='700';
-      if (v.startsWith('S')) { bg='rgba(0,91,187,0.14)'; color='#003d80'; }
-      else if (v.startsWith('A')) { bg='rgba(0,91,187,0.08)'; color='#004a99'; }
-      else if (v.startsWith('B')) { bg='rgba(0,0,0,0.03)'; color:'#333'; fw='600'; }
-      else if (v.startsWith('C')) { bg='rgba(42,97,204,0.08)'; color='#2a61cc'; }
-      else if (v.startsWith('D')) { bg='rgba(42,97,204,0.14)'; color='#1a44a3'; }
-      return {'background-color':bg,'color':color,'font-weight':fw,'text-align':'center'};
+      try{
+        const raw = params.value;
+        if (raw === null || raw === undefined) {
+          return {'text-align':'center'};
+        }
+        const v = String(raw);
+        let bg=null, color=null, fw='700';
+        if (/^[SABCD]/.test(v)) {
+          if (v.startsWith('S')) { bg='rgba(0,91,187,0.14)'; color='#003d80'; }
+          else if (v.startsWith('A')) { bg='rgba(0,91,187,0.08)'; color:'#004a99'; }
+          else if (v.startsWith('B')) { bg='rgba(0,0,0,0.03)'; color:'#333'; fw='600'; }
+          else if (v.startsWith('C')) { bg='rgba(42,97,204,0.08)'; color:'#2a61cc'; }
+          else if (v.startsWith('D')) { bg='rgba(42,97,204,0.14)'; color:'#1a44a3'; }
+          return {'background-color':bg,'color':color,'font-weight':fw,'text-align':'center'};
+        }
+        return {'text-align':'center'};
+      } catch (e) {
+        return {'text-align':'center'};
+      }
     }""")
 
     gb = GridOptionsBuilder.from_dataframe(table_view.fillna("–")) # [수정] fillna
@@ -3751,15 +3761,25 @@ def render_growth_score_digital():
 
     grade_cell = JsCode("""
     function(params){
-      const v = (params.value || '').toString();
-      if (v === '–' || v === 'nan') return '–';
-      let bg='#fff', color='#111', fw='700';
-      if (v.startsWith('S')) { bg='rgba(0,91,187,0.14)'; color='#003d80'; }
-      else if (v.startsWith('A')) { bg='rgba(0,91,187,0.08)'; color='#004a99'; }
-      else if (v.startsWith('B')) { bg='rgba(0,0,0,0.03)'; color:'#333'; fw='600'; }
-      else if (v.startsWith('C')) { bg='rgba(42,97,204,0.08)'; color='#2a61cc'; }
-      else if (v.startsWith('D')) { bg='rgba(42,97,204,0.14)'; color='#1a44a3'; }
-      return {'background-color':bg,'color':color,'font-weight':fw,'text-align':'center'};
+      try{
+        const raw = params.value;
+        if (raw === null || raw === undefined) {
+          return {'text-align':'center'};
+        }
+        const v = String(raw);
+        let bg=null, color=null, fw='700';
+        if (/^[SABCD]/.test(v)) {
+          if (v.startsWith('S')) { bg='rgba(0,91,187,0.14)'; color='#003d80'; }
+          else if (v.startsWith('A')) { bg='rgba(0,91,187,0.08)'; color:'#004a99'; }
+          else if (v.startsWith('B')) { bg='rgba(0,0,0,0.03)'; color:'#333'; fw='600'; }
+          else if (v.startsWith('C')) { bg='rgba(42,97,204,0.08)'; color:'#2a61cc'; }
+          else if (v.startsWith('D')) { bg='rgba(42,97,204,0.14)'; color:'#1a44a3'; }
+          return {'background-color':bg,'color':color,'font-weight':fw,'text-align':'center'};
+        }
+        return {'text-align':'center'};
+      } catch (e) {
+        return {'text-align':'center'};
+      }
     }""")
 
     gb = GridOptionsBuilder.from_dataframe(table_view.fillna("–")) # [수정] fillna
