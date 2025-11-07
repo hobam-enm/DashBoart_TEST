@@ -703,57 +703,58 @@ section[data-testid="stSidebar"] .stButton > button{
 
 #region [ 5. 사이드바 네비게이션 ]
 # =====================================================
-# - 선택(현재 페이지) 체크아이콘 제거
-# - 활성 버튼은 type="primary" / 비활성은 "secondary"
-#   → 리젼4 CSS에 따라 활성: 블루배경+흰글씨, 비활성: 투명
-# - 클릭 시 ?page=... 쿼리 세팅 후 즉시 리런
+# 현재 페이지 읽기(없으면 Overview)
+current_page = get_current_page_default("Overview")
+st.session_state["page"] = current_page  # 세션 보존
 
-import streamlit as st
-from urllib.parse import urlencode
+# URL만 업데이트(리로드 없음)
+def _set_page_query_param(page_key: str):
+    try:
+        qp = st.query_params
+        qp["page"] = page_key
+        st.query_params = qp
+    except Exception:
+        st.experimental_set_query_params(page=page_key)
 
-# === 페이지 라우팅 유틸 ===
-def _get_current_page_default(default_name: str) -> str:
-    q = st.query_params
-    page = (q.get("page") or [default_name])[0] if isinstance(q.get("page"), list) else (q.get("page") or default_name)
-    return page
-
-def _set_page_query_param(page_name: str):
-    st.query_params.update({"page": page_name})
-
-# === 네비 아이템 정의 (아이콘은 원하는 걸로 교체 가능) ===
-NAV_ITEMS = [
-    ("Overview",            "📊 Overview"),
-    ("IP 성과 자세히보기",     "📈 IP 성과 자세히보기"),
-    ("오디언스 히트맵",        "👥 오디언스 히트맵"),   # ✅ 제거, 고정 아이콘으로 대체
-    ("비교분석",              "⚖️ 비교분석"),
-    ("성장스코어-방영지표",     "🚀 성장스코어-방영지표"),
-    ("성장스코어-디지털",      "📣 성장스코어-디지털"),
-    ("회차 비교",             "🎬 회차 비교"),
-]
-
-current_page = _get_current_page_default("Overview")
+# 그라디언트 타이틀: 메인 텍스트만(서브타이틀 제거)
+def render_gradient_title(main_text: str, emoji: str = "🎬"):
+    st.markdown(
+        f"""
+        <div class="page-title-wrap">
+          <span class="page-title-emoji">{emoji}</span>
+          <span class="page-title-main">{main_text}</span>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
 with st.sidebar:
-    # 상단 타이틀/문의처는 리젼4에서 스타일 중앙정렬 적용됨
-    st.markdown('<hr class="sidebar-hr" />', unsafe_allow_html=True)
+    st.markdown('<div class="sidebar-hr"></div>', unsafe_allow_html=True)
 
-    for key, label in NAV_ITEMS:
-        is_active = (key == current_page)
+    render_gradient_title("드라마 성과 대시보드", emoji="")
+    st.markdown(
+    "<p style='font-size:12px; color:gray;'>문의 : 미디어)디지털마케팅팀 데이터파트</p>",
+    unsafe_allow_html=True
+    )
+    st.markdown("<hr style='border:1px solid #eee; margin:0px 0;'>", unsafe_allow_html=True)
 
-        # ✅ 체크표시(선택시 붙이던 문자열) 완전 제거
-        btn = st.button(
-            label,
-            key=f"nav_{key}",
-            type=("primary" if is_active else "secondary"),
-            use_container_width=True
+    # 🔹 네비게이션 버튼 (리로드 없이 전환)
+    for key, label in NAV_ITEMS.items():
+        is_active = (current_page == key)
+        btn_label = f"{'✅ ' if is_active else ''}{label}"
+        clicked = st.button(
+            btn_label,
+            key=f"navbtn__{key}",
+            use_container_width=True,
+            type=("primary" if is_active else "secondary")  # 활성 하이라이트
         )
-        if btn and not is_active:
+        if clicked:
+            st.session_state["page"] = key
             _set_page_query_param(key)
-            st.rerun()
-
-    st.markdown('<hr class="sidebar-hr" />', unsafe_allow_html=True)
-# =====================================================
+            if hasattr(st, "rerun"): st.rerun()
+            else: st.experimental_rerun()
 #endregion
+
 
 
 #region [ 6. 공통 집계 유틸: KPI 계산 ]
@@ -4157,4 +4158,3 @@ section[data-testid="stSidebar"] [data-testid="stSidebarContent"] {
 </style>
 """, unsafe_allow_html=True)
 # ============================================================================
-
