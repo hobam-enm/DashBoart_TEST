@@ -598,7 +598,7 @@ hr { margin: 1.5rem 0; background-color: #e0e0e0; }
 
 /* =====================================================
    버튼 기반 사이드바 네비게이션 스킨 (리로드 없는 내비)
-   ★ 여기만 변경: 풀폭 + 무간격 + 희미한 구분선 + 확실한 호버/선택
+   ★ 풀폭 + 무간격 + 희미한 구분선 + 확실한 호버/선택(블루/화이트)
    ===================================================== */
 section[data-testid="stSidebar"] .block-container { padding-top: 0.75rem; }
 
@@ -631,22 +631,44 @@ section[data-testid="stSidebar"] [data-testid="baseButton-secondary"] > button {
   color: #333;
 }
 
-/* 활성(Primary) — 진한 블루계열 + 좌측 인디케이터 */
+/* ===== 활성(Primary) — 체크 제거 + 블루 배경/흰 글씨 ===== */
 section[data-testid="stSidebar"] [data-testid="baseButton-primary"] > button {
-  background: rgba(11, 97, 255, 0.16) !important;
-  color: #111 !important;
+  background: #0b61ff !important;          /* 블루 배경 */
+  color: #ffffff !important;               /* 흰 글씨 */
+  border-bottom: 1px solid #0b61ff;        /* 경계선 색 맞춤 */
   position: relative;
-  box-shadow: inset 3px 0 0 0 #0b61ff;      /* 좌측 인디케이터 */
-  border-bottom: 1px solid #E5E7EB;         /* 줄맞춤용 */
+  box-shadow: none;
+  padding-left: 14px !important;           /* 아이콘 자리 여백 제거 */
 }
 
-/* 활성 hover — 살짝 더 진하게 */
+/* 활성 hover — 조금 더 진한 블루 */
 section[data-testid="stSidebar"] [data-testid="baseButton-primary"] > button:hover {
-  background: rgba(11, 97, 255, 0.22) !important;
+  background: #0a56e5 !important;
+  border-color: #0a56e5 !important;
+}
+
+/* (핵심) 활성 버튼 내부의 아이콘/체크 SVG 강제 숨김 */
+section[data-testid="stSidebar"] [data-testid="baseButton-primary"] > button svg,
+section[data-testid="stSidebar"] [data-testid="baseButton-primary"] > button [data-testid="stIcon"] {
+  display: none !important;
+}
+
+/* (방어) 혹시 ::before/::after로 체크를 붙였던 경우 제거 */
+section[data-testid="stSidebar"] [data-testid="baseButton-primary"] > button::before,
+section[data-testid="stSidebar"] [data-testid="baseButton-primary"] > button::after {
+  content: none !important;
 }
 
 /* 사이드바 구분선 */
 .sidebar-hr { margin: 0; border-top: 1px solid #E5E7EB; }
+
+/* --- Sidebar: Title/문의처 중앙정렬 --- */
+section[data-testid="stSidebar"] .page-title-wrap{justify-content:center;text-align:center;}
+section[data-testid="stSidebar"] .page-title-main{display:block;text-align:center;}
+section[data-testid="stSidebar"] .sidebar-logo{text-align:center;}
+section[data-testid="stSidebar"] [data-testid="stCaptionContainer"],
+section[data-testid="stSidebar"] .stCaption,
+section[data-testid="stSidebar"] .stMarkdown p.sidebar-contact{ text-align:center !important; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -676,11 +698,7 @@ section[data-testid="stSidebar"] .stButton > button{
 }
 </style>
 """, unsafe_allow_html=True)
-
-
 #endregion
-
-
 
 
 #region [ 5. 사이드바 네비게이션 ]
