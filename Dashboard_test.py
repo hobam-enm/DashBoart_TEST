@@ -3109,7 +3109,7 @@ def render_growth_score():
         ("가구시청률", "H시청률", None),     # ratings mean
         ("타깃시청률", "T시청률", None),     # ratings mean
         ("TVING LIVE", "시청인구", "LIVE"), # ep sum mean
-        ("TVING VOD",  "시청인구", "VOD"),  # ep sum mean
+        ("TVING VOD",  "시청인구", "VOD"),  # ep sum mean  ← ☆ 보정 대상 (넷플릭스편성작==1이면 ×1.4)
     ]
 
     ips = sorted(df_all["IP"].dropna().unique().tolist())
@@ -3183,6 +3183,11 @@ def render_growth_score():
             sub = sub[sub["매체"] == "TVING LIVE"]
         elif media == "VOD":
             sub = sub[sub["매체"] == "TVING VOD"]
+            # ☆☆☆ 넷플릭스 편성작 보정 (이 리젼 한정) — 회귀용 시계열에도 반영
+            if "넷플릭스편성작" in sub.columns:
+                msk = (sub.get("넷플릭스편성작", 0) == 1)
+                if msk.any():
+                    sub.loc[msk, "value"] = pd.to_numeric(sub.loc[msk, "value"], errors="coerce") * 1.4
         sub = _filter_to_ep(sub, ep_cutoff)
         sub["value"] = pd.to_numeric(sub["value"], errors="coerce").replace(0, np.nan)
         sub = sub.dropna(subset=["value", "회차_numeric"])
@@ -3209,7 +3214,13 @@ def render_growth_score():
         if metric == "시청인구" and media == "LIVE":
             return mean_of_ip_episode_sum(ip_df, "시청인구", ["TVING LIVE"])
         if metric == "시청인구" and media == "VOD":
-            return mean_of_ip_episode_sum(ip_df, "시청인구", ["TVING VOD"])
+            # ☆☆☆ 넷플릭스 편성작 보정 (이 리젼 한정) — 절대값 산출에도 반영
+            adj = ip_df.copy()
+            if "넷플릭스편성작" in adj.columns:
+                msk = (adj.get("넷플릭스편성작", 0) == 1) & (adj["매체"] == "TVING VOD") & (adj["metric"] == "시청인구")
+                if msk.any():
+                    adj.loc[msk, "value"] = pd.to_numeric(adj.loc[msk, "value"], errors="coerce") * 1.4
+            return mean_of_ip_episode_sum(adj, "시청인구", ["TVING VOD"])
         return None
 
     def _quintile_grade(series, labels):
@@ -3316,7 +3327,13 @@ def render_growth_score():
         if metric == "시청인구" and media == "LIVE":
             return mean_of_ip_episode_sum(sub, "시청인구", ["TVING LIVE"])
         if metric == "시청인구" and media == "VOD":
-            return mean_of_ip_episode_sum(sub, "시청인구", ["TVING VOD"])
+            # ☆☆☆ 넷플릭스 편성작 보정 (이 리젼 한정) — N회 기준 절대값 산출에도 반영
+            adj = sub.copy()
+            if "넷플릭스편성작" in adj.columns:
+                msk = (adj.get("넷플릭스편성작", 0) == 1) & (adj["매체"] == "TVING VOD") & (adj["metric"] == "시청인구")
+                if msk.any():
+                    adj.loc[msk, "value"] = pd.to_numeric(adj.loc[msk, "value"], errors="coerce") * 1.4
+            return mean_of_ip_episode_sum(adj, "시청인구", ["TVING VOD"])
         return None
 
     def _slope_n(ip_df, metric, media, n):
@@ -3326,6 +3343,11 @@ def render_growth_score():
             sub = sub[sub["매체"] == "TVING LIVE"]
         elif media == "VOD":
             sub = sub[sub["매체"] == "TVING VOD"]
+            # ☆☆☆ 넷플릭스 편성작 보정 (이 리젼 한정) — 회귀 기울기에도 반영
+            if "넷플릭스편성작" in sub.columns:
+                msk = (sub.get("넷플릭스편성작", 0) == 1)
+                if msk.any():
+                    sub.loc[msk, "value"] = pd.to_numeric(sub.loc[msk, "value"], errors="coerce") * 1.4
         sub = _filter_to_ep(sub, n)
         sub["value"] = pd.to_numeric(sub["value"], errors="coerce").replace(0, np.nan)
         sub = sub.dropna(subset=["value", "회차_numeric"])
@@ -3546,7 +3568,7 @@ def render_growth_score():
       else if (v.startsWith('A')) { bg='rgba(0,91,187,0.08)'; color='#004a99'; }
       else if (v.startsWith('B')) { bg='rgba(0,0,0,0.03)'; color:'#333'; fw='600'; }
       else if (v.startsWith('C')) { bg='rgba(42,97,204,0.08)'; color='#2a61cc'; }
-      else if (v.startsWith('D')) { bg='rgba(42,97,204,0.14)'; color='#1a44a3'; }
+      else if (v.startsWith('D')) { bg='rgba(42,97,204,0.14)'; color:'#1a44a3'; }
       return {'background-color':bg,'color':color,'font-weight':fw,'text-align':'center'};
     }""")
 
@@ -3572,6 +3594,7 @@ def render_growth_score():
 
 # =====================================================
 #endregion
+
 
 #region [ 14. 페이지 7: 성장스코어-디지털 ]
 # =====================================================
