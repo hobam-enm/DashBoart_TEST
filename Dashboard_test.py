@@ -445,6 +445,74 @@ div[data-testid="stVerticalBlockBorderWrapper"] {
 div[data-testid="stVerticalBlockBorderWrapper"] {
   /* emulate ._liftable */
 }
+            
+/* ===== Sidebar compact spacing (리젼2에만 유지) ===== */
+[data-testid="stSidebar"] .block-container{
+  padding-top: 6px !important;
+  padding-bottom: 6px !important;
+  padding-left: 8px !important;
+  padding-right: 8px !important;
+}
+[data-testid="stSidebar"] [data-testid="stVerticalBlock"]{
+  gap: 4px !important;
+}
+[data-testid="stSidebar"] h1, 
+[data-testid="stSidebar"] h2, 
+[data-testid="stSidebar"] h3, 
+[data-testid="stSidebar"] h4, 
+[data-testid="stSidebar"] h5, 
+[data-testid="stSidebar"] h6{
+  margin: 2px 0 4px !important;
+}
+[data-testid="stSidebar"] .stMarkdown, 
+[data-testid="stSidebar"] label{
+  margin: 0 0 2px !important;
+  line-height: 1.15 !important;
+}
+[data-testid="stSidebar"] .stButton{ 
+  margin: 0 !important;
+}
+[data-testid="stSidebar"] .stButton > button{
+  padding: 6px 10px !important;
+  margin: 0 !important;
+  min-height: auto !important;
+  line-height: 1.1 !important;
+  border-radius: 8px !important;
+}
+[data-testid="stSidebar"] a[data-testid="stPageLink-NavLink"]{
+  display: block;
+  padding: 6px 10px !important;
+  margin: 0 !important;
+  line-height: 1.1 !important;
+  border-radius: 8px !important;
+}
+[data-testid="stSidebar"] a[data-testid="stPageLink-NavLink"] + a{
+  margin-top: 2px !important;
+}
+[data-testid="stSidebar"] div[role="radiogroup"]{
+  gap: 2px !important;
+}
+[data-testid="stSidebar"] div[role="radiogroup"] label{
+  padding: 2px 6px !important;
+  margin: 0 !important;
+  line-height: 1.1 !important;
+}
+[data-testid="stSidebar"] .stSelectbox,
+[data-testid="stSidebar"] .stMultiSelect{
+  margin-bottom: 4px !important;
+}
+.sidebar-hr{ height: 4px; margin: 6px 0 !important; }
+.sidebar-contact{ margin: 2px 0 6px !important; line-height: 1.2 !important; }
+.nav-active, .nav-inactive{
+  margin: 0 !important;
+  padding: 0 !important;
+}
+[data-testid="stSidebar"] .stButton > button:hover,
+[data-testid="stSidebar"] a[data-testid="stPageLink-NavLink"]:hover{
+  transform: none !important;
+}
+
+
 </style>
 """, unsafe_allow_html=True)
 #endregion
