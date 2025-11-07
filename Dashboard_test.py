@@ -601,11 +601,13 @@ hr { margin: 1.5rem 0; background-color: #e0e0e0; }
    ★ 풀폭 + 무간격 + 희미한 구분선 + 확실한 호버/선택(블루/화이트)
    ===================================================== */
 
-/* [간격 0] — 사이드바 내 버튼 래퍼 여백 제거 */
+/* [간격 0] — 사이드바 내 버튼 래퍼 여백 제거 (정밀) */
 section[data-testid="stSidebar"] .block-container{padding-top:0.75rem;}
 section[data-testid="stSidebar"] div[data-testid="stVerticalBlock"]{margin:0 !important; padding:0 !important;}
+section[data-testid="stSidebar"] div[data-testid="element-container"]{margin:0 !important; padding:0 !important;} /* ★추가 */
 section[data-testid="stSidebar"] .stButton{margin:0 !important; padding:0 !important;}
-section[data-testid="stSidebar"] .stButton > button{margin:0 !important;}
+section[data-testid="stSidebar"] .stButton > div{margin:0 !important; padding:0 !important;}                    /* ★추가 */
+section[data-testid="stSidebar"] .stButton > button{margin:0 !important; line-height:1.15 !important;}
 
 /* 공통 버튼 — 꽉 차게, 간격 0, 구분선만 남김 */
 section[data-testid="stSidebar"] .stButton > button {
@@ -711,6 +713,7 @@ section[data-testid="stSidebar"] .stButton > button{
 </style>
 """, unsafe_allow_html=True)
 #endregion
+
 
 
 
