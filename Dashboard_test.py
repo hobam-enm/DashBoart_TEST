@@ -3732,7 +3732,6 @@ def fmt_eokman(n):
 
 #region [ 3. 공통 유틸 & 상수 (Refactor Kit) ]
 # =====================================================
-from __future__ import annotations
 import re as _re, math as _math, numpy as _np, pandas as _pd
 from typing import Dict as _Dict, Any as _Any, Iterable as _Iterable, Optional as _Optional
 import streamlit as _st
