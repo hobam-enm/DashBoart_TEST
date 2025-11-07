@@ -3369,7 +3369,11 @@ def render_growth_score():
             margin=dict(l=8, r=8, t=8, b=8),
             showlegend=False
         )
-        st.plotly_chart(fig_e, use_container_width=True, config={"displayModeBar": False})
+        
+        # [수정] st.columns(1)로 감싸서 독립된 카드로 만듭니다.
+        c_evo, = st.columns(1)
+        with c_evo:
+            st.plotly_chart(fig_e, use_container_width=True, config={"displayModeBar": False})
 
     st.divider()
 
@@ -3798,7 +3802,11 @@ def render_growth_score_digital():
             showgrid=False, zeroline=False, showline=False
         )
         fig_e.update_layout(height=200, margin=dict(l=8, r=8, t=8, b=8), showlegend=False)
-        st.plotly_chart(fig_e, use_container_width=True, config={"displayModeBar": False})
+        
+        # [수정] st.columns(1)로 감싸서 독립된 카드로 만듭니다.
+        c_evo_d, = st.columns(1)
+        with c_evo_d:
+            st.plotly_chart(fig_e, use_container_width=True, config={"displayModeBar": False})
 
     st.divider()
 
@@ -3921,6 +3929,7 @@ def render_growth_score_digital():
         allow_unsafe_jscode=True
     )
 #endregion
+
 
 #region [ 14. 메인 라우터 ]
 # =====================================================
