@@ -449,236 +449,170 @@ def get_episode_options(df: pd.DataFrame) -> List[str]:
     else: return []
 #endregion
 
-#region [ 4. 공통 스타일 ]
+#region [ 4. 공통 스타일 (CSS / Theme) ]
 # =====================================================
-# CSS 수정: 전체적인 색상 톤, 폰트, 카드 디자인, 네비 버튼 스킨
-st.markdown("""
+# - 사이드바 네비: 풀폭 버튼, 버튼 간 간격 0, 희미한 구분선, Hover/Active 명확
+# - 리젼5가 st.button 기반이든, <a> 커스텀 네비든 모두 커버
+# - 라이트/다크 모드 대응
+import streamlit as st
+
+_STYLES = """
 <style>
-/* 지표기준안내 전용 타이포 + 인라인코드 스타일 */
-.gd-guideline { font-size: 13px; line-height: 1.35; }
-.gd-guideline ul { margin: .2rem 0 .6rem 1.1rem; padding: 0; }
-.gd-guideline li { margin: .15rem 0; }
-.gd-guideline b, .gd-guideline strong { font-weight: 600; }
-/* 백틱(`...`) 인라인 코드 느낌: 작고, 살짝 녹색 칩 */
-.gd-guideline code{
-  background: rgba(16,185,129,.10);
-  color: #16a34a;
-  padding: 1px 6px;
-  border-radius: 6px;
-  font-size: .92em;   /* 본문보다 더 작게 */
+/* =========================
+   0) 컬러 변수 (라이트/다크 대응)
+   ========================= */
+:root {
+  --brand: #0b61ff;          /* 메인 포커스 컬러 */
+  --brand-ink: #0b3ea8;      /* 포커스 그라디언트 하단색 */
+  --ink: #1f2a37;            /* 본문 글자 */
+  --ink-dim: #6b7b93;        /* 보조 글자 */
+  --line: rgba(0,0,0,0.08);  /* 희미한 구분선 */
+  --hover: rgba(11,97,255,0.08);
+  --active: rgba(11,97,255,0.16);
+  --surface: #ffffff;        /* 카드/버튼 바탕 */
 }
-/* --- 전체 앱 배경 --- */
-[data-testid="stAppViewContainer"] {
-    background-color: #f8f9fa; /* 매우 연한 회색 배경 */
-}
-
-/* --- st.container(border=True) 카드 스타일 --- */
-div[data-testid="stVerticalBlockBorderWrapper"] {
-    background-color: #ffffff;
-    border: 1px solid #e9e9e9;
-    border-radius: 10px;
-    box-shadow: 0 2px 5px rgba(0,0,0,0.03);
-    padding: 1.25rem 1.25rem 1.5rem 1.25rem;
-    margin-bottom: 1.5rem;
+html[data-theme="dark"], .stApp.dark {
+  --ink: #e5e7eb;
+  --ink-dim: #9ca3af;
+  --line: rgba(255,255,255,0.12);
+  --hover: rgba(11,97,255,0.15);
+  --active: rgba(11,97,255,0.28);
+  --surface: #0b1220;
 }
 
-/* --- Sidebar 배경/패딩 + 항상 펼침(폭 고정) --- */
+/* =========================
+   1) 사이드바 레이아웃 기본
+   ========================= */
+section[data-testid="stSidebar"] > div {
+  padding-top: 8px !important;
+}
 section[data-testid="stSidebar"] {
-    background: #ffffff;
-    border-right: 1px solid #e0e0e0;
-    padding-top: 1rem;
-    padding-left: 0.5rem;
-    padding-right: 0.5rem;
-    min-width:340px !important;
-    max-width:340px !important;
-}
-/* 사이드바 접힘 토글 버튼 숨김 */
-div[data-testid="collapsedControl"] { display:none !important; }
-
-/* --- 로고 --- */
-.sidebar-logo{
-    font-size: 28px;
-    font-weight: 700;
-    color: #1a1a1a;
-    text-align: center;
-    margin-bottom: 10px;
-    padding-top: 10px;
+  border-right: 1px solid var(--line);
+  background: var(--surface);
 }
 
-/* --- (레거시) 네비게이션 앵커 아이템 --- */
-.nav-item{
-    display: block;
-    width: 100%;
-    padding: 12px 15px;
-    color: #333 !important;
-    background: #f1f3f5;
-    text-decoration: none !important;
-    font-weight: 600;
-    border-radius: 8px;
-    margin-bottom: 5px;
-    text-align: center;
-    transition: background-color 0.2s ease, color 0.2s ease;
-}
-.nav-item:hover{
-    background: #e9ecef;
-    color: #000 !important;
-    text-decoration: none;
-}
-.active{
-    background: #004a99;
-    color: #ffffff !important;
-    text-decoration: none;
-    font-weight: 700;
-}
-.active:hover{
-    background: #003d80;
-    color: #ffffff !important;
+/* 사이드바 내부 타이포 기본값 */
+section[data-testid="stSidebar"] * {
+  color: var(--ink);
 }
 
-/* --- KPI 카드 --- */
-.kpi-card {
-  background: #ffffff;
-  border: 1px solid #e9e9e9;
-  border-radius: 10px;
-  padding: 20px 15px;
-  text-align: center;
-  box-shadow: 0 2px 5px rgba(0,0,0,0.03);
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-}
-.kpi-title { 
-    font-size: 15px; 
-    font-weight: 600; 
-    margin-bottom: 10px; 
-    color: #444; 
-}
-.kpi-value { 
-    font-size: 28px; 
-    font-weight: 700; 
-    color: #000; 
-    line-height: 1.2;
-}
-
-/* --- KPI 서브 라인 --- */
-.kpi-subwrap { margin-top: 10px; line-height: 1.4; }
-.kpi-sublabel { font-size: 12px; font-weight: 500; color: #555; letter-spacing: 0.1px; margin-right: 6px; }
-.kpi-substrong { font-size: 14px; font-weight: 700; color: #111; }
-.kpi-subpct { font-size: 14px; font-weight: 700; }
-
-/* --- AgGrid 공통 --- */
-.ag-theme-streamlit { font-size: 13px; }
-.ag-theme-streamlit .ag-root-wrapper { border-radius: 8px; }
-.ag-theme-streamlit .ag-row-hover { background-color: #f5f8ff !important; }
-.ag-theme-streamlit .ag-header-cell-label { justify-content: center !important; }
-.ag-theme-streamlit .centered-header .ag-header-cell-label { justify-content: center !important; }
-.ag-theme-streamlit .centered-header .ag-sort-indicator-container { margin-left: 4px; }
-.ag-theme-streamlit .bold-header .ag-header-cell-text { 
-    font-weight: 700 !important; 
-    font-size: 13px; 
-    color: #111;
-}
-
-/* --- 페이지 내 섹션 타이틀 --- */
-.sec-title{ 
-    font-size: 20px; 
-    font-weight: 700; 
-    color: #111; 
-    margin: 0 0 10px 0;
-    padding-bottom: 0;
-    border-bottom: none;
-}
-
-/* --- Streamlit 기본 요소 미세 조정 --- */
-div[data-testid="stMultiSelect"], div[data-testid="stSelectbox"] { margin-top: -10px; }
-h3 { margin-top: -15px; margin-bottom: 10px; }
-h4 { font-weight: 700; color: #111; margin-top: 0rem; margin-bottom: 0.5rem; }
-hr { margin: 1.5rem 0; background-color: #e0e0e0; }
-
-/* =====================================================
-   버튼 기반 사이드바 네비게이션 스킨 (리로드 없는 내비)
-   기존 .nav-item 룩&필을 버튼에 이식
-   ===================================================== */
-section[data-testid="stSidebar"] .block-container { padding-top: 0.75rem; }
-
-/* 공통 버튼 스타일 */
+/* =========================
+   2) st.button 기반 네비 (리젼5 기존 구조 호환)
+   ========================= */
+/* 공통: 버튼을 '풀폭·무간격·구분선'으로 */
 section[data-testid="stSidebar"] .stButton > button {
-  border-radius: 8px;
-  border: 1px solid var(--outline, #DCDCDC);
-  background: #f1f3f5;
-  color: #333;
-  font-weight: 600;
-  padding: 12px 15px;
-  margin: 6px 0 0 0;
-  box-shadow: none;
   width: 100%;
-  transition: background-color .12s ease-in-out, border-color .12s ease-in-out, color .12s ease-in-out;
+  box-sizing: border-box;
+  text-align: left;
+  padding: 12px 14px;
+  margin: 0;                                 /* 버튼 간 간격 0 */
+  border-radius: 0;                           /* 네모모양 */
+  border: none;
+  border-bottom: 1px solid var(--line);       /* 희미한 구분선 */
+  background: transparent;
+  color: var(--ink);
+  transition: background-color 120ms ease, color 120ms ease, box-shadow 120ms ease;
+  box-shadow: none;
 }
 
-/* hover */
+/* hover 효과 */
 section[data-testid="stSidebar"] .stButton > button:hover {
-  border-color: #B9B9B9;
-  background: #e9ecef;
-  color: #000;
+  background: var(--hover);
 }
 
-/* 비활성(secondary) */
-section[data-testid="stSidebar"] .stButton [data-testid="baseButton-secondary"] {
-  border: 1px solid #E5E7EB;
-  background: #f1f3f5;
-  color: #333;
+/* Primary(선택된 페이지) 강조 — Streamlit baseButton-primary 대응 */
+section[data-testid="stSidebar"] [data-testid="baseButton-primary"] > button,
+section[data-testid="stSidebar"] .stButton > button[kind="primary"] {
+  background: var(--active) !important;
+  color: var(--ink) !important;
+  box-shadow: inset 3px 0 0 0 var(--brand);   /* 좌측 인디케이터 */
 }
 
-/* 활성(Primary) — 기존 .active 느낌 */
-section[data-testid="stSidebar"] .stButton [data-testid="baseButton-primary"] {
-  background: #004a99;
-  color: #fff;
-  border: 1px solid #004a99;
-  box-shadow: 0 4px 10px rgba(0, 74, 153, 0.25);
+/* Secondary(비선택) — Hover 강화 */
+section[data-testid="stSidebar"] [data-testid="baseButton-secondary"] > button:hover,
+section[data-testid="stSidebar"] .stButton > button[kind="secondary"]:hover {
+  background: var(--hover) !important;
 }
 
-/* 활성 hover */
-section[data-testid="stSidebar"] .stButton [data-testid="baseButton-primary"]:hover {
-  filter: brightness(1.02);
-  background: #003d80;
-  border-color: #003d80;
+/* =========================
+   3) <a> 앵커 기반 커스텀 네비 (옵션)
+   ========================= */
+.nav-wrap { margin:0; padding:0; }
+.sidebar-content a { color: inherit !important; text-decoration: none !important; }
+
+.nav-item {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  margin: 0;                                  /* 간격 0 */
+  padding: 12px 14px;
+  color: var(--ink) !important;
+  text-decoration: none !important;
+  border-bottom: 1px solid var(--line);       /* 희미한 구분선 */
+  position: relative;
+  transition: background-color 120ms ease, color 120ms ease;
+  background: transparent;
 }
 
-/* 사이드바 구분선 */
-.sidebar-hr { margin: 8px 0 12px 0; border-top: 1px solid #E5E7EB; }
+/* Hover/Active 배경 */
+.nav-item:hover { background: var(--hover); }
+.nav-item.active { background: var(--active); }
+
+/* 좌측 인디케이터 (active) */
+.nav-item.active::before {
+  content: "";
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 3px;
+  background: linear-gradient(180deg, var(--brand), var(--brand-ink));
+  border-top-right-radius: 2px;
+  border-bottom-right-radius: 2px;
+}
+
+/* 제목/부제 텍스트 (옵션) */
+.nav-title {
+  font-weight: 700; font-size: 14px; letter-spacing: -0.2px; line-height: 1.1;
+}
+.nav-sub {
+  display: block; font-size: 11.5px; color: var(--ink-dim); margin-top: 2px;
+}
+.nav-row {
+  display: grid; grid-template-columns: 20px 1fr; gap: 8px; align-items: center;
+}
+.nav-ico { opacity: .85; font-size: 16px; line-height: 1; }
+
+/* =========================
+   4) 보조 컴포넌트
+   ========================= */
+.sidebar-hr {
+  height: 1px; background: var(--line); margin: 0;  /* 버튼 간 간격 대신 구분선만 */
+}
+.page-title {
+  font-weight: 800; font-size: 18px; letter-spacing: -0.2px; margin: 0 0 8px 0;
+}
+.badge {
+  display: inline-block; padding: 2px 8px; border-radius: 999px;
+  font-size: 11px; color: var(--ink); background: var(--hover);
+  border: 1px solid var(--line);
+}
+
+/* =========================
+   5) 카드/표 기본 (필요 시)
+   ========================= */
+.kpi-card{border-radius:16px;border:1px solid var(--line);background:#fff;padding:12px 14px;
+          box-shadow:0 1px 2px rgba(0,0,0,0.04)}
+.kpi-title{font-size:13px;color:var(--ink-dim);margin-bottom:4px;font-weight:600}
+.kpi-value{font-weight:800;letter-spacing:-0.2px}
+
+.centered-header .ag-header-cell-label{justify-content:center;}
+.bold-header .ag-header-cell-text{font-weight:700;}
 </style>
-""", unsafe_allow_html=True)
+"""
 
-# [ 4. 공통 스타일 ] 맨 아래쪽에 이 블록을 추가(또는 기존 page-title 스타일을 교체)
-st.markdown("""
-<style>
-/* ==== Sidebar Gradient Title: 1줄, 줄바꿈 없이, 폭 좁아도 예쁘게 ==== */
-.page-title-wrap{
-  display:flex; align-items:center; gap:8px; margin:4px 0 10px 0;
-}
-.page-title-emoji{ font-size:20px; line-height:1; }
-.page-title-main{
-  /* clamp(min, preferred, max) → 사이드바가 좁아도 자연스레 줄어듦 */
-  font-size: clamp(18px, 2.2vw, 24px);
-  font-weight: 800; letter-spacing:-0.2px; line-height:1.15;
-  background: linear-gradient(90deg,#6A5ACD 0%, #A663CC 40%, #FF7A8A 75%, #FF8A3D 100%);
-  -webkit-background-clip:text; background-clip:text; color:transparent;
-  white-space: nowrap;             /* 줄바꿈 금지 */
-  overflow: hidden;                /* 넘치면 숨김 */
-  text-overflow: ellipsis;         /* … 처리 */
-  max-width: 100%;                 /* 사이드바 폭에 맞춰 자르기 */
-}
-
-/* 사이드바 버튼도 약간 컴팩트하게(필요 시) */
-section[data-testid="stSidebar"] .stButton > button{
-  padding: 10px 12px; font-weight: 600;
-}
-</style>
-""", unsafe_allow_html=True)
-
-
+st.markdown(_STYLES, unsafe_allow_html=True)
+# =====================================================
 #endregion
+
 
 
 #region [ 5. 사이드바 네비게이션 ]
