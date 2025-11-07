@@ -3109,7 +3109,7 @@ def render_growth_score():
         ("가구시청률", "H시청률", None),     # ratings mean
         ("타깃시청률", "T시청률", None),     # ratings mean
         ("TVING LIVE", "시청인구", "LIVE"), # ep sum mean
-        ("TVING VOD",  "시청인구", "VOD"),  # ep sum mean  ← ☆ 보정 대상 (넷플릭스편성작==1이면 ×1.4)
+        ("TVING VOD",  "시청인구", "VOD"),  # ep sum mean  ← ☆ 보정 대상(절대만)
     ]
 
     ips = sorted(df_all["IP"].dropna().unique().tolist())
@@ -3129,7 +3129,6 @@ def render_growth_score():
     """, unsafe_allow_html=True)
 
     # ---------- 헤더(타이틀/선택) ----------
-    # 헤더에 표시할 회차 기준은 session_state의 현재값(없으면 기본 4)을 사용
     _ep_display = st.session_state.get("growth_ep_cutoff", 4)
 
     head = st.columns([5, 3, 2])
@@ -3150,44 +3149,36 @@ def render_growth_score():
         )
 
     # ---------- 지표 기준 안내 ----------
-    # 헤더 다음, 요약카드 위에 배치 권장
     with st.expander("ℹ️ 지표 기준 안내", expanded=False):
         st.markdown("""
     **등급 체계**
     - **절대값 등급**: 각 지표의 절대 수준을 IP 간 백분위 20% 단위로 구분 → `S / A / B / C / D`
     - **상승률 등급**: 동일 기간(선택 회차 범위) 내 회차-값 선형회귀 기울기(slope)를 IP 간 백분위 20% 단위로 구분 → `+2 / +1 / 0 / -1 / -2`
-    - **종합등급**: 절대값과 상승률 등급을 결합해 표기 (예: `A+2`).  
-      - 참고 규칙 예시: **절대값 상위 20%** ∧ **상승률 상위 40%** ⇒ `S+1` 처럼 상/중 상향 표기
+    - **종합등급**: 절대값과 상승률 등급을 결합해 표기 (예: `A+2`).
 
     **회차 기준(~N회)**
-    - 각 IP의 **1~N회** 데이터만 사용 (**적응형 지표**: 없는 회차는 자동 제외).
-    - **0 패딩/비정상값 제외**: 숫자 변환 실패/0 값은 `NaN` 처리 후 평균/회귀에서 제외되어 왜곡 방지.
+    - 각 IP의 **1~N회** 데이터만 사용.
+    - **0/비정상값 제외**: 숫자 변환 실패/0은 `NaN` 처리 후 평균/회귀에서 제외.
             """)
 
-    # 선택한 작품 타이틀
     st.markdown(f"#### {selected_ip} <span style='font-size:16px;color:#6b7b93'>자세히보기</span>",
             unsafe_allow_html=True
         )
 
     # ---------- 공통 유틸 ----------
     def _filter_to_ep(df, n):
-        """회차 n 이하만 사용(적응모드: 없는 회차는 자동 제외)"""
         if "회차_numeric" in df.columns:
             return df[pd.to_numeric(df["회차_numeric"], errors="coerce") <= float(n)]
         m = df["회차"].astype(str).str.extract(r"(\d+)", expand=False)
         return df[pd.to_numeric(m, errors="coerce") <= float(n)]
 
     def _series_for_reg(ip_df, metric, media):
+        # ⚠️ 상승등급(기울기)용 경로 — 보정 미적용 (기울기 등급은 유지)
         sub = ip_df[ip_df["metric"] == metric].copy()
         if media == "LIVE":
             sub = sub[sub["매체"] == "TVING LIVE"]
         elif media == "VOD":
             sub = sub[sub["매체"] == "TVING VOD"]
-            # ☆☆☆ 넷플릭스 편성작 보정 (이 리젼 한정) — 회귀용 시계열에도 반영
-            if "넷플릭스편성작" in sub.columns:
-                msk = (sub.get("넷플릭스편성작", 0) == 1)
-                if msk.any():
-                    sub.loc[msk, "value"] = pd.to_numeric(sub.loc[msk, "value"], errors="coerce") * 1.4
         sub = _filter_to_ep(sub, ep_cutoff)
         sub["value"] = pd.to_numeric(sub["value"], errors="coerce").replace(0, np.nan)
         sub = sub.dropna(subset=["value", "회차_numeric"])
@@ -3208,13 +3199,13 @@ def render_growth_score():
         except Exception: return np.nan
 
     def _abs_value(ip_df, metric, media=None):
+        # ☆ 절대등급 산출만 보정 적용 (넷플릭스편성작==1 & TVING VOD & 시청인구)
         ip_df = _filter_to_ep(ip_df, ep_cutoff)
         if metric in ["H시청률", "T시청률"]:
             return mean_of_ip_episode_mean(ip_df, metric)
         if metric == "시청인구" and media == "LIVE":
             return mean_of_ip_episode_sum(ip_df, "시청인구", ["TVING LIVE"])
         if metric == "시청인구" and media == "VOD":
-            # ☆☆☆ 넷플릭스 편성작 보정 (이 리젼 한정) — 절대값 산출에도 반영
             adj = ip_df.copy()
             if "넷플릭스편성작" in adj.columns:
                 msk = (adj.get("넷플릭스편성작", 0) == 1) & (adj["매체"] == "TVING VOD") & (adj["metric"] == "시청인구")
@@ -3253,7 +3244,7 @@ def render_growth_score():
     # ---------- 등급 산정 ----------
     for disp, _, _ in METRICS:
         base[f"{disp}_절대등급"] = _quintile_grade(base[f"{disp}_절대"], ["S","A","B","C","D"])
-        base[f"{disp}_상승등급"] = _quintile_grade(base[f"{disp}_기울기"], ["+2","+1","0","-1","-2"])
+        base[f"{disp}_상승등급"] = _quintile_grade(base[f"{disp}_기울기"], ["+2","+1","0","-1","+ -2".replace(" ","")])  # 그대로 유지
         base[f"{disp}_종합"]   = base[f"{disp}_절대등급"].astype(str) + base[f"{disp}_상승등급"].astype(str)
 
     base["_ABS_PCT_MEAN"]   = pd.concat([_to_percentile(base[f"{d}_절대"])   for d,_,_ in METRICS], axis=1).mean(axis=1)
@@ -3266,7 +3257,6 @@ def render_growth_score():
     focus = base[base["IP"] == selected_ip].iloc[0]
 
     card_cols = st.columns([2, 1, 1, 1, 1])  # 종합 2칸
-    # 종합 카드 (강조)
     with card_cols[0]:
         st.markdown(
             f"""
@@ -3277,7 +3267,6 @@ def render_growth_score():
             """,
             unsafe_allow_html=True
         )
-    # 나머지 4개
     def _grade_card(col, title, val):
         with col:
             st.markdown(
@@ -3295,13 +3284,10 @@ def render_growth_score():
     _grade_card(card_cols[4], "TVING VOD 등급",  focus["TVING VOD_종합"])
 
     st.markdown("<div style='height:16px'></div>", unsafe_allow_html=True)
-    # ===== [회차별 등급 추이: 선택 IP] ==========================================
-    # x: 2·4·6… 실제 데이터가 존재하는 마지막 회차까지
-    # y: 종합_절대등급(S/A/B/C/D) → 5/4/3/2/1로 매핑하여 라인차트
-    # 각 지점 라벨: 'S+1' (절대 + 상승)
+
     from plotly import graph_objects as go
 
-    # --- (1) 선택 IP의 '실제 값'이 있는 회차까지만 Ns 생성 ---
+    # --- (1) Ns 구성 ---
     _ip_all = df_all[df_all["IP"] == selected_ip].copy()
     if "회차_numeric" in _ip_all.columns:
         _ip_all["ep"] = pd.to_numeric(_ip_all["회차_numeric"], errors="coerce")
@@ -3315,9 +3301,8 @@ def render_growth_score():
         _max_ep = int(np.nanmax(_valid_eps))
         _Ns = [n for n in EP_CHOICES if n <= _max_ep]
     else:
-        _Ns = [min(EP_CHOICES)]  # 유효 데이터 없으면 최소값만
+        _Ns = [min(EP_CHOICES)]
 
-    # --- (2) cutoff=N마다 전체 IP 기준으로 등급 산정 후, 선택 IP 한 줄만 뽑기 ---
     ABS_NUM = {"S":5, "A":4, "B":3, "C":2, "D":1}
 
     def _abs_value_n(ip_df, metric, media, n):
@@ -3327,7 +3312,7 @@ def render_growth_score():
         if metric == "시청인구" and media == "LIVE":
             return mean_of_ip_episode_sum(sub, "시청인구", ["TVING LIVE"])
         if metric == "시청인구" and media == "VOD":
-            # ☆☆☆ 넷플릭스 편성작 보정 (이 리젼 한정) — N회 기준 절대값 산출에도 반영
+            # ☆ 절대값(회차 N 기준)만 보정
             adj = sub.copy()
             if "넷플릭스편성작" in adj.columns:
                 msk = (adj.get("넷플릭스편성작", 0) == 1) & (adj["매체"] == "TVING VOD") & (adj["metric"] == "시청인구")
@@ -3337,17 +3322,12 @@ def render_growth_score():
         return None
 
     def _slope_n(ip_df, metric, media, n):
-        # 회귀는 cutoff n을 강제 적용
+        # ⚠️ 상승등급용 경로 — 보정 미적용
         sub = ip_df[ip_df["metric"] == metric].copy()
         if media == "LIVE":
             sub = sub[sub["매체"] == "TVING LIVE"]
         elif media == "VOD":
             sub = sub[sub["매체"] == "TVING VOD"]
-            # ☆☆☆ 넷플릭스 편성작 보정 (이 리젼 한정) — 회귀 기울기에도 반영
-            if "넷플릭스편성작" in sub.columns:
-                msk = (sub.get("넷플릭스편성작", 0) == 1)
-                if msk.any():
-                    sub.loc[msk, "value"] = pd.to_numeric(sub.loc[msk, "value"], errors="coerce") * 1.4
         sub = _filter_to_ep(sub, n)
         sub["value"] = pd.to_numeric(sub["value"], errors="coerce").replace(0, np.nan)
         sub = sub.dropna(subset=["value", "회차_numeric"])
@@ -3367,9 +3347,9 @@ def render_growth_score():
         except Exception:
             return np.nan
 
+    # --- (2) N별 등급 산출 및 선택 IP 라인 만들기 ---
     evo_rows = []
     for n in _Ns:
-        # 전체 IP에 대해 절대/기울기 계산
         tmp = []
         for ip in ips:
             ip_df = df_all[df_all["IP"] == ip]
@@ -3380,7 +3360,6 @@ def render_growth_score():
             tmp.append(row)
         tmp = pd.DataFrame(tmp)
 
-        # 등급 산정(각 지표 → 절대/상승 → 종합, 그 다음 '종합'의 절대/상승)
         for disp, _, _ in METRICS:
             tmp[f"{disp}_절대등급"] = _quintile_grade(tmp[f"{disp}_절대"],   ["S","A","B","C","D"])
             tmp[f"{disp}_상승등급"] = _quintile_grade(tmp[f"{disp}_기울기"], ["+2","+1","0","-1","-2"])
@@ -3389,7 +3368,6 @@ def render_growth_score():
         tmp["종합_절대등급"] = _quintile_grade(tmp["_ABS_PCT_MEAN"],   ["S","A","B","C","D"])
         tmp["종합_상승등급"] = _quintile_grade(tmp["_SLOPE_PCT_MEAN"], ["+2","+1","0","-1","-2"])
 
-        # 선택 IP만 추출
         row = tmp[tmp["IP"] == selected_ip]
         if not row.empty and pd.notna(row.iloc[0]["종합_절대등급"]):
             ag = str(row.iloc[0]["종합_절대등급"])
@@ -3406,16 +3384,11 @@ def render_growth_score():
     if evo.empty:
         st.info("회차별 등급 추이를 표시할 데이터가 부족합니다.")
     else:
-        # --- (3) 라인 차트: 부드럽게, 내부 격자/가이드라인 제거, y축 tick을 S/A/B/C/D로
         fig_e = go.Figure()
-
-        # 선택회차 강조(세로 하이라이트)
-        # x축은 숫자 N을 쓰고, tick은 '2회차' 형식으로 보여줌
         fig_e.add_vrect(
             x0=ep_cutoff - 0.5, x1=ep_cutoff + 0.5,
             fillcolor="rgba(0,90,200,0.12)", line_width=0
         )
-
         fig_e.add_trace(go.Scatter(
             x=evo["N"], y=evo["ABS_NUM"],
             mode="lines+markers",
@@ -3424,38 +3397,20 @@ def render_growth_score():
             name=selected_ip,
             hoverinfo="skip"
         ))
-
-        # 각 지점에 'S+1' 라벨 추가
         for xi, yi, ag, sg in zip(evo["N"], evo["ABS_NUM"], evo["ABS_GRADE"], evo["SLOPE_GRADE"]):
             label = f"{ag}{sg}" if isinstance(ag, str) and isinstance(sg, str) else ""
-            fig_e.add_annotation(
-                x=xi, y=yi,
-                text=label,
-                showarrow=False,
-                font=dict(size=12, color="#333", family="sans-serif"),
-                yshift=14
-            )
-
-        # 축/그리드/레이아웃
-        fig_e.update_xaxes(
-            tickmode="array",
-            tickvals=evo["N"].tolist(),
-            ticktext=[f"{int(n)}회차" for n in evo["N"].tolist()],
-            showgrid=False, zeroline=False, showline=False
-        )
-        fig_e.update_yaxes(
-            tickmode="array",
-            tickvals=[5,4,3,2,1],
-            ticktext=["S","A","B","C","D"],
-            range=[0.7, 5.3],
-            showgrid=False, zeroline=False, showline=False
-        )
-        fig_e.update_layout(
-            height=200,
-            margin=dict(l=8, r=8, t=8, b=8),
-            showlegend=False
-        )
-
+            fig_e.add_annotation(x=xi, y=yi, text=label, showarrow=False,
+                                 font=dict(size=12, color="#333", family="sans-serif"), yshift=14)
+        fig_e.update_xaxes(tickmode="array",
+                           tickvals=evo["N"].tolist(),
+                           ticktext=[f"{int(n)}회차" for n in evo["N"].tolist()],
+                           showgrid=False, zeroline=False, showline=False)
+        fig_e.update_yaxes(tickmode="array",
+                           tickvals=[5,4,3,2,1],
+                           ticktext=["S","A","B","C","D"],
+                           range=[0.7, 5.3],
+                           showgrid=False, zeroline=False, showline=False)
+        fig_e.update_layout(height=200, margin=dict(l=8, r=8, t=8, b=8), showlegend=False)
         st.plotly_chart(fig_e, use_container_width=True, config={"displayModeBar": False})
 
     st.divider()
@@ -3463,7 +3418,6 @@ def render_growth_score():
     # ---------- [포지셔닝맵] ----------
     st.markdown("#### 🗺️ 포지셔닝맵")
 
-    # 셀별 작품 모으기
     pos_map = {(r, c): [] for r in ROW_LABELS for c in COL_LABELS}
     for _, r in base.iterrows():
         ra = str(r["종합_절대등급"]) if pd.notna(r["종합_절대등급"]) else None
@@ -3471,7 +3425,6 @@ def render_growth_score():
         if ra in ROW_LABELS and rs in COL_LABELS:
             pos_map[(ra, rs)].append(r["IP"])
 
-    # 색 값(점수↑=더 어둡게)
     z = []
     for rr in ROW_LABELS:
         row_z = []
@@ -3479,7 +3432,6 @@ def render_growth_score():
             row_z.append((ABS_SCORE[rr] + SLO_SCORE[cc]) / 2.0)
         z.append(row_z)
 
-    # 가로/세로 패딩 최소화, 세로 길이 증가
     fig = px.imshow(
         z,
         x=COL_LABELS, y=ROW_LABELS,
@@ -3487,43 +3439,30 @@ def render_growth_score():
         color_continuous_scale="Blues",
         range_color=[1, 5],
         text_auto=False,
-        aspect="auto"               # 컨테이너 너비는 가득, 세로는 height로 제어
+        aspect="auto"
     ).update_traces(xgap=0.0, ygap=0.0)
 
-    # 축/눈금/컬러바/마진 최소화
     fig.update_xaxes(showticklabels=False, title=None, ticks="")
     fig.update_yaxes(showticklabels=False, title=None, ticks="")
-    fig.update_layout(
-        height=760,                # ← 세로 더 길게
-        margin=dict(l=2, r=2, t=2, b=2),
-        coloraxis_showscale=False
-    )
-    fig.update_traces(hovertemplate="<extra></extra>")  # hover 깔끔
+    fig.update_layout(height=760, margin=dict(l=2, r=2, t=2, b=2), coloraxis_showscale=False)
+    fig.update_traces(hovertemplate="<extra></extra>")
 
-    # 어두운 셀엔 흰 글자, 밝은 셀엔 짙은 회색 (좌하단 가독성 개선)
     def _font_color(val: float) -> str:
         return "#FFFFFF" if val >= 3.3 else "#111111"
 
-    # 등급은 좌상단(크게, 셀 안쪽으로), 작품명은 중앙(줄바꿈)
     for r_idx, rr in enumerate(ROW_LABELS):
         for c_idx, cc in enumerate(COL_LABELS):
             cell_val = z[r_idx][c_idx]
             names = pos_map[(rr, cc)]
             color = _font_color(cell_val)
-
-            # 1) 등급 라벨: origin="upper"라서 셀 '안쪽'으로 넣으려면 yshift는 양수
             fig.add_annotation(
                 x=cc, y=rr, xref="x", yref="y",
                 text=f"<b style='letter-spacing:0.5px'>{rr}{cc}</b>",
                 showarrow=False,
                 font=dict(size=22, color=color, family="sans-serif"),
                 xanchor="center", yanchor="top",
-                xshift=0,   # 좌측에서 약간 안쪽
-                yshift=80,   # 위에서 아래(셀 안쪽)로
-                align="left"
+                xshift=0, yshift=80, align="left"
             )
-
-            # 2) 작품명: 중앙 정렬, 줄바꿈/라인간격 타이트
             if names:
                 fig.add_annotation(
                     x=cc, y=rr, xref="x", yref="y",
@@ -3531,19 +3470,17 @@ def render_growth_score():
                     showarrow=False,
                     font=dict(size=12, color=color, family="sans-serif"),
                     xanchor="center", yanchor="middle",
-                    yshift=6      
+                    yshift=6
                 )
-
 
     st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
 
-    # ---------- [전체표] (정렬 규칙: 절대 > 상승 내림차순) ----------
+    # ---------- [전체표] ----------
     table = base[[
         "IP","종합_절대등급","종합_상승등급","종합등급",
         "가구시청률_종합","타깃시청률_종합","TVING LIVE_종합","TVING VOD_종합"
     ]].copy()
 
-    # 정렬 키
     table["_abs_key"]   = table["종합_절대등급"].map(ABS_SCORE).fillna(0)
     table["_slope_key"] = table["종합_상승등급"].map(SLO_SCORE).fillna(0)
     table = table.sort_values(["_abs_key","_slope_key","IP"], ascending=[False, False, True])
@@ -3558,7 +3495,6 @@ def render_growth_score():
         "TVING VOD_종합":"TVING VOD"
     })
 
-    # 등급 셀 스타일
     from st_aggrid import GridOptionsBuilder, AgGrid, GridUpdateMode, JsCode
     grade_cell = JsCode("""
     function(params){
@@ -3594,6 +3530,7 @@ def render_growth_score():
 
 # =====================================================
 #endregion
+
 
 
 #region [ 14. 페이지 7: 성장스코어-디지털 ]
