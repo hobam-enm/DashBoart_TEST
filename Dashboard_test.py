@@ -249,8 +249,8 @@ section[data-testid="stSidebar"] {
     padding-top: 1rem;
     padding-left: 0.5rem;
     padding-right: 0.5rem;
-    min-width:340px !important;
-    max-width:340px !important;
+    min-width:320px !important;
+    max-width:320px !important;
 }
 div[data-testid="collapsedControl"] { display:none !important; }
 
@@ -284,10 +284,9 @@ section[data-testid="stSidebar"] .stButton > button {
   width: 100%;
   box-sizing: border-box;
   text-align: left;
-  padding: 12px 14px;
+  padding: 20px 20px;
   border-radius: 0;
-  border: none;
-  border-bottom: 1px solid #E5E7EB;
+  border: 1px solid #E5E7EB;
   background: transparent;
   color: #333;
   font-weight: 600;
@@ -779,7 +778,8 @@ with st.sidebar:
         "<p class='sidebar-contact' style='font-size:12px; color:gray;'>문의 : 미디어)디지털마케팅팀 데이터파트</p>",
         unsafe_allow_html=True
     )
-    st.markdown("<div style='margin-top: 10px;'></div>", unsafe_allow_html=True)
+    st.markdown("<div style='margin-top: 30px;'></div>", unsafe_allow_html=True)
+    st.markdown("<div style='margin-top: 30px;'></div>", unsafe_allow_html=True)
 
     for key, label in NAV_ITEMS.items():
         is_active = (current_page == key)
@@ -2200,7 +2200,6 @@ def render_demographic():
             
     media_list_label = "TV" if selected_media_type == "TV" else "TVING (L+Q+V 합산)"
 
-    st.caption(f"선택된 두 대상의 회차별 데모 시청인구 비교 ( {media_list_label} / 비교대상 대비 % 증감 )")
     st.divider()
 
     if not selected_ip1: st.warning("기준 IP를 선택해주세요."); return
@@ -2781,7 +2780,17 @@ def render_comparison():
     with filter_cols[0]:
         st.markdown("## ⚖️ IP간 비교분석")
     with st.expander("ℹ️ 지표 기준 안내", expanded=False):
-        st.markdown("<div class='gd-guideline'>[수정] 지표 기준 안내가 필요합니다.</div>", unsafe_allow_html=True)
+        st.markdown("<div class='gd-guideline'>", unsafe_allow_html=True)
+        st.markdown(textwrap.dedent("""
+            **지표 기준**
+        - **시청률** `회차평균`: 전국 기준 가구 / 타깃(2049) 시청률
+        - **티빙 LIVE** `회차평균`: 업데이트 예정
+        - **티빙 QUICK** `회차평균`: 방영당일 VOD 시청 UV
+        - **티빙 VOD** `회차평균`: 방영일+1부터 +6까지 **6days** VOD UV
+        - **디지털 조회/언급량** `회차총합`: 방영주차(월~일) 내 총합
+        - **화제성 점수** `회차평균`: 방영기간 주차별 화제성 점수 평균
+        """).strip())
+        st.markdown("</div>", unsafe_allow_html=True)
 
     with filter_cols[1]:
         comparison_mode = st.radio(
@@ -3124,9 +3133,8 @@ def render_growth_score():
     - **상승률 등급**: 동일 기간(선택 회차 범위) 내 회차-값 선형회귀 기울기(slope)를 IP 간 백분위 20% 단위로 구분 → `+2 / +1 / 0 / -1 / -2`
     - **종합등급**: 절대값과 상승률 등급을 결합해 표기 (예: `A+2`).
 
-    **회차 기준(~N회)**
-    - 각 IP의 **1~N회** 데이터만 사용.
-    - **0/비정상값 제외**: 숫자 변환 실패/0은 `NaN` 처리 후 평균/회귀에서 제외.
+    **보정기준**
+    - 넷플릭스 편성작품은 넷플릭스 비 편성작 대비 평균적으로 약 40%정도의 TVING VOD수치의 손실이 있으며, 그에 따라 등급산출시 40%보정
             """)
 
     st.markdown(f"#### {selected_ip} <span style='font-size:16px;color:#6b7b93'>자세히보기</span>",
@@ -3526,7 +3534,6 @@ def render_growth_score_digital():
         st.markdown("""
 **디지털 지표 정의(고정)**
 - **조회수, 화제성**: 회차별 합(에피소드 단위)을 사용 → 1~N회 집계 시계열의 평균/회귀
-  *(※ 화제성도 절대/상승 스코어를 모두 반영합니다.)*
 
 **등급 체계(공통)**
 - **절대값 등급**: IP 간 백분위 20% 단위 `S/A/B/C/D`
