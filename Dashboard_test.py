@@ -2607,8 +2607,11 @@ def render_ip_vs_group_comparison(df_full):
                 .groupby("데모", as_index=False)["시청인구"].sum())
         render_demo_compare_bar(left, right, cat_col="데모", val_col="시청인구")
 
-# ---------- 페이지 4 엔트리 ----------
-def render_page4_compare(df_full):
+def render_page4_compare(df_full=None):
+    # 라우터에서 인자 없이 호출해도 동작하도록 기본값 허용
+    if df_full is None:
+        df_full = load_data()
+
     tab_ipip, tab_group = st.tabs(["IP vs IP", "IP vs 그룹"])
     with tab_ipip:
         render_ip_vs_ip_comparison(df_full)
