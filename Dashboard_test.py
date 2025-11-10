@@ -2682,59 +2682,53 @@ def render_ip_vs_group_comparison(
         avg_pop = agg.groupby("데모_구분")["value"].mean()
         return avg_pop
 
-    # 공통 정렬: 10남→…→60남→10여→…→60여
+    # [정렬] 10남→…→60남→10여→…→60여
     sort_map = {f"{d}{'남성' if g == 0 else '여성'}": int(d.replace('대', '')) * 10 + g for d in DECADES for g in range(2)}
     ordered_labels = sorted([f"{d}남성" for d in DECADES] + [f"{d}여성" for d in DECADES], key=lambda x: sort_map[x])
 
-    MALE_COLOR = "#2a61cc"    # 남=파랑
-    FEMALE_COLOR = "#d93636"  # 여=빨강
-    GROUP_COLOR = "#aaaaaa"   # 비교군=회색
+    # 색상: 기준IP=빨강, 비교군=회색 (성별 분리 제거)
+    IP_COLOR = "#d93636"
+    GROUP_COLOR = "#aaaaaa"
 
     def _render_demo_bar(container, title, media_list):
         with container:
             st.markdown(f"###### {title}")
             ip_pop = get_demo_avg_pop(df_ip, media_list)
             group_pop = get_demo_avg_pop(df_group, media_list)
+
             base = pd.DataFrame({"데모_구분": ordered_labels})
-            df_ipv = base.merge(ip_pop.rename("IP"), left_on="데모_구분", right_index=True, how="left")
-            df_grp = base.merge(group_pop.rename("Group"), left_on="데모_구분", right_index=True, how="left")
-            df_ipv["IP"] = df_ipv["IP"].fillna(0)
-            df_grp["Group"] = df_grp["Group"].fillna(0)
+            df_demo = base.merge(ip_pop.rename(ip), left_on="데모_구분", right_index=True, how="left")
+            df_demo = df_demo.merge(group_pop.rename(group_name), left_on="데모_구분", right_index=True, how="left")
+            df_demo[[ip, group_name]] = df_demo[[ip, group_name]].fillna(0)
 
-            # 성별 분리(각 트레이스가 자기 성별 구간에만 값 세팅)
-            is_male = base["데모_구분"].str.endswith("남성")
-            ip_male_y = np.where(is_male, df_ipv["IP"].values, None)
-            ip_female_y = np.where(~is_male, df_ipv["IP"].values, None)
+            df_m = df_demo.melt(id_vars="데모_구분", var_name="구분", value_name="시청인구")
+            df_m["sort_key"] = df_m["데모_구분"].map(sort_map).fillna(999)
+            df_m = df_m.sort_values("sort_key")
 
-            fig = go.Figure()
-            fig.add_trace(go.Bar(
-                x=base["데모_구분"], y=ip_male_y, name=f"{ip} (남)", marker_color=MALE_COLOR,
-                text=[f"{v:,.0f}" if v is not None else "" for v in ip_male_y],
-                textposition="outside", offsetgroup=0
-            ))
-            fig.add_trace(go.Bar(
-                x=base["데모_구분"], y=ip_female_y, name=f"{ip} (여)", marker_color=FEMALE_COLOR,
-                text=[f"{v:,.0f}" if v is not None else "" for v in ip_female_y],
-                textposition="outside", offsetgroup=0
-            ))
-            fig.add_trace(go.Bar(
-                x=base["데모_구분"], y=df_grp["Group"], name=group_name, marker_color=GROUP_COLOR,
-                text=df_grp["Group"].map(lambda v: f"{v:,.0f}"),
-                textposition="outside", offsetgroup=1
-            ))
-            fig.update_xaxes(categoryorder="array", categoryarray=ordered_labels, tickangle=0)
-            fig.update_layout(
-                barmode="group", height=350,
-                yaxis_title="평균 시청인구", xaxis_title=None,
-                margin=dict(t=20, b=0),
-                legend=dict(title=None, orientation="h", yanchor="bottom", y=1.02)
-            )
-            c_demo, = st.columns(1)
-            with c_demo:
-                st.plotly_chart(fig, use_container_width=True)
+            if not df_m.empty:
+                fig = px.bar(
+                    df_m, x="데모_구분", y="시청인구", color="구분", barmode="group",
+                    text="시청인구",
+                    category_orders={"데모_구분": ordered_labels},
+                    color_discrete_map={ip: IP_COLOR, group_name: GROUP_COLOR}
+                )
+                fig.update_traces(texttemplate="%{text:,.0f}", textposition="outside")
+                fig.update_layout(
+                    height=350, yaxis_title="평균 시청인구", xaxis_title=None,
+                    margin=dict(t=20, b=0),
+                    legend=dict(title=None, orientation="h", yanchor="bottom", y=1.02)
+                )
+                # 고유 키로 DuplicateElementId 방지
+                st.plotly_chart(
+                    fig, use_container_width=True,
+                    key=f"demobar-{title.replace(' ', '_')}-{''.join([m[0] for m in media_list])}"
+                )
+            else:
+                st.info(f"{title} 데이터 없음")
 
     _render_demo_bar(col_demo_tv,   "📺 TV (평균 시청인구)", ["TV"])
     _render_demo_bar(col_demo_tving, "▶️ TVING (평균 시청인구)", ["TVING LIVE", "TVING QUICK", "TVING VOD"])
+
 
 
 # ===== 10.4. [페이지 4] "IP vs IP" 렌더링 =====
