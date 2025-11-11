@@ -2640,7 +2640,9 @@ def render_ip_vs_group_comparison(
         df_demo["연령대_대"] = df_demo["데모"].apply(_to_decade_label) # [6. 공통 함수]
         df_demo["성별"] = df_demo["데모"].apply(_gender_from_demo) # [6. 공통 함수]
         df_demo = df_demo[df_demo["성별"].isin(["남", "여"]) & (df_demo["연령대_대"] != "기타")]
-        df_demo["데모_구분"] = df_demo["연령대_대"] + df_demo["성별"]
+        
+        # [수정] 2. '10대남' -> '10대남성' 형태로 라벨 생성
+        df_demo["데모_구분"] = df_demo.apply(lambda r: f"{r['연령대_대']}{'남성' if r['성별']=='남' else '여성'}", axis=1)
         
         if "회차_numeric" not in df_demo.columns:
             df_demo["회차_numeric"] = df_demo["회차"].str.extract(r"(\d+)", expand=False).astype(float)
@@ -2664,7 +2666,8 @@ def render_ip_vs_group_comparison(
         if not df_demo_tv_melt.empty:
             fig_demo_tv = px.bar(
                 df_demo_tv_melt, x="데모_구분", y="시청인구", color="구분", barmode="group", 
-                text="시청인구", color_discrete_map={"IP": "#d93636", "Group": "#aaaaaa"} # [수정] 4. 그룹 색상 변경
+                text="시청인구", color_discrete_map={"IP": "#d93636", "Group": "#aaaaaa"},
+                category_orders={"데모_구분": DEMO_COLS_ORDER} # [수정] 2. Plotly 정렬 순서 강제
             )
             fig_demo_tv.update_traces(texttemplate='%{text:,.0f}', textposition='outside')
             fig_demo_tv.update_layout(
@@ -2692,7 +2695,8 @@ def render_ip_vs_group_comparison(
         if not df_demo_tving_melt.empty:
             fig_demo_tving = px.bar(
                 df_demo_tving_melt, x="데모_구분", y="시청인구", color="구분", barmode="group", 
-                text="시청인구", color_discrete_map={"IP": "#d93636", "Group": "#aaaaaa"} # [수정] 4. 그룹 색상 변경
+                text="시청인구", color_discrete_map={"IP": "#d93636", "Group": "#aaaaaa"},
+                category_orders={"데모_구분": DEMO_COLS_ORDER} # [수정] 2. Plotly 정렬 순서 강제
             )
             fig_demo_tving.update_traces(texttemplate='%{text:,.0f}', textposition='outside')
             fig_demo_tving.update_layout(
@@ -2849,8 +2853,10 @@ def render_ip_vs_ip_comparison(df_all: pd.DataFrame, ip1: str, ip2: str, kpi_per
         df_demo["연령대_대"] = df_demo["데모"].apply(_to_decade_label) # [6. 공통 함수]
         df_demo["성별"] = df_demo["데모"].apply(_gender_from_demo) # [6. 공통 함수]
         df_demo = df_demo[df_demo["성별"].isin(["남", "여"]) & (df_demo["연령대_대"] != "기타")]
-        df_demo["데모_구분"] = df_demo["연령대_대"] + df_demo["성별"]
         
+        # [수정] 2. '10대남' -> '10대남성' 형태로 라벨 생성 (IP vs IP 모드)
+        df_demo["데모_구분"] = df_demo.apply(lambda r: f"{r['연령대_대']}{'남성' if r['성별']=='남' else '여성'}", axis=1)
+
         if "회차_numeric" not in df_demo.columns:
             df_demo["회차_numeric"] = df_demo["회차"].str.extract(r"(\d+)", expand=False).astype(float)
         
@@ -2874,7 +2880,8 @@ def render_ip_vs_ip_comparison(df_all: pd.DataFrame, ip1: str, ip2: str, kpi_per
         if not df_demo_tv_melt.empty:
             fig_demo_tv = px.bar(
                 df_demo_tv_melt, x="데모_구분", y="시청인구", color="IP", barmode="group", 
-                text="시청인구", color_discrete_map={ip1: "#d93636", ip2: "#aaaaaa"} # [수정] 1. 대상 변경
+                text="시청인구", color_discrete_map={ip1: "#d93636", ip2: "#aaaaaa"}, # [수정] 1. 대상 변경
+                category_orders={"데모_구분": DEMO_COLS_ORDER} # [수정] 2. Plotly 정렬 순서 강제
             )
             fig_demo_tv.update_traces(texttemplate='%{text:,.0f}', textposition='outside')
             fig_demo_tv.update_layout(
@@ -2903,7 +2910,8 @@ def render_ip_vs_ip_comparison(df_all: pd.DataFrame, ip1: str, ip2: str, kpi_per
         if not df_demo_tving_melt.empty:
             fig_demo_tving = px.bar(
                 df_demo_tving_melt, x="데모_구분", y="시청인구", color="IP", barmode="group", 
-                text="시청인구", color_discrete_map={ip1: "#d93636", ip2: "#aaaaaa"} # [수정] 1. 대상 변경
+                text="시청인구", color_discrete_map={ip1: "#d93636", ip2: "#aaaaaa"}, # [수정] 1. 대상 변경
+                category_orders={"데모_구분": DEMO_COLS_ORDER} # [수정] 2. Plotly 정렬 순서 강제
             )
             fig_demo_tving.update_traces(texttemplate='%{text:,.0f}', textposition='outside')
             fig_demo_tving.update_layout(
