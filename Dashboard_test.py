@@ -2656,7 +2656,8 @@ def render_ip_vs_group_comparison(
         df_demo_tv = pd.DataFrame({"IP": ip_pop_tv, "Group": group_pop_tv}).fillna(0).reset_index()
         df_demo_tv_melt = df_demo_tv.melt(id_vars="데모_구분", var_name="구분", value_name="시청인구")
         
-        sort_map = {f"{d}{'남성' if g == 0 else '여성'}": int(d.replace('대',''))*10 + g for d in DECADES for g in range(2)} # [수정] DECADES 사용
+        # [수정] 2. x축 정렬 기준 변경 (남성 10-60대, 여성 10-60대)
+        sort_map = {col_name: i for i, col_name in enumerate(DEMO_COLS_ORDER)}
         df_demo_tv_melt["sort_key"] = df_demo_tv_melt["데모_구분"].map(sort_map).fillna(999)
         df_demo_tv_melt = df_demo_tv_melt.sort_values("sort_key")
 
@@ -2683,7 +2684,8 @@ def render_ip_vs_group_comparison(
         df_demo_tving = pd.DataFrame({"IP": ip_pop_tving, "Group": group_pop_tving}).fillna(0).reset_index()
         df_demo_tving_melt = df_demo_tving.melt(id_vars="데모_구분", var_name="구분", value_name="시청인구")
         
-        sort_map = {f"{d}{'남성' if g == 0 else '여성'}": int(d.replace('대',''))*10 + g for d in DECADES for g in range(2)} # [수정] DECADES 사용
+        # [수정] 2. x축 정렬 기준 변경 (남성 10-60대, 여성 10-60대)
+        sort_map = {col_name: i for i, col_name in enumerate(DEMO_COLS_ORDER)}
         df_demo_tving_melt["sort_key"] = df_demo_tving_melt["데모_구분"].map(sort_map).fillna(999)
         df_demo_tving_melt = df_demo_tving_melt.sort_values("sort_key")
 
@@ -2727,7 +2729,6 @@ def _render_kpi_card_comparison(
             elif val2 < val1: winner = 2
 
     val1_style = "color:#d93636; font-weight: 700;" if winner == 1 else ("color:#888; font-weight: 400;" if winner == 2 else "color:#333; font-weight: 400;")
-    val2_style = "color:#2a61cc; font-weight: 700;" if winner == 2 else ("color:#888; font-weight: 400;" if winner == 1 else "color:#333; font-weight: 400;")
     # [수정] 4. ip2의 기본 스타일 색상을 회색으로 변경
     val2_style = "color:#aaaaaa; font-weight: 700;" if winner == 2 else ("color:#888; font-weight: 400;" if winner == 1 else "color:#333; font-weight: 400;")
 
@@ -2833,35 +2834,87 @@ def render_ip_vs_ip_comparison(df_all: pd.DataFrame, ip1: str, ip2: str, kpi_per
         else: 
             st.info("화제성 트렌드 데이터가 없습니다.")
             
+    # [수정] 1. IP vs IP 모드의 '시청인구 비교' 섹션을 IP vs Group 모드와 동일하게(TV/TVING 2열) 변경
     st.divider()
-
-    st.markdown("#### 4. TV 시청자 데모 비교 (TV 시청인구 비중)")
+    st.markdown(f"#### 4. 시청인구 비교 ({ip2} 대비)")
+    col_demo_tv, col_demo_tving = st.columns(2)
     
-    # [수정] 2. 차트를 st.columns(1)로 감싸 개별 카드로 만듭니다.
-    with st.columns(1)[0]:
-        demo1 = df1[(df1["metric"] == "시청인구") & (df1["매체"] == "TV") & (df1["데모"].notna())]
-        demo2 = df2[(df2["metric"] == "시청인구") & (df2["매체"] == "TV") & (df2["데모"].notna())]
+    # [수정] 1. IP vs Group 모드에서 헬퍼 함수 복사
+    def get_demo_avg_pop(df_demo_src, media_filter: List[str]):
+        df_demo = df_demo_src[
+            (df_demo_src["metric"] == "시청인구") & 
+            (df_demo_src["매체"].isin(media_filter)) & 
+            (df_demo_src["데모"].notna())
+        ].copy()
+        df_demo["연령대_대"] = df_demo["데모"].apply(_to_decade_label) # [6. 공통 함수]
+        df_demo["성별"] = df_demo["데모"].apply(_gender_from_demo) # [6. 공통 함수]
+        df_demo = df_demo[df_demo["성별"].isin(["남", "여"]) & (df_demo["연령대_대"] != "기타")]
+        df_demo["데모_구분"] = df_demo["연령대_대"] + df_demo["성별"]
         
-        def prep_demo_data(df_demo, ip_name):
-            df_demo["연령대_대"] = df_demo["데모"].apply(_to_decade_label) # [6. 공통 함수]
-            df_demo = df_demo[df_demo["연령대_대"] != "기타"]
-            agg = df_demo.groupby("연령대_대")["value"].sum()
-            total = agg.sum()
-            return pd.DataFrame({"연령대": agg.index, "비중": (agg / total * 100) if total > 0 else agg, "IP": ip_name})
-            
-        demo_agg1 = prep_demo_data(demo1, ip1)
-        demo_agg2 = prep_demo_data(demo2, ip2)
-        demo_data_grouped = pd.concat([demo_agg1, demo_agg2])
-        all_decades = sorted(demo_data_grouped["연령대"].unique(), key=_decade_key) # [6. 공통 함수]
+        if "회차_numeric" not in df_demo.columns:
+            df_demo["회차_numeric"] = df_demo["회차"].str.extract(r"(\d+)", expand=False).astype(float)
         
-        fig_demo = px.bar(demo_data_grouped, x="연령대", y="비중", color="IP", barmode="group", 
-                          text="비중", color_discrete_map={ip1: "#d93636", ip2: "#aaaaaa"}, # [수정] 4. ip2 색상 변경
-                          category_orders={"연령대": all_decades})
-        fig_demo.update_traces(texttemplate='%{text:.1f}%', textposition='outside')
-        fig_demo.update_layout(height=350, margin=dict(t=20, b=20, l=20, r=20), 
-                               yaxis_title="시청 비중 (%)", xaxis_title="연령대", 
-                               legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
-        st.plotly_chart(fig_demo, use_container_width=True)
+        agg = df_demo.groupby(["IP", "회차_numeric", "데모_구분"])["value"].sum().reset_index()
+        avg_pop = agg.groupby("데모_구분")["value"].mean() 
+        return avg_pop
+
+    with col_demo_tv:
+        st.markdown(f"###### 📺 TV (평균 시청인구)")
+        # [수정] 1. df_ip -> df1, df_group -> df2, "Group" -> ip2
+        ip_pop_tv = get_demo_avg_pop(df1, ["TV"])
+        group_pop_tv = get_demo_avg_pop(df2, ["TV"])
+        df_demo_tv = pd.DataFrame({ip1: ip_pop_tv, ip2: group_pop_tv}).fillna(0).reset_index()
+        df_demo_tv_melt = df_demo_tv.melt(id_vars="데모_구분", var_name="IP", value_name="시청인구")
+        
+        # [수정] 2. x축 정렬 기준 변경 (남성 10-60대, 여성 10-60대)
+        sort_map = {col_name: i for i, col_name in enumerate(DEMO_COLS_ORDER)}
+        df_demo_tv_melt["sort_key"] = df_demo_tv_melt["데모_구분"].map(sort_map).fillna(999)
+        df_demo_tv_melt = df_demo_tv_melt.sort_values("sort_key")
+
+        if not df_demo_tv_melt.empty:
+            fig_demo_tv = px.bar(
+                df_demo_tv_melt, x="데모_구분", y="시청인구", color="IP", barmode="group", 
+                text="시청인구", color_discrete_map={ip1: "#d93636", ip2: "#aaaaaa"} # [수정] 1. 대상 변경
+            )
+            fig_demo_tv.update_traces(texttemplate='%{text:,.0f}', textposition='outside')
+            fig_demo_tv.update_layout(
+                height=350, yaxis_title="평균 시청인구", xaxis_title=None, 
+                margin=dict(t=20, b=0), 
+                legend=dict(title="IP", orientation="h", yanchor="bottom", y=1.02) # [수정] 1. 대상 변경
+            )
+            st.plotly_chart(fig_demo_tv, use_container_width=True)
+        else: 
+            st.info("TV 데모 데이터 없음")
+
+    with col_demo_tving:
+        st.markdown(f"###### ▶️ TVING (평균 시청인구)")
+        tving_media = ["TVING LIVE", "TVING QUICK", "TVING VOD"]
+        # [수정] 1. df_ip -> df1, df_group -> df2, "Group" -> ip2
+        ip_pop_tving = get_demo_avg_pop(df1, tving_media)
+        group_pop_tving = get_demo_avg_pop(df2, tving_media)
+        df_demo_tving = pd.DataFrame({ip1: ip_pop_tving, ip2: group_pop_tving}).fillna(0).reset_index()
+        df_demo_tving_melt = df_demo_tving.melt(id_vars="데모_구분", var_name="IP", value_name="시청인구")
+        
+        # [수정] 2. x축 정렬 기준 변경 (남성 10-60대, 여성 10-60대)
+        sort_map = {col_name: i for i, col_name in enumerate(DEMO_COLS_ORDER)}
+        df_demo_tving_melt["sort_key"] = df_demo_tving_melt["데모_구분"].map(sort_map).fillna(999)
+        df_demo_tving_melt = df_demo_tving_melt.sort_values("sort_key")
+
+        if not df_demo_tving_melt.empty:
+            fig_demo_tving = px.bar(
+                df_demo_tving_melt, x="데모_구분", y="시청인구", color="IP", barmode="group", 
+                text="시청인구", color_discrete_map={ip1: "#d93636", ip2: "#aaaaaa"} # [수정] 1. 대상 변경
+            )
+            fig_demo_tving.update_traces(texttemplate='%{text:,.0f}', textposition='outside')
+            fig_demo_tving.update_layout(
+                height=350, yaxis_title="평균 시청인구", xaxis_title=None, 
+                margin=dict(t=20, b=0), 
+                legend=dict(title="IP", orientation="h", yanchor="bottom", y=1.02) # [수정] 1. 대상 변경
+            )
+            st.plotly_chart(fig_demo_tving, use_container_width=True)
+        else: 
+            st.info("TVING 데모 데이터 없음")
+
 
 # ===== 10.5. [페이지 4] 메인 렌더링 함수 =====
 def render_comparison():
