@@ -2021,7 +2021,7 @@ def render_ip_detail():
     st.divider()
 
     # === [Row5] 데모분석 상세 표 (AgGrid) ===
-    st.markdown("#### 👥 데모분석 상세 표")
+    st.markdown("#### 👥 회차별 시청자수 분포")
 
     def _build_demo_table_numeric(df_src, medias):
         sub = df_src[(df_src["metric"]=="시청인구") & (df_src["데모"].notna()) & (df_src["매체"].isin(medias))].copy()
@@ -2101,7 +2101,7 @@ def render_ip_detail():
     _render_aggrid_table(tv_numeric, "📺 TV (시청자수)")
 
     tving_numeric = _build_demo_table_numeric(f, ["TVING LIVE", "TVING QUICK", "TVING VOD"])
-    _render_aggrid_table(tving_numeric, "▶︎ TVING 합산 (LIVE/QUICK/VOD) 시청자수")
+    _render_aggrid_table(tving_numeric, "▶︎ TVING 합산 시청자수")
 #endregion
 
 
