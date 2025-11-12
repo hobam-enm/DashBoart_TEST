@@ -1800,7 +1800,7 @@ def render_ip_detail():
             st.info("표시할 시청률 데이터가 없습니다.")
 
     with cB:
-        st.markdown("<div class='sec-title'>📊 TVING 시청자수</div>", unsafe_allow_html=True)
+        st.markdown("<div class='sec-title'>📱 TVING 시청자수</div>", unsafe_allow_html=True)
         t_keep = ["TVING LIVE", "TVING QUICK", "TVING VOD"]
         tsub = f[(f["metric"] == "시청인구") & (f["매체"].isin(t_keep))].dropna(subset=["회차", "회차_num"]).copy()
         tsub = tsub.sort_values("회차_num")
