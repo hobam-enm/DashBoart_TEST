@@ -1410,7 +1410,7 @@ def render_overview():
 
 #region [ 8. 페이지 2: IP 성과 자세히보기 ]
 # =====================================================
-# [수정] TVING 이중축(Live:Line/VOD:Bar), Y축/호버 한글 포맷팅(N억NNNN만) 적용 (2025-11-12)
+# [수정] 함수 정의 순서 재배치(오류 해결) 및 기존 포맷팅 유지 (2025-11-12)
 def render_ip_detail():
 
     df_full = load_data() # [3. 공통 함수]
@@ -1539,33 +1539,43 @@ def render_ip_detail():
         return df[df["metric_norm"] == target]
 
     # --- [Helper] 한글 숫자 포맷팅 (N억NNNN만) ---
-    def fmt_kor(x, is_axis=False):
+    def fmt_kor(x):
         if pd.isna(x): return "0"
         val = float(x)
         if val == 0: return "0"
-        
-        # 만 단위 반올림 (호버용)
         rounded = int(round(val / 10000)) 
-        if rounded == 0 and val > 0: # 값이 있는데 반올림해서 0이 되는 경우 소수점 처리
-             return f"{val/10000:.1f}만"
+        if rounded == 0 and val > 0: return f"{val/10000:.1f}만"
 
         uk = rounded // 10000
         man = rounded % 10000
-        
         if uk > 0:
             if man > 0: return f"{uk}억{man:04d}만"
             else: return f"{uk}억"
         else:
             return f"{man}만"
 
-    # --- [Helper] Y축 눈금 생성기 (tickvals, ticktext) ---
-    def get_axis_ticks(max_val):
+    # --- [Helper] 티빙 라이브용 포맷팅 (N만N천) ---
+    def fmt_live_kor(x):
+        if pd.isna(x): return "0"
+        val = float(x)
+        if val == 0: return "0"
+        
+        man = int(val // 10000)
+        cheon = int((val % 10000) // 1000)
+        
+        if man > 0:
+            if cheon > 0: return f"{man}만{cheon}천"
+            else: return f"{man}만"
+        else:
+            if cheon > 0: return f"{cheon}천"
+            else: return f"{int(val)}" # 1000 미만
+
+    # --- [Helper] Y축 눈금 생성기 ---
+    def get_axis_ticks(max_val, formatter=fmt_kor):
         if pd.isna(max_val) or max_val <= 0:
             return None, None
         
-        # 적절한 간격 찾기 (최대값을 4~5등분)
         step = max_val / 4
-        # 예쁘게 떨어지는 숫자로 조정 (1, 2, 5 단위)
         power = 10 ** int(np.log10(step))
         base = step / power
         if base < 1.5: step = 1 * power
@@ -1574,52 +1584,10 @@ def render_ip_detail():
         else: step = 10 * power
         
         vals = np.arange(0, max_val + step * 0.1, step)
-        texts = [fmt_kor(v, is_axis=True) for v in vals]
+        texts = [formatter(v) for v in vals]
         return vals, texts
-
-    # --- KPI/평균비/랭킹 계산 ---
-    val_T = mean_of_ip_episode_mean(f, "T시청률")
-    val_H = mean_of_ip_episode_mean(f, "H시청률")
-    val_live = mean_of_ip_episode_sum(f, "시청인구", ["TVING LIVE"])
-    val_vod = mean_of_ip_episode_sum(f, "시청인구", ["TVING VOD", "TVING QUICK"]) 
-    val_buzz = mean_of_ip_sums(f, "언급량")
-    val_view = mean_of_ip_sums(f, "조회수")
-
-    # --- 화제성 메트릭 ---
-    def _min_of_ip_metric(df_src: pd.DataFrame, metric_name: str) -> float | None:
-        sub = _metric_filter(df_src, metric_name).copy()
-        if sub.empty: return None
-        s = pd.to_numeric(sub["value"], errors="coerce").dropna()
-        return float(s.min()) if not s.empty else None
-
-    def _mean_like_rating(df_src: pd.DataFrame, metric_name: str) -> float | None:
-        sub = _metric_filter(df_src, metric_name).copy()
-        if sub.empty: return None
-        sub["val"] = pd.to_numeric(sub["value"], errors="coerce")
-        sub = sub.dropna(subset=["val"])
-        if sub.empty: return None
-
-        if "회차_num" in sub.columns and sub["회차_num"].notna().any():
-            g = sub.dropna(subset=["회차_num"]).groupby("회차_num", as_index=False)["val"].mean()
-            return float(g["val"].mean()) if not g.empty else None
-
-        if date_col_for_filter in sub.columns and sub[date_col_for_filter].notna().any():
-            g = sub.dropna(subset=[date_col_for_filter]).groupby(date_col_for_filter, as_index=False)["val"].mean()
-            return float(g["val"].mean()) if not g.empty else None
-
-        return float(sub["val"].mean()) if not sub["val"].empty else None
-
-    val_topic_min = _min_of_ip_metric(f, "F_Total")
-    val_topic_avg = _mean_like_rating(f, "F_score")
-
-    base_T = mean_of_ip_episode_mean(base, "T시청률")
-    base_H = mean_of_ip_episode_mean(base, "H시청률")
-    base_live = mean_of_ip_episode_sum(base, "시청인구", ["TVING LIVE"])
-    base_vod = mean_of_ip_episode_sum(base, "시청인구", ["TVING VOD", "TVING QUICK"]) 
-    base_buzz = mean_of_ip_sums(base, "언급량")
-    base_view = mean_of_ip_sums(base, "조회수")
-
-    # --- 화제성 베이스값 ---
+    
+    # --- [Helper] 계산용 유틸리티 함수들 (순서 중요: 계산 전에 정의되어야 함) ---
     def _series_ip_metric(base_df: pd.DataFrame, metric_name: str, mode: str = "mean", media: List[str] | None = None):
         if metric_name == "조회수":
             sub = _get_view_data(base_df)
@@ -1651,6 +1619,47 @@ def render_ip_detail():
             s = sub.groupby("IP")["value"].mean()
         return pd.to_numeric(s, errors="coerce").dropna()
 
+    def _min_of_ip_metric(df_src: pd.DataFrame, metric_name: str) -> float | None:
+        sub = _metric_filter(df_src, metric_name).copy()
+        if sub.empty: return None
+        s = pd.to_numeric(sub["value"], errors="coerce").dropna()
+        return float(s.min()) if not s.empty else None
+
+    def _mean_like_rating(df_src: pd.DataFrame, metric_name: str) -> float | None:
+        sub = _metric_filter(df_src, metric_name).copy()
+        if sub.empty: return None
+        sub["val"] = pd.to_numeric(sub["value"], errors="coerce")
+        sub = sub.dropna(subset=["val"])
+        if sub.empty: return None
+
+        if "회차_num" in sub.columns and sub["회차_num"].notna().any():
+            g = sub.dropna(subset=["회차_num"]).groupby("회차_num", as_index=False)["val"].mean()
+            return float(g["val"].mean()) if not g.empty else None
+
+        if date_col_for_filter in sub.columns and sub[date_col_for_filter].notna().any():
+            g = sub.dropna(subset=[date_col_for_filter]).groupby(date_col_for_filter, as_index=False)["val"].mean()
+            return float(g["val"].mean()) if not g.empty else None
+
+        return float(sub["val"].mean()) if not sub["val"].empty else None
+
+    # --- KPI/평균비/랭킹 계산 ---
+    val_T = mean_of_ip_episode_mean(f, "T시청률")
+    val_H = mean_of_ip_episode_mean(f, "H시청률")
+    val_live = mean_of_ip_episode_sum(f, "시청인구", ["TVING LIVE"])
+    val_vod = mean_of_ip_episode_sum(f, "시청인구", ["TVING VOD", "TVING QUICK"]) 
+    val_buzz = mean_of_ip_sums(f, "언급량")
+    val_view = mean_of_ip_sums(f, "조회수")
+
+    val_topic_min = _min_of_ip_metric(f, "F_Total")
+    val_topic_avg = _mean_like_rating(f, "F_score")
+
+    base_T = mean_of_ip_episode_mean(base, "T시청률")
+    base_H = mean_of_ip_episode_mean(base, "H시청률")
+    base_live = mean_of_ip_episode_sum(base, "시청인구", ["TVING LIVE"])
+    base_vod = mean_of_ip_episode_sum(base, "시청인구", ["TVING VOD", "TVING QUICK"]) 
+    base_buzz = mean_of_ip_sums(base, "언급량")
+    base_view = mean_of_ip_sums(base, "조회수")
+    
     base_topic_min_series = _series_ip_metric(base, "F_Total", mode="min")
     base_topic_min = float(base_topic_min_series.mean()) if not base_topic_min_series.empty else None
     base_topic_avg = _mean_like_rating(base, "F_score")
@@ -1754,7 +1763,7 @@ def render_ip_detail():
     st.divider()
 
     # --- 공통 그래프 크기/설정 ---
-    chart_h = 320 # [수정] 이중축 등 복잡해진 차트를 위해 높이 약간 증가
+    chart_h = 320
     common_cfg = {"scrollZoom": False, "staticPlot": False, "displayModeBar": False}
 
     # === [Row1] 시청률 추이 | 티빙추이 ===
@@ -1797,27 +1806,25 @@ def render_ip_detail():
         tsub = tsub.sort_values("회차_num")
         
         if not tsub.empty:
-            # [수정] TVING VOD에 QUICK 합산
             tsub["매체_통합"] = tsub["매체"].apply(lambda x: "TVING VOD" if x in ["TVING VOD", "TVING QUICK"] else x)
             pvt = tsub.pivot_table(index="회차", columns="매체_통합", values="value", aggfunc="sum").fillna(0)
             
             ep_order = tsub[["회차", "회차_num"]].drop_duplicates().sort_values("회차_num")["회차"].tolist()
             pvt = pvt.reindex(ep_order)
             
-            # [수정] 호버 텍스트 포맷팅 생성
             vod_hover = [fmt_kor(v) for v in pvt.get("TVING VOD", [])]
-            live_hover = [fmt_kor(v) for v in pvt.get("TVING LIVE", [])]
+            # [수정] Live 호버에 N만N천 적용
+            live_hover = [fmt_live_kor(v) for v in pvt.get("TVING LIVE", [])]
             
-            # [수정] Y축 눈금 계산 (Live, VOD 각각)
             max_vod = pvt.get("TVING VOD", pd.Series([0])).max()
             max_live = pvt.get("TVING LIVE", pd.Series([0])).max()
             
-            vod_ticks_val, vod_ticks_txt = get_axis_ticks(max_vod)
-            live_ticks_val, live_ticks_txt = get_axis_ticks(max_live)
+            vod_ticks_val, vod_ticks_txt = get_axis_ticks(max_vod, formatter=fmt_kor)
+            # [수정] Live 축에 N만N천 적용
+            live_ticks_val, live_ticks_txt = get_axis_ticks(max_live, formatter=fmt_live_kor)
 
             fig_tving = go.Figure()
 
-            # 1. VOD (좌측 축, 막대)
             if "TVING VOD" in pvt.columns:
                 fig_tving.add_trace(go.Bar(
                     name="TVING VOD", 
@@ -1826,10 +1833,9 @@ def render_ip_detail():
                     yaxis='y1',
                     hovertemplate="<b>%{x}</b><br>TVING VOD: %{text}<extra></extra>",
                     text=vod_hover,
-                    textposition='none' # 호버만 표시
+                    textposition='none'
                 ))
                 
-            # 2. LIVE (우측 축, 꺾은선)
             if "TVING LIVE" in pvt.columns:
                 fig_tving.add_trace(go.Scatter(
                     name="TVING LIVE", 
@@ -1845,7 +1851,6 @@ def render_ip_detail():
             fig_tving.update_layout(
                 height=chart_h, margin=dict(l=8, r=8, t=10, b=8),
                 legend=dict(orientation='h', yanchor='bottom', y=1.02),
-                # 이중축 설정
                 yaxis=dict(
                     title="VOD (합산)", 
                     titlefont=dict(color="#1565c0"),
@@ -1891,13 +1896,16 @@ def render_ip_detail():
                        .sort_index().fillna(0))
                 x_vals = pvt.index.tolist(); use_category = False
 
-            # [수정] Stacked Bar Y축 눈금 계산 (합산 기준)
-            max_view = pvt.sum(axis=1).max()
-            view_ticks_val, view_ticks_txt = get_axis_ticks(max_view)
+            # 총합 계산
+            total_view = pvt.sum(axis=1)
+            max_view = total_view.max()
+            view_ticks_val, view_ticks_txt = get_axis_ticks(max_view, formatter=fmt_kor)
+            
+            # [수정] 총합 텍스트 (N억NNNN만)
+            total_text = [fmt_kor(v) for v in total_view]
 
             fig_view = go.Figure()
             for i, col in enumerate(pvt.columns):
-                # 호버 텍스트 생성
                 h_texts = [fmt_kor(v) for v in pvt[col]]
                 c_code = digital_colors[i % len(digital_colors)]
                 
@@ -1905,18 +1913,30 @@ def render_ip_detail():
                     name=col, x=x_vals, y=pvt[col], 
                     marker_color=c_code,
                     hovertemplate="<b>%{x}</b><br>" + f"{col}: " + "%{text}<extra></extra>",
-                    text=h_texts
+                    text=h_texts,
+                    textposition='none' # 개별 수치 숨김
                 ))
+            
+            # [수정] 총합 Scatter 추가
+            fig_view.add_trace(go.Scatter(
+                x=x_vals, y=total_view,
+                mode='text',
+                text=total_text,
+                textposition='top center',
+                textfont=dict(size=11, color='#333'),
+                showlegend=False,
+                hoverinfo='skip'
+            ))
                 
             fig_view.update_layout(
                 barmode="stack", legend_title=None,
                 bargap=0.15, bargroupgap=0.05,
                 height=chart_h, margin=dict(l=8, r=8, t=10, b=8),
-                # [수정] Y축 한글 눈금 적용
                 yaxis=dict(
                     tickvals=view_ticks_val,
                     ticktext=view_ticks_txt,
-                    fixedrange=True
+                    fixedrange=True,
+                    range=[0, max_view * 1.15] # 텍스트 공간 확보
                 )
             )
             if use_category:
@@ -1942,29 +1962,46 @@ def render_ip_detail():
                        .sort_index().fillna(0))
                 x_vals = pvt.index.tolist(); use_category = False
 
+            # 총합 계산
+            total_buzz = pvt.sum(axis=1)
+            max_buzz = total_buzz.max()
+            # [수정] 총합 텍스트 (#,###)
+            total_text = [f"{v:,.0f}" for v in total_buzz]
+
             fig_buzz = go.Figure()
             for i, col in enumerate(pvt.columns):
                 c_code = digital_colors[(i+2) % len(digital_colors)]
-                # [수정] 언급량도 호버 포맷팅 적용 (단, 언급량은 단위가 작아 보통 그대로 나오나 로직 통일)
-                h_texts = [fmt_kor(v) for v in pvt[col]]
+                h_texts = [f"{v:,.0f}" for v in pvt[col]]
                 
                 fig_buzz.add_trace(go.Bar(
                     name=col, x=x_vals, y=pvt[col], 
                     marker_color=c_code,
                     hovertemplate="<b>%{x}</b><br>" + f"{col}: " + "%{text}<extra></extra>",
-                    text=h_texts
+                    text=h_texts,
+                    textposition='none' # 개별 수치 숨김
                 ))
+            
+            # [수정] 총합 Scatter 추가
+            fig_buzz.add_trace(go.Scatter(
+                x=x_vals, y=total_buzz,
+                mode='text',
+                text=total_text,
+                textposition='top center',
+                textfont=dict(size=11, color='#333'),
+                showlegend=False,
+                hoverinfo='skip'
+            ))
                 
             fig_buzz.update_layout(
                 barmode="stack", legend_title=None,
                 bargap=0.15, bargroupgap=0.05,
-                height=chart_h, margin=dict(l=8, r=8, t=10, b=8)
+                height=chart_h, margin=dict(l=8, r=8, t=10, b=8),
+                yaxis=dict(fixedrange=True, range=[0, max_buzz * 1.15])
             )
             if use_category:
                 fig_buzz.update_xaxes(categoryorder="array", categoryarray=x_vals, title=None, fixedrange=True)
             else:
                 fig_buzz.update_xaxes(title=None, fixedrange=True)
-            fig_buzz.update_yaxes(title=None, fixedrange=True)
             st.plotly_chart(fig_buzz, use_container_width=True, config=common_cfg)
         else:
             st.info("표시할 언급량 데이터가 없습니다.")
