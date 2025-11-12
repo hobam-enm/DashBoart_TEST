@@ -1769,7 +1769,7 @@ def render_ip_detail():
     # === [Row1] 시청률 추이 | 티빙추이 ===
     cA, cB = st.columns(2)
     with cA:
-        st.markdown("<div class='sec-title'>📈 시청률 추이 (회차별)</div>", unsafe_allow_html=True)
+        st.markdown("<div class='sec-title'>📈 시청률</div>", unsafe_allow_html=True)
         rsub = f[f["metric"].isin(["T시청률", "H시청률"])].dropna(subset=["회차", "회차_num"]).copy()
         rsub = rsub.sort_values("회차_num")
         if not rsub.empty:
@@ -1800,7 +1800,7 @@ def render_ip_detail():
             st.info("표시할 시청률 데이터가 없습니다.")
 
     with cB:
-        st.markdown("<div class='sec-title'>📊 TVING 시청자 추이 (회차별)</div>", unsafe_allow_html=True)
+        st.markdown("<div class='sec-title'>📊 TVING 시청자수</div>", unsafe_allow_html=True)
         t_keep = ["TVING LIVE", "TVING QUICK", "TVING VOD"]
         tsub = f[(f["metric"] == "시청인구") & (f["매체"].isin(t_keep))].dropna(subset=["회차", "회차_num"]).copy()
         tsub = tsub.sort_values("회차_num")
@@ -1883,7 +1883,7 @@ def render_ip_detail():
     digital_colors = ['#5c6bc0', '#7e57c2', '#26a69a', '#66bb6a', '#ffa726', '#ef5350']
     
     with cC:
-        st.markdown("<div class='sec-title'>▶ 디지털 조회수</div>", unsafe_allow_html=True)
+        st.markdown("<div class='sec-title'>💻 디지털 조회수</div>", unsafe_allow_html=True)
         dview = _get_view_data(f) # [3. 공통 함수]
         if not dview.empty:
             if has_week_col and dview["주차"].notna().any():
@@ -2009,7 +2009,7 @@ def render_ip_detail():
     # === [Row3] 화제성  ===
     cE, cF = st.columns(2)
     with cE:
-        st.markdown("<div class='sec-title'>🔥 화제성 지수</div>", unsafe_allow_html=True)
+        st.markdown("<div class='sec-title'>🏆 화제성 순위</div>", unsafe_allow_html=True)
         fdx = _metric_filter(f, "F_Total").copy()
         if not fdx.empty:
             fdx["순위"] = pd.to_numeric(fdx["value"], errors="coerce").round().astype("Int64")
