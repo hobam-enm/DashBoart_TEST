@@ -2548,18 +2548,37 @@ def render_demographic():
 
 #region [ 10. 페이지 4: IP간 비교분석 ]
 # =====================================================
-# [수정] 그룹비교 색상 회색통일 / 시청률 회차제한 강화 / 범례 중앙정렬 (2025-11-12)
+# [수정] 도넛차트 색상고정 / VOD+QUICK 통합 / 레이더 라벨 한글화 / 조회수 억단위 표기 (2025-11-12)
+
+# ===== 10.0. 포맷팅 헬퍼 (페이지 4 전용) =====
+def _fmt_kor_large(v):
+    """N억 NNNN만 단위 포맷팅"""
+    if v is None or pd.isna(v): return "–"
+    val = float(v)
+    if val == 0: return "0"
+    
+    uk = int(val // 100000000)
+    man = int((val % 100000000) // 10000)
+    
+    if uk > 0:
+        return f"{uk}억{man:04d}만"
+    elif man > 0:
+        return f"{man}만"
+    else:
+        return f"{int(val)}"
 
 # ===== 10.1. [페이지 4] KPI 백분위 계산 (캐싱) =====
 @st.cache_data(ttl=600)
 def get_kpi_data_for_all_ips(df_all: pd.DataFrame) -> pd.DataFrame:
     """
-    모든 IP에 대해 7가지 핵심 KPI(화제성 점수 포함)를 집계하고 0-100점(백분위)으로 변환 (0 패딩은 제외).
+    모든 IP에 대해 KPI 집계 후 백분위(0~100) 변환
+    [수정] TVING VOD = VOD + QUICK 합산 반영
     """
     df = df_all.copy()
     df["value"] = pd.to_numeric(df["value"], errors="coerce")
     df.loc[df["value"] == 0, "value"] = np.nan
     df = df.dropna(subset=["value"])
+    
     if "회차_numeric" in df.columns:
         df = df.dropna(subset=["회차_numeric"])
     else:
@@ -2575,47 +2594,49 @@ def get_kpi_data_for_all_ips(df_all: pd.DataFrame) -> pd.DataFrame:
     kpi_t_rating = _ip_mean_of_ep_mean("T시청률")
     kpi_h_rating = _ip_mean_of_ep_mean("H시청률")
 
-    sub_vod = df[(df["metric"] == "시청인구") & (df["매체"] == "TVING VOD")]
-    if not sub_vod.empty:
-        vod_ep_sum = sub_vod.groupby(["IP", "회차_numeric"])["value"].sum().reset_index()
+    # [수정] TVING VOD + QUICK 합산 -> "TVING VOD"로 표기
+    sub_vod_all = df[(df["metric"] == "시청인구") & (df["매체"].isin(["TVING VOD", "TVING QUICK"]))]
+    if not sub_vod_all.empty:
+        vod_ep_sum = sub_vod_all.groupby(["IP", "회차_numeric"])["value"].sum().reset_index()
         kpi_vod = vod_ep_sum.groupby("IP")["value"].mean().rename("TVING VOD")
     else:
         kpi_vod = pd.Series(dtype=float, name="TVING VOD")
 
-    sub_lq = df[(df["metric"] == "시청인구") & (df["매체"].isin(["TVING LIVE", "TVING QUICK"]))]
-    if not sub_lq.empty:
-        lq_ep_sum = sub_lq.groupby(["IP", "회차_numeric"])["value"].sum().reset_index()
-        kpi_livequick = lq_ep_sum.groupby("IP")["value"].mean().rename("TVING 라이브+QUICK")
+    # [수정] TVING LIVE 단독
+    sub_live = df[(df["metric"] == "시청인구") & (df["매체"] == "TVING LIVE")]
+    if not sub_live.empty:
+        live_ep_sum = sub_live.groupby(["IP", "회차_numeric"])["value"].sum().reset_index()
+        kpi_live = live_ep_sum.groupby("IP")["value"].mean().rename("TVING LIVE")
     else:
-        kpi_livequick = pd.Series(dtype=float, name="TVING 라이브+QUICK")
+        kpi_live = pd.Series(dtype=float, name="TVING LIVE")
 
     kpi_view = _get_view_data(df).groupby("IP")["value"].sum().rename("디지털 조회수") # [3. 공통 함수]
     kpi_buzz = df[df["metric"] == "언급량"].groupby("IP")["value"].sum().rename("디지털 언급량")
-    
-    # [수정] 화제성 점수(F_Score) KPI 추가
     kpi_f_score = _ip_mean_of_ep_mean("F_Score").rename("화제성 점수")
 
-    kpi_df = pd.concat([kpi_t_rating, kpi_h_rating, kpi_vod, kpi_livequick, kpi_view, kpi_buzz, kpi_f_score], axis=1)
+    kpi_df = pd.concat([kpi_t_rating, kpi_h_rating, kpi_vod, kpi_live, kpi_view, kpi_buzz, kpi_f_score], axis=1)
     kpi_percentiles = kpi_df.rank(pct=True) * 100
     return kpi_percentiles.fillna(0)
 
 
 # ===== 10.2. [페이지 4] 단일 IP/그룹 KPI 계산 =====
 def get_agg_kpis_for_ip_page4(df_ip: pd.DataFrame) -> Dict[str, float | None]:
-    """단일 IP 또는 IP 그룹에 대한 주요 KPI 절대값을 계산합니다. (페이지 4 전용)"""
+    """
+    단일 IP 또는 IP 그룹에 대한 주요 KPI 절대값 계산
+    [수정] TVING VOD = VOD + QUICK 합산 반영
+    """
     kpis = {}
-    kpis["T시청률"] = mean_of_ip_episode_mean(df_ip, "T시청률") # [5. 공통 함수]
-    kpis["H시청률"] = mean_of_ip_episode_mean(df_ip, "H시청률") # [5. 공통 함수]
-    kpis["TVING VOD"] = mean_of_ip_episode_sum(df_ip, "시청인구", ["TVING VOD"]) # [5. 공통 함수]
-    kpis["TVING 라이브+QUICK"] = mean_of_ip_episode_sum(df_ip, "시청인구", ["TVING LIVE", "TVING QUICK"]) # [5. 공통 함수]
-    kpis["디지털 조회수"] = mean_of_ip_sums(df_ip, "조회수") # [5. 공통 함수]
-    kpis["디지털 언급량"] = mean_of_ip_sums(df_ip, "언급량") # [5. 공통 함수]
+    kpis["T시청률"] = mean_of_ip_episode_mean(df_ip, "T시청률")
+    kpis["H시청률"] = mean_of_ip_episode_mean(df_ip, "H시청률")
     
-    fundex = df_ip[df_ip["metric"] == "F_Total"]["value"]
-    kpis["화제성 순위"] = fundex.min() if not fundex.empty else None
-    kpis["화제성 순위(평균)"] = fundex.mean() if not fundex.empty else None 
+    # [수정] VOD + QUICK
+    kpis["TVING VOD"] = mean_of_ip_episode_sum(df_ip, "시청인구", ["TVING VOD", "TVING QUICK"])
+    # [수정] LIVE 단독
+    kpis["TVING LIVE"] = mean_of_ip_episode_sum(df_ip, "시청인구", ["TVING LIVE"])
     
-    kpis["화제성 점수"] = mean_of_ip_episode_mean(df_ip, "F_Score") # [5. 공통 함수]
+    kpis["디지털 조회수"] = mean_of_ip_sums(df_ip, "조회수")
+    kpis["디지털 언급량"] = mean_of_ip_sums(df_ip, "언급량")
+    kpis["화제성 점수"] = mean_of_ip_episode_mean(df_ip, "F_Score")
 
     return kpis
 
@@ -2630,19 +2651,23 @@ def _render_kpi_row_ip_vs_group(kpis_ip, kpis_group, group_name):
         
     delta_t = calc_delta(kpis_ip.get('T시청률'), kpis_group.get('T시청률'))
     delta_h = calc_delta(kpis_ip.get('H시청률'), kpis_group.get('H시청률'))
-    delta_lq = calc_delta(kpis_ip.get('TVING 라이브+QUICK'), kpis_group.get('TVING 라이브+QUICK'))
+    delta_live = calc_delta(kpis_ip.get('TVING LIVE'), kpis_group.get('TVING LIVE'))
     delta_vod = calc_delta(kpis_ip.get('TVING VOD'), kpis_group.get('TVING VOD'))
     delta_view = calc_delta(kpis_ip.get('디지털 조회수'), kpis_group.get('디지털 조회수'))
     delta_buzz = calc_delta(kpis_ip.get('디지털 언급량'), kpis_group.get('디지털 언급량'))
     delta_fscore = calc_delta(kpis_ip.get('화제성 점수'), kpis_group.get('화제성 점수'))
 
+    # [수정] 조회수 포맷팅 (N억 NNNN만)
+    view_val_str = _fmt_kor_large(kpis_ip.get('디지털 조회수'))
+
     st.markdown(f"#### 1. 주요 성과 ({group_name} 대비)")
     kpi_cols = st.columns(7) 
     with kpi_cols[0]: st.metric("🎯 타깃시청률", f"{kpis_ip.get('T시청률', 0):.2f}%", f"{delta_t * 100:.1f}%" if delta_t is not None else "N/A")
     with kpi_cols[1]: st.metric("🏠 가구시청률", f"{kpis_ip.get('H시청률', 0):.2f}%", f"{delta_h * 100:.1f}%" if delta_h is not None else "N/A")
-    with kpi_cols[2]: st.metric("⚡ 티빙 L+Q", f"{kpis_ip.get('TVING 라이브+QUICK', 0):,.0f}", f"{delta_lq * 100:.1f}%" if delta_lq is not None else "N/A")
+    with kpi_cols[2]: st.metric("⚡ 티빙 LIVE", f"{kpis_ip.get('TVING LIVE', 0):,.0f}", f"{delta_live * 100:.1f}%" if delta_live is not None else "N/A")
     with kpi_cols[3]: st.metric("▶️ 티빙 VOD", f"{kpis_ip.get('TVING VOD', 0):,.0f}", f"{delta_vod * 100:.1f}%" if delta_vod is not None else "N/A")
-    with kpi_cols[4]: st.metric("👀 디지털 조회", f"{kpis_ip.get('디지털 조회수', 0):,.0f}", f"{delta_view * 100:.1f}%" if delta_view is not None else "N/A")
+    # [수정] 조회수 포맷팅 적용
+    with kpi_cols[4]: st.metric("👀 디지털 조회", view_val_str, f"{delta_view * 100:.1f}%" if delta_view is not None else "N/A")
     with kpi_cols[5]: st.metric("💬 디지털 언급", f"{kpis_ip.get('디지털 언급량', 0):,.0f}", f"{delta_buzz * 100:.1f}%" if delta_buzz is not None else "N/A")
     with kpi_cols[6]: st.metric("🔥 화제성 점수", f"{kpis_ip.get('화제성 점수', 0):,.0f}", f"{delta_fscore * 100:.1f}%" if delta_fscore is not None else "N/A")
 
@@ -2656,7 +2681,7 @@ def _render_kpi_row_ip_vs_ip(kpis1, kpis2, ip1, ip2):
             else: win = 1 if v1 < v2 else (2 if v2 < v1 else 0)
         
         s1 = "color:#d93636;font-weight:700" if win==1 else "color:#333"
-        s2 = "color:#aaaaaa;font-weight:700" if win==2 else "color:#888" # Comp는 회색 강조
+        s2 = "color:#aaaaaa;font-weight:700" if win==2 else "color:#888"
 
         st.markdown(f"""
         <div class="kpi-card" style="padding:10px 10px;">
@@ -2672,21 +2697,21 @@ def _render_kpi_row_ip_vs_ip(kpis1, kpis2, ip1, ip2):
     c1, c2, c3, c4, c5, c6, c7 = st.columns(7)
     with c1: _card("🎯 타깃시청률", kpis1.get("T시청률"), kpis2.get("T시청률"), "{:.2f}%")
     with c2: _card("🏠 가구시청률", kpis1.get("H시청률"), kpis2.get("H시청률"), "{:.2f}%")
-    with c3: _card("⚡ 티빙 L+Q", kpis1.get("TVING 라이브+QUICK"), kpis2.get("TVING 라이브+QUICK"), "{:,.0f}")
+    with c3: _card("⚡ 티빙 LIVE", kpis1.get("TVING LIVE"), kpis2.get("TVING LIVE"), "{:,.0f}")
     with c4: _card("▶️ 티빙 VOD", kpis1.get("TVING VOD"), kpis2.get("TVING VOD"), "{:,.0f}")
     with c5: _card("👀 디지털 조회", kpis1.get("디지털 조회수"), kpis2.get("디지털 조회수"), "{:,.0f}")
     with c6: _card("💬 디지털 언급", kpis1.get("디지털 언급량"), kpis2.get("디지털 언급량"), "{:,.0f}")
     with c7: _card("🔥 화제성 점수", kpis1.get("화제성 점수"), kpis2.get("화제성 점수"), "{:,.0f}")
 
 
-# ===== 10.4. [페이지 4] 통합 그래프 섹션 (레이아웃 통일) =====
+# ===== 10.4. [페이지 4] 통합 그래프 섹션 =====
 def _render_unified_charts(
     df_target: pd.DataFrame, 
     df_comp: pd.DataFrame, 
     target_name: str, 
     comp_name: str,
     kpi_percentiles: pd.DataFrame,
-    comp_color: str = "#aaaaaa" # 그룹(Blue) or IP(Grey)
+    comp_color: str = "#aaaaaa"
 ):
     st.divider()
 
@@ -2697,29 +2722,41 @@ def _render_unified_charts(
     # [좌측] 성과 포지셔닝
     with col_radar:
         st.markdown("###### 성과 백분위 (Positioning)")
-        radar_metrics = ["T시청률", "H시청률", "TVING 라이브+QUICK", "TVING VOD", "디지털 조회수", "디지털 언급량", "화제성 점수"]
         
+        # [수정] 레이더 차트 축 라벨 사용자 관점으로 변경
+        # 내부 Metric Key -> Label Mapping
+        radar_map = {
+            "T시청률": "타깃시청률", 
+            "H시청률": "가구시청률", 
+            "TVING LIVE": "티빙 LIVE", 
+            "TVING VOD": "티빙 VOD", # (VOD+QUICK)
+            "디지털 조회수": "조회수", 
+            "디지털 언급량": "언급량", 
+            "화제성 점수": "화제성"
+        }
+        radar_metrics = list(radar_map.keys())
+        radar_labels = list(radar_map.values())
+
         # Target Score
         if target_name in kpi_percentiles.index:
             score_t = kpi_percentiles.loc[target_name][radar_metrics]
         else:
             score_t = pd.Series(0, index=radar_metrics)
             
-        # Comp Score (IP or Group Mean)
+        # Comp Score
         if comp_name in kpi_percentiles.index: # IP vs IP
             score_c = kpi_percentiles.loc[comp_name][radar_metrics]
         else: # IP vs Group
             group_ips = df_comp["IP"].unique()
-            # 해당 그룹에 속한 IP들의 평균 백분위
             score_c = kpi_percentiles.loc[kpi_percentiles.index.isin(group_ips)].mean()[radar_metrics]
 
         fig_radar = go.Figure()
         fig_radar.add_trace(go.Scatterpolar(
-            r=score_t.values, theta=[m.replace("TVING ","").replace("디지털 ","") for m in radar_metrics],
+            r=score_t.values, theta=radar_labels,
             fill='toself', name=target_name, line=dict(color="#d93636")
         ))
         fig_radar.add_trace(go.Scatterpolar(
-            r=score_c.values, theta=[m.replace("TVING ","").replace("디지털 ","") for m in radar_metrics],
+            r=score_c.values, theta=radar_labels,
             fill='toself', name=comp_name, line=dict(color=comp_color)
         ))
         fig_radar.update_layout(
@@ -2730,11 +2767,11 @@ def _render_unified_charts(
         )
         st.plotly_chart(fig_radar, use_container_width=True)
 
-    # [우측] 시청률 비교 (가구/타깃 통합 + 기준IP 회차제한)
+    # [우측] 시청률 비교
     with col_rating:
         st.markdown(f"###### 시청률")
         
-        # [수정] 기준 IP의 '시청률' 데이터에서만 최대 회차 확인 (디지털/화제성 데이터 혼입 방지)
+        # 회차 제한 로직
         df_target_rating = df_target[df_target["metric"].isin(["T시청률", "H시청률"])].copy()
         if "회차_numeric" not in df_target_rating.columns:
             df_target_rating["회차_numeric"] = df_target_rating["회차"].str.extract(r"(\d+)", expand=False).astype(float)
@@ -2742,18 +2779,13 @@ def _render_unified_charts(
         max_ep = df_target_rating["회차_numeric"].max()
         if pd.isna(max_ep): max_ep = 999
         
-        # 데이터 필터링 (회차 <= max_ep)
         def _get_trend(df, metric):
             if "회차_numeric" not in df.columns:
                 df["회차_numeric"] = df["회차"].str.extract(r"(\d+)", expand=False).astype(float)
-            
-            # metric 일치 & 회차 제한 조건 동시 적용
             mask = (df["metric"] == metric)
             if pd.notna(max_ep):
                 mask = mask & (df["회차_numeric"] <= max_ep)
-            
             sub = df[mask].copy()
-            # Group일 경우 회차별 평균, IP일 경우 그냥 값
             return sub.groupby("회차_numeric")["value"].mean().sort_index()
 
         t_target = _get_trend(df_target, "T시청률")
@@ -2761,17 +2793,12 @@ def _render_unified_charts(
         t_comp   = _get_trend(df_comp,   "T시청률")
         h_comp   = _get_trend(df_comp,   "H시청률")
         
-        # 색상 2페이지와 통일: 타깃(#3949ab), 가구(#90a4ae)
-        # 라인 스타일: 기준(Solid), 비교군(Dot)
         fig_line = go.Figure()
-        
-        # 기준 IP (실선)
         fig_line.add_trace(go.Scatter(x=h_target.index, y=h_target.values, name=f"{target_name}(가구)",
                                       mode='lines+markers', line=dict(color="#90a4ae", width=2)))
         fig_line.add_trace(go.Scatter(x=t_target.index, y=t_target.values, name=f"{target_name}(타깃)",
                                       mode='lines+markers', line=dict(color="#3949ab", width=2)))
         
-        # 비교군 (점선)
         fig_line.add_trace(go.Scatter(x=h_comp.index, y=h_comp.values, name=f"{comp_name}(가구)",
                                       mode='lines+markers', line=dict(color="#90a4ae", width=2, dash='dot')))
         fig_line.add_trace(go.Scatter(x=t_comp.index, y=t_comp.values, name=f"{comp_name}(타깃)",
@@ -2784,11 +2811,10 @@ def _render_unified_charts(
 
     st.divider()
 
-    # --- 3. 시청인구 비교 (TV / TVING) ---
+    # --- 3. 시청인구 비교 ---
     st.markdown("#### 3. 매체별 평균 시청인구")
     col_pop_tv, col_pop_tving = st.columns(2)
 
-    # Demo Helper
     def _get_demo_pop(df_src, medias):
         sub = df_src[(df_src["metric"]=="시청인구") & (df_src["매체"].isin(medias)) & df_src["데모"].notna()].copy()
         sub["성별"] = sub["데모"].apply(_gender_from_demo)
@@ -2802,16 +2828,13 @@ def _render_unified_charts(
         agg = sub.groupby(["IP","회차_numeric","label"])["value"].sum().reset_index()
         return agg.groupby("label")["value"].mean()
 
-    # TV Pop
     with col_pop_tv:
         st.markdown("###### 📺 TV (평균 시청인구)")
-        pop_t_tv = _get_demo_pop(df_target, ["TV"])
-        pop_c_tv = _get_demo_pop(df_comp,   ["TV"])
-        
-        df_bar = pd.DataFrame({target_name: pop_t_tv, comp_name: pop_c_tv}).fillna(0).reset_index()
+        pop_t = _get_demo_pop(df_target, ["TV"])
+        pop_c = _get_demo_pop(df_comp,   ["TV"])
+        df_bar = pd.DataFrame({target_name: pop_t, comp_name: pop_c}).fillna(0).reset_index()
         df_melt = df_bar.melt(id_vars="label", var_name="구분", value_name="인구수")
         
-        # Sort
         sort_map = {col: i for i, col in enumerate(DEMO_COLS_ORDER)}
         df_melt["s"] = df_melt["label"].map(sort_map).fillna(999)
         df_melt = df_melt.sort_values("s")
@@ -2827,17 +2850,15 @@ def _render_unified_charts(
         else:
             st.info("데이터 없음")
 
-    # TVING Pop
     with col_pop_tving:
+        # [수정] TVING LIVE, TVING VOD, TVING QUICK 모두 포함하되 표기는 "티빙"
         st.markdown("###### ▶️ TVING (평균 시청인구)")
         tving_ms = ["TVING LIVE", "TVING QUICK", "TVING VOD"]
-        pop_t_tv = _get_demo_pop(df_target, tving_ms)
-        pop_c_tv = _get_demo_pop(df_comp,   tving_ms)
-        
-        df_bar = pd.DataFrame({target_name: pop_t_tv, comp_name: pop_c_tv}).fillna(0).reset_index()
+        pop_t = _get_demo_pop(df_target, tving_ms)
+        pop_c = _get_demo_pop(df_comp,   tving_ms)
+        df_bar = pd.DataFrame({target_name: pop_t, comp_name: pop_c}).fillna(0).reset_index()
         df_melt = df_bar.melt(id_vars="label", var_name="구분", value_name="인구수")
         
-        # Sort
         sort_map = {col: i for i, col in enumerate(DEMO_COLS_ORDER)}
         df_melt["s"] = df_melt["label"].map(sort_map).fillna(999)
         df_melt = df_melt.sort_values("s")
@@ -2859,29 +2880,39 @@ def _render_unified_charts(
     st.markdown("#### 4. 디지털 반응")
     col_dig_view, col_dig_buzz = st.columns(2)
 
-    # Helper for Pie
     def _get_pie_data(df_src, metric):
-        # 조회수의 경우 PGC/UGC 필터 적용
         if metric == "조회수":
             sub = _get_view_data(df_src) # [3. 공통 함수]
         else:
             sub = df_src[df_src["metric"] == metric].copy()
         
         if sub.empty: return pd.DataFrame(columns=["매체", "val"])
+        # IP vs Group 상황에서도 '매체별 평균'이 아니라 '매체별 총량의 비중'을 봐야하므로
+        # 여기서는 단순히 총합을 구하고 그 안에서 비중을 나눕니다.
+        # 다만, 도넛의 스케일(크기) 비교를 위해선 Group의 경우 '평균적인 1개 IP의 크기'로 환산해야 공정한 비교가 됩니다.
         
-        per_ip = sub.groupby(["IP", "매체"])["value"].sum().reset_index()
-        avg_per_media = per_ip.groupby("매체")["value"].mean().reset_index().rename(columns={"value":"val"})
+        # Step 1: IP별, 매체별 합계
+        per_ip_media = sub.groupby(["IP", "매체"])["value"].sum().reset_index()
+        
+        # Step 2: 매체별로 "IP들의 평균값" 계산 (이것이 곧 그룹의 평균적인 모습)
+        avg_per_media = per_ip_media.groupby("매체")["value"].mean().reset_index().rename(columns={"value":"val"})
+        
         return avg_per_media
 
-    def _draw_scaled_donuts(df_t, df_c, title, t_name, c_name, color_c):
+    def _draw_scaled_donuts_fixed_color(df_t, df_c, title, t_name, c_name):
         from plotly.subplots import make_subplots
         
-        # 2페이지와 동일한 디지털 컬러 팔레트
-        digital_colors = ['#5c6bc0', '#7e57c2', '#26a69a', '#66bb6a', '#ffa726', '#ef5350']
+        # [수정] 색상 고정 로직: 모든 등장 매체를 수집하여 정렬 후 색상 할당
+        all_media = set(df_t["매체"].unique()) | set(df_c["매체"].unique())
+        sorted_media = sorted(list(all_media))
         
-        # 색상 일관성을 위해 매체명 정렬
-        df_t = df_t.sort_values("매체")
-        df_c = df_c.sort_values("매체")
+        # 파스텔톤 컬러 팔레트 (순환)
+        base_colors = ['#5c6bc0', '#7e57c2', '#26a69a', '#66bb6a', '#ffa726', '#ef5350', '#8d6e63', '#78909c']
+        color_map = {m: base_colors[i % len(base_colors)] for i, m in enumerate(sorted_media)}
+        
+        # 각 데이터프레임에 색상 컬럼 추가
+        df_t["color"] = df_t["매체"].map(color_map)
+        df_c["color"] = df_c["매체"].map(color_map)
 
         fig = make_subplots(rows=1, cols=2, specs=[[{'type':'domain'}, {'type':'domain'}]],
                             subplot_titles=[f"{t_name}", f"{c_name}"])
@@ -2893,26 +2924,27 @@ def _render_unified_charts(
             fig.add_trace(go.Pie(
                 labels=df_t["매체"], values=df_t["val"], 
                 name=t_name, scalegroup='one', hole=0.4,
-                title=f"Total<br>{int(sum_t):,}", title_font=dict(size=14),
-                marker=dict(colors=digital_colors),
-                domain=dict(column=0)
+                title=f"Total<br>{_fmt_kor_large(sum_t)}", title_font=dict(size=14),
+                marker=dict(colors=df_t["color"]), # 고정된 색상 적용
+                domain=dict(column=0),
+                sort=False # 매체 정렬 순서 유지 (또는 colors 리스트 순서와 데이터 순서 일치 필요)
             ), 1, 1)
         
         if not df_c.empty:
             fig.add_trace(go.Pie(
                 labels=df_c["매체"], values=df_c["val"], 
                 name=c_name, scalegroup='one', hole=0.4,
-                title=f"Total<br>{int(sum_c):,}", title_font=dict(size=14),
-                marker=dict(colors=digital_colors),
-                domain=dict(column=1)
+                title=f"Total<br>{_fmt_kor_large(sum_c)}", title_font=dict(size=14),
+                marker=dict(colors=df_c["color"]), # 고정된 색상 적용
+                domain=dict(column=1),
+                sort=False
             ), 1, 2)
         
-        # [수정] 범례 가운데 정렬 (x=0.5, xanchor='center')
+        # [수정] 범례 가운데 정렬
         fig.update_layout(height=320, margin=dict(t=30, b=10, l=10, r=10),
                           legend=dict(orientation="h", y=-0.15, x=0.5, xanchor="center"))
         return fig
 
-    # Digital Views
     with col_dig_view:
         st.markdown("###### 👀 디지털 조회수 비교")
         pie_t = _get_pie_data(df_target, "조회수")
@@ -2921,10 +2953,9 @@ def _render_unified_charts(
         if pie_t.empty and pie_c.empty:
             st.info("데이터 없음")
         else:
-            fig_pie = _draw_scaled_donuts(pie_t, pie_c, "조회수", target_name, comp_name, comp_color)
+            fig_pie = _draw_scaled_donuts_fixed_color(pie_t, pie_c, "조회수", target_name, comp_name)
             st.plotly_chart(fig_pie, use_container_width=True)
 
-    # Digital Buzz
     with col_dig_buzz:
         st.markdown("###### 💬 디지털 언급량 비교")
         pie_t = _get_pie_data(df_target, "언급량")
@@ -2933,7 +2964,7 @@ def _render_unified_charts(
         if pie_t.empty and pie_c.empty:
             st.info("데이터 없음")
         else:
-            fig_pie = _draw_scaled_donuts(pie_t, pie_c, "언급량", target_name, comp_name, comp_color)
+            fig_pie = _draw_scaled_donuts_fixed_color(pie_t, pie_c, "언급량", target_name, comp_name)
             st.plotly_chart(fig_pie, use_container_width=True)
 
 
@@ -2960,8 +2991,7 @@ def render_comparison():
             **지표 기준**
         - **시청률** `회차평균`: 전국 기준 가구 / 타깃(2049) 시청률
         - **티빙 LIVE** `회차평균`: 업데이트 예정
-        - **티빙 QUICK** `회차평균`: 방영당일 VOD 시청 UV
-        - **티빙 VOD** `회차평균`: 방영일+1부터 +6까지 **6days** VOD UV
+        - **티빙 VOD** `회차평균`: 티빙 VOD + QUICK 합산
         - **디지털 조회/언급량** `회차총합`: 방영주차(월~일) 내 총합
         - **화제성 점수** `회차평균`: 방영기간 주차별 화제성 점수 평균
         """).strip())
@@ -3041,7 +3071,7 @@ def render_comparison():
         # KPI Row
         _render_kpi_row_ip_vs_group(kpis_target, kpis_comp, comp_name)
         
-        # [수정] 그룹 색상(comp_color)을 IPvsIP 모드와 동일하게 회색(#aaaaaa)으로 변경
+        # Unified Charts (Comp Group = Grey)
         _render_unified_charts(df_target, df_comp, selected_ip1, comp_name, kpi_percentiles, comp_color="#aaaaaa")
 
     else: # IP vs IP
@@ -3056,7 +3086,7 @@ def render_comparison():
         # KPI Row
         _render_kpi_row_ip_vs_ip(kpis_target, kpis_comp, selected_ip1, selected_ip2)
         
-        # Unified Charts (IP2 is Grey)
+        # Unified Charts (Comp IP = Grey)
         _render_unified_charts(df_target, df_comp, selected_ip1, comp_name, kpi_percentiles, comp_color="#aaaaaa")
 #endregion
 
