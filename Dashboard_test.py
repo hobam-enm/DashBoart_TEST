@@ -1072,7 +1072,7 @@ def get_avg_demo_pop_by_episode(df_src: pd.DataFrame, medias: List[str]) -> pd.D
 
 #region [ 7. 페이지 1: Overview ]
 # =====================================================
-# [수정] 그래프 제목 간소화 및 호버 숫자 포맷(N억NNNN만) 적용 (2025-11-12)
+# [수정] KPI/차트/테이블: 티빙 VOD를 '당일'과 '주간'으로 분리 (2025-11-12)
 def render_overview():
     df = load_data() # [3. 공통 함수]
   
@@ -1086,8 +1086,9 @@ def render_overview():
         st.markdown(textwrap.dedent("""
             **지표 기준**
         - **시청률** `회차평균`: 전국 기준 가구 / 타깃(2049) 시청률
-        - **티빙 LIVE** `회차평균`: 업데이트 예정
-        - **티빙 VOD** `회차평균`: 회차 방영일부터 +6일까지의 7일간 VOD UV
+        - **티빙 LIVE** `회차평균`: 실시간 시청 UV
+        - **티빙 당일 VOD** `회차평균`: (구 티빙 퀵) 본방송 당일 VOD UV
+        - **티빙 주간 VOD** `회차평균`: 회차 방영일부터 +6일까지의 7일간 VOD UV
         - **디지털 조회/언급량** `회차총합`: 방영주차(월~일) 내 총합
         - **화제성 점수** `회차평균`: 방영기간 주차별 화제성 점수 평균
         - **앵커드라마 기준**: 토일 3%↑, 월화 2%↑
@@ -1147,9 +1148,13 @@ def render_overview():
     def avg_of_ip_tving_epSum_mean(media_name: str):
         return mean_of_ip_episode_sum(f, "시청인구", [media_name]) # [5. 공통 함수]
 
-    # [수정] 티빙 VOD + QUICK 합산 계산 함수
-    def avg_of_ip_tving_vod_combined():
-        return mean_of_ip_episode_sum(f, "시청인구", ["TVING VOD", "TVING QUICK"]) # [5. 공통 함수]
+    # [수정] VOD 분리: 당일 VOD(Quick)
+    def avg_of_ip_tving_quick():
+        return mean_of_ip_episode_sum(f, "시청인구", ["TVING QUICK"])
+
+    # [수정] VOD 분리: 주간 VOD (순수 VOD)
+    def avg_of_ip_tving_vod_weekly():
+        return mean_of_ip_episode_sum(f, "시청인구", ["TVING VOD"])
 
     def avg_of_ip_sums(metric_name: str):
         return mean_of_ip_sums(f, metric_name) # [5. 공통 함수]
@@ -1169,28 +1174,28 @@ def render_overview():
     # --- 요약 카드 ---
     st.caption('▶ IP별 평균')
 
-    # [수정] 티빙퀵 카드 삭제로 인한 컬럼 조정 (5 -> 4)
-    c1, c2, c3, c4 = st.columns(4)
+    # [수정] KPI 카드 4열 -> 5열로 확장 (Quick, VOD 분리)
+    c1, c2, c3, c4, c5 = st.columns(5)
     st.markdown("<div style='margin-top:20px'></div>", unsafe_allow_html=True)
     c6, c7, c8, c9, c10 = st.columns(5)
 
     t_rating   = avg_of_ip_means("T시청률")
     h_rating   = avg_of_ip_means("H시청률")
     tving_live = avg_of_ip_tving_epSum_mean("TVING LIVE")
-    # [수정] 티빙 VOD에 QUICK 합산 수치 사용
-    tving_vod  = avg_of_ip_tving_vod_combined() 
-    
+    tving_quick= avg_of_ip_tving_quick()        # [추가]
+    tving_vod  = avg_of_ip_tving_vod_weekly()   # [수정]
+
     digital_view = avg_of_ip_sums("조회수")
     digital_buzz = avg_of_ip_sums("언급량")
     f_score      = avg_of_ip_means("F_Score")
     fundex_top1 = count_ip_with_min1("F_Total")
     anchor_total = count_anchor_dramas()
 
-    kpi(c1, "🎯 타깃 시청률", fmt(t_rating, digits=3)) # [3. 공통 함수]
+    kpi(c1, "🎯 타깃 시청률", fmt(t_rating, digits=3))
     kpi(c2, "🏠 가구 시청률", fmt(h_rating, digits=3))
     kpi(c3, "📺 티빙 LIVE", fmt(tving_live, intlike=True))
-    # [수정] 티빙 QUICK 카드 삭제됨
-    kpi(c4, "▶️ 티빙 VOD", fmt(tving_vod, intlike=True)) # Label은 VOD 유지, 값은 합산값
+    kpi(c4, "⚡ 티빙 당일 VOD", fmt(tving_quick, intlike=True)) # [추가]
+    kpi(c5, "▶️ 티빙 주간 VOD", fmt(tving_vod, intlike=True))   # [수정]
     
     kpi(c6, "👀 디지털 조회", fmt(digital_view, intlike=True))
     kpi(c7, "💬 디지털 언급량", fmt(digital_buzz, intlike=True))
@@ -1201,55 +1206,50 @@ def render_overview():
     st.divider()
 
     # --- 주차별 시청자수 트렌드 (Stacked Bar) ---
-    # [수정] 티빙 본방(LIVE만), 티빙 VOD(VOD+QUICK) 로직 변경
+    # [수정] 차트도 KPI와 동일하게 Quick/VOD 분리
     df_trend = f[f["metric"]=="시청인구"].copy()
     if not df_trend.empty:
         tv_weekly = df_trend[df_trend["매체"]=="TV"].groupby("주차시작일")["value"].sum()
         
-        # [수정] 티빙 본방 = TVING LIVE 만 포함
         tving_live_weekly = df_trend[df_trend["매체"]=="TVING LIVE"].groupby("주차시작일")["value"].sum()
-        
-        # [수정] 티빙 VOD = TVING VOD + TVING QUICK 합산
-        tving_vod_combined_weekly = df_trend[df_trend["매체"].isin(["TVING VOD", "TVING QUICK"])]\
-            .groupby("주차시작일")["value"].sum()
+        tving_quick_weekly = df_trend[df_trend["매체"]=="TVING QUICK"].groupby("주차시작일")["value"].sum() # [추가]
+        tving_vod_weekly = df_trend[df_trend["매체"]=="TVING VOD"].groupby("주차시작일")["value"].sum()     # [수정]
 
         all_dates = sorted(list(
-            set(tv_weekly.index) | set(tving_live_weekly.index) | set(tving_vod_combined_weekly.index)
+            set(tv_weekly.index) | set(tving_live_weekly.index) | 
+            set(tving_quick_weekly.index) | set(tving_vod_weekly.index)
         ))
         
         if all_dates:
             df_bar = pd.DataFrame({"주차시작일": all_dates})
             df_bar["TV 본방"] = df_bar["주차시작일"].map(tv_weekly).fillna(0)
             df_bar["티빙 본방"] = df_bar["주차시작일"].map(tving_live_weekly).fillna(0)
-            df_bar["티빙 VOD"] = df_bar["주차시작일"].map(tving_vod_combined_weekly).fillna(0)
+            df_bar["티빙 당일"] = df_bar["주차시작일"].map(tving_quick_weekly).fillna(0) # [추가]
+            df_bar["티빙 주간"] = df_bar["주차시작일"].map(tving_vod_weekly).fillna(0)   # [수정]
 
             df_long = df_bar.melt(id_vars="주차시작일",
-                                  value_vars=["TV 본방","티빙 본방","티빙 VOD"],
+                                  value_vars=["TV 본방","티빙 본방","티빙 당일","티빙 주간"],
                                   var_name="구분", value_name="시청자수")
 
-            # [수정] 호버 포맷팅 함수 (N억NNNN만, 만단위 미만 반올림)
             def fmt_kor_hover(x):
                 if pd.isna(x) or x == 0: return "0"
-                val = int(round(x / 10000)) # 만 단위 반올림
+                val = int(round(x / 10000))
                 uk = val // 10000
                 man = val % 10000
-                if uk > 0:
-                    return f"{uk}억{man:04d}만"
-                else:
-                    return f"{man}만"
+                if uk > 0: return f"{uk}억{man:04d}만"
+                else: return f"{man}만"
 
             df_long["hover_txt"] = df_long["시청자수"].apply(fmt_kor_hover)
 
             fig = px.bar(
                 df_long, x="주차시작일", y="시청자수", color="구분", text="시청자수",
-                # [수정] 제목 간소화 (설명 제거)
                 title="📊 주차별 시청자수",
                 color_discrete_map={
                     "TV 본방": "#1f77b4",
                     "티빙 본방": "#d62728",
-                    "티빙 VOD": "#ff7f7f"
+                    "티빙 당일": "#64b5f6", # Page 2 Quick Color
+                    "티빙 주간": "#ff7f7f"  # Light Red for VOD (or modify to match theme)
                 },
-                # [수정] 커스텀 데이터 추가 (호버용)
                 custom_data=["hover_txt"]
             )
             fig.update_layout(
@@ -1257,7 +1257,6 @@ def render_overview():
                 barmode="stack", legend_title="구분",
                 title_font=dict(size=20)
             )
-            # [수정] 호버 템플릿 적용 (커스텀 데이터 사용)
             fig.update_traces(
                 texttemplate='%{text:,.0f}', 
                 textposition="inside",
@@ -1280,99 +1279,70 @@ def render_overview():
 
     def calculate_overview_performance(df):
         all_ips = df["IP"].unique()
-        if len(all_ips) == 0:
-            return pd.DataFrame()
+        if len(all_ips) == 0: return pd.DataFrame()
 
-        # 0. episode-aware helper
         ep_col = _episode_col(df) # [5. 공통 함수]
         
-        # Helper to get "mean of episode sums"
         def _get_mean_of_ep_sums(df, metric_name, media_list=None):
             sub = df[df["metric"] == metric_name]
-            if media_list:
-                sub = sub[sub["매체"].isin(media_list)]
-            
+            if media_list: sub = sub[sub["매체"].isin(media_list)]
             if sub.empty or ep_col not in sub.columns: 
                 return pd.Series(dtype=float).reindex(all_ips).fillna(0)
-            
             sub = sub.dropna(subset=[ep_col]).copy()
             sub["value"] = pd.to_numeric(sub["value"], errors="coerce").replace(0, np.nan)
             sub = sub.dropna(subset=["value"])
-
-            if sub.empty: 
-                return pd.Series(dtype=float).reindex(all_ips).fillna(0)
-
+            if sub.empty: return pd.Series(dtype=float).reindex(all_ips).fillna(0)
             ep_sum = sub.groupby(["IP", ep_col], as_index=False)["value"].sum()
             per_ip_mean = ep_sum.groupby("IP")["value"].mean()
             return per_ip_mean.reindex(all_ips).fillna(0) 
 
-        # Helper to get "mean of episode means" (for ratings)
         def _get_mean_of_ep_means(df, metric_name):
             sub = df[df["metric"] == metric_name]
-            
             if sub.empty or ep_col not in sub.columns:
                 return pd.Series(dtype=float).reindex(all_ips).fillna(0)
-            
             sub = sub.dropna(subset=[ep_col]).copy()
             sub["value"] = pd.to_numeric(sub["value"], errors="coerce").replace(0, np.nan)
             sub = sub.dropna(subset=["value"])
-
-            if sub.empty:
-                return pd.Series(dtype=float).reindex(all_ips).fillna(0)
-            
+            if sub.empty: return pd.Series(dtype=float).reindex(all_ips).fillna(0)
             ep_mean = sub.groupby(["IP", ep_col], as_index=False)["value"].mean()
             per_ip_mean = ep_mean.groupby("IP")["value"].mean()
             return per_ip_mean.reindex(all_ips).fillna(0)
         
-        # 2. 필요한 집계 정의
         aggs = {}
-        
-        # 시청률 (회차평균의 평균)
         aggs["타깃시청률"] = _get_mean_of_ep_means(df, "T시청률")
         aggs["가구시청률"] = _get_mean_of_ep_means(df, "H시청률")
-        
-        # TVING (회차합의 평균)
         aggs["티빙LIVE"] = _get_mean_of_ep_sums(df, "시청인구", ["TVING LIVE"])
         
-        # [수정] 티빙QUICK 컬럼 삭제, 티빙VOD에 QUICK 합산
-        aggs["티빙VOD"] = _get_mean_of_ep_sums(df, "시청인구", ["TVING VOD", "TVING QUICK"]) 
+        # [수정] 테이블 컬럼도 분리
+        aggs["티빙당일"] = _get_mean_of_ep_sums(df, "시청인구", ["TVING QUICK"])
+        aggs["티빙주간"] = _get_mean_of_ep_sums(df, "시청인구", ["TVING VOD"]) 
         
-        # 디지털 (총합)
         aggs["디지털언급량"] = df[df["metric"] == "언급량"].groupby("IP")["value"].sum().reindex(all_ips).fillna(0)
-        aggs["디지털조회수"] = _get_view_data(df).groupby("IP")["value"].sum().reindex(all_ips).fillna(0) # [3. 공통 함수]
-        
-        # 화제성 (최소/평균)
+        aggs["디지털조회수"] = _get_view_data(df).groupby("IP")["value"].sum().reindex(all_ips).fillna(0)
         aggs["화제성순위"] = df[df["metric"] == "F_Total"].groupby("IP")["value"].min().reindex(all_ips).fillna(0)
-        
-        # 화제성점수 (회차합의 평균)
         aggs["화제성점수"] = _get_mean_of_ep_sums(df, "F_Score", media_list=None)
 
-        # 3. 데이터프레임 결합
         df_perf = pd.DataFrame(aggs).fillna(0).reset_index().rename(columns={"index": "IP"})
         return df_perf.sort_values("타깃시청률", ascending=False)
 
     df_perf = calculate_overview_performance(f)
 
-    # --- (이하 AgGrid 설정은 동일) ---
     fmt_fixed3 = JsCode("""
     function(params){
       if (params.value == null || isNaN(params.value)) return '';
       return Number(params.value).toFixed(3);
-    }
-    """)
+    }""")
     fmt_thousands = JsCode("""
     function(params){
       if (params.value == null || isNaN(params.value)) return '';
       return Math.round(params.value).toLocaleString();
-    }
-    """)
+    }""")
     fmt_rank = JsCode("""
     function(params){
       if (params.value == null || isNaN(params.value)) return '';
       if (params.value == 0) return '–';
       return Math.round(params.value) + '위';
-    }
-    """)
+    }""")
 
     gb = GridOptionsBuilder.from_dataframe(df_perf)
     gb.configure_default_column(
@@ -1383,12 +1353,13 @@ def render_overview():
     gb.configure_grid_options(rowHeight=34, suppressMenuHide=True, domLayout='normal')
     
     gb.configure_column('IP', header_name='IP', cellStyle={'textAlign':'left'}) 
-    
     gb.configure_column('타깃시청률', valueFormatter=fmt_fixed3, sort='desc')
     gb.configure_column('가구시청률', valueFormatter=fmt_fixed3)
     gb.configure_column('티빙LIVE', valueFormatter=fmt_thousands)
-    # [수정] 티빙QUICK 컬럼 설정 삭제
-    gb.configure_column('티빙VOD', valueFormatter=fmt_thousands) # Header Name 그대로 티빙VOD 사용
+    # [수정] 컬럼 분리 반영
+    gb.configure_column('티빙당일', header_name="티빙 당일 VOD", valueFormatter=fmt_thousands)
+    gb.configure_column('티빙주간', header_name="티빙 주간 VOD", valueFormatter=fmt_thousands)
+    
     gb.configure_column('디지털조회수', valueFormatter=fmt_thousands)
     gb.configure_column('디지털언급량', valueFormatter=fmt_thousands)
     gb.configure_column('화제성순위', valueFormatter=fmt_rank)
