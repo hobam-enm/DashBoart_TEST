@@ -1875,17 +1875,17 @@ def render_ip_detail():
         container.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
 
     with cG:
-        st.markdown("<div class='sec-title'>🎯 TV 데모</div>", unsafe_allow_html=True)
+        st.markdown("<div class='sec-title' style='font-size:14px;'>👥누적 시청자 분포 - TV</div>", unsafe_allow_html=True)
         tv_demo = f[(f["매체"] == "TV") & (f["metric"] == "시청인구") & f["데모"].notna()].copy()
         _render_pyramid_local(cG, "", tv_demo, height=260)
 
     with cH:
-        st.markdown("<div class='sec-title'>⚡ TVING LIVE 데모</div>", unsafe_allow_html=True)
+        st.markdown("<div class='sec-title' style='font-size:14px;'>⚡누적 시청자 분포 - TVING LIVE</div>", unsafe_allow_html=True)
         live_demo = f[(f["매체"] == "TVING LIVE") & (f["metric"] == "시청인구") & f["데모"].notna()].copy()
         _render_pyramid_local(cH, "", live_demo, height=260)
 
     with cI:
-        st.markdown("<div class='sec-title'>▶️ TVING VOD 데모</div>", unsafe_allow_html=True)
+        st.markdown("<div class='sec-title' style='font-size:14px;'>▶️누적 시청자 분포 - TVING VOD</div>", unsafe_allow_html=True)
         vod_demo = f[(f["매체"].isin(["TVING VOD", "TVING QUICK"])) & (f["metric"] == "시청인구") & f["데모"].notna()].copy()
         _render_pyramid_local(cI, "", vod_demo, height=260)
 
