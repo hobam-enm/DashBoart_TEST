@@ -1410,7 +1410,7 @@ def render_overview():
 
 #region [ 8. 페이지 2: IP 성과 자세히보기 ]
 # =====================================================
-# [수정] 함수 정의 순서 재배치(오류 해결) 및 기존 포맷팅 유지 (2025-11-12)
+# [수정] 화제성 순위/점수 그래프 통합 및 빈칸 더미카드 처리 (2025-11-12)
 def render_ip_detail():
 
     df_full = load_data() # [3. 공통 함수]
@@ -2006,91 +2006,111 @@ def render_ip_detail():
         else:
             st.info("표시할 언급량 데이터가 없습니다.")
 
-    # === [Row3] 화제성  ===
+    # === [Row3] 화제성 (통합) ===
     cE, cF = st.columns(2)
     with cE:
-        st.markdown("<div class='sec-title'>🏆 화제성 순위</div>", unsafe_allow_html=True)
-        fdx = _metric_filter(f, "F_Total").copy()
-        if not fdx.empty:
-            fdx["순위"] = pd.to_numeric(fdx["value"], errors="coerce").round().astype("Int64")
-
-            if has_week_col and fdx["주차"].notna().any():
-                order = (
-                    fdx[["주차", "주차_num"]].dropna()
-                    .drop_duplicates()
-                    .sort_values("주차_num")["주차"].tolist()
-                )
-                s = fdx.groupby("주차", as_index=True)["순위"].min().reindex(order).dropna()
-                x_vals = s.index.tolist(); use_category = True
-            else:
-                s = fdx.set_index("주차시작일")["순위"].sort_index().dropna()
-                x_vals = s.index.tolist(); use_category = False
-            
-            if not s.empty:
-                y_min, y_max = 0.5, 10
-                labels = [f"{int(v)}위" for v in s.values]
-                text_positions = ["bottom center" if (v <= 1.5) else "top center" for v in s.values]
-
-                fig_fx = go.Figure()
-                fig_fx.add_trace(go.Scatter(
-                    x=x_vals, y=s.values,
-                    mode="lines+markers+text", name="화제성 순위",
-                    text=labels, textposition=text_positions,
-                    textfont=dict(size=12, color="#111"),
-                    line=dict(color='#ab47bc', width=2),
-                    marker=dict(size=8, color='#8e24aa'),
-                    cliponaxis=False
-                ))
-                fig_fx.update_yaxes(autorange=False, range=[y_max, y_min], dtick=1,
-                                    title=None, fixedrange=True)
-                if use_category:
-                    fig_fx.update_xaxes(categoryorder="array", categoryarray=x_vals,
-                                        title=None, fixedrange=True)
-                else:
-                    fig_fx.update_xaxes(title=None, fixedrange=True)
-                fig_fx.update_layout(legend_title=None, height=chart_h,
-                                     margin=dict(l=8, r=8, t=10, b=8))
-                st.plotly_chart(fig_fx, use_container_width=True, config=common_cfg)
-            else:
-                st.info("표시할 화제성 지수 데이터가 없습니다.")
+        st.markdown("<div class='sec-title'>🔥 화제성 점수 & 순위</div>", unsafe_allow_html=True)
+        
+        # 1. 데이터 준비 (순위/점수)
+        fdx = _metric_filter(f, "F_Total").copy() # Rank
+        fs = _metric_filter(f, "F_score").copy()  # Score
+        
+        # 주차/주차시작일 기준 처리
+        if has_week_col and f["주차"].notna().any():
+            order = (f[["주차", "주차_num"]].dropna().drop_duplicates().sort_values("주차_num")["주차"].tolist())
+            key_col = "주차"
+            use_category = True
         else:
-            st.info("표시할 화제성 지수 데이터가 없습니다.")
-
-    with cF:
-        st.markdown("<div class='sec-title'>🔥 화제성 점수</div>", unsafe_allow_html=True)
-        fs = _metric_filter(f, "F_score").copy()
+            key_col = "주차시작일"
+            order = sorted(f[key_col].dropna().unique())
+            use_category = False
+            
+        # 점수 데이터 집계
         if not fs.empty:
             fs["val"] = pd.to_numeric(fs["value"], errors="coerce")
-            fs = fs.dropna(subset=["val"])
-            if not fs.empty:
-                order = (
-                    f[["주차", "주차_num"]]
-                    .dropna()
-                    .drop_duplicates()
-                    .sort_values("주차_num")["주차"]
-                    .tolist()
-                )
-                fs_week = fs.dropna(subset=["주차"]).groupby("주차", as_index=True)["val"].mean()
-                fs_plot = fs_week.reindex(order).dropna()
-                
-                if not fs_plot.empty:
-                    x_vals = fs_plot.index.tolist()
-                    fig_fscore = go.Figure()
-                    fig_fscore.add_trace(go.Scatter(
-                        x=x_vals, y=fs_plot.values,
-                        mode="lines", 
-                        name="화제성 점수", 
-                        line_shape="spline",
-                        line=dict(color='#ec407a', width=3)
-                    ))
-                    fig_fscore.update_xaxes(categoryorder="array", categoryarray=x_vals, title=None, fixedrange=True)
-                    fig_fscore.update_yaxes(title=None, fixedrange=True)
-                    fig_fscore.update_layout(legend_title=None, height=chart_h, margin=dict(l=8, r=8, t=10, b=8))
-                    st.plotly_chart(fig_fscore, use_container_width=True, config=common_cfg)
-                else:
-                    st.info("표시할 화제성 점수(F_score) 데이터가 없습니다.")
+            fs_agg = fs.dropna(subset=[key_col]).groupby(key_col, as_index=False)["val"].mean()
+        else:
+            fs_agg = pd.DataFrame(columns=[key_col, "val"])
+            
+        # 순위 데이터 집계
+        if not fdx.empty:
+            fdx["rank"] = pd.to_numeric(fdx["value"], errors="coerce")
+            fdx_agg = fdx.dropna(subset=[key_col]).groupby(key_col, as_index=False)["rank"].min()
+        else:
+            fdx_agg = pd.DataFrame(columns=[key_col, "rank"])
+            
+        # 병합
+        if not fs_agg.empty:
+            merged = pd.merge(fs_agg, fdx_agg, on=key_col, how="left")
+            
+            # 정렬
+            if use_category:
+                merged = merged.set_index(key_col).reindex(order).dropna(subset=["val"]).reset_index()
             else:
-                st.info("표시할 화제성 점수(F_score) 데이터가 없습니다.")
+                merged = merged.sort_values(key_col)
+                
+            if not merged.empty:
+                x_vals = merged[key_col].tolist()
+                y_vals = merged["val"].tolist()
+                
+                # 라벨 생성 (1위 / 1,234점)
+                def make_label(r):
+                    rnk = r['rank']
+                    scr = r['val']
+                    r_txt = f"{int(rnk)}위" if pd.notna(rnk) else ""
+                    s_txt = f"{int(scr):,}점" if pd.notna(scr) else ""
+                    if r_txt and s_txt: return f"{r_txt}<br>/{s_txt}" # 줄바꿈 처리
+                    if s_txt: return s_txt
+                    return ""
+                
+                labels = merged.apply(make_label, axis=1).tolist()
+                
+                fig_comb = go.Figure()
+                fig_comb.add_trace(go.Scatter(
+                    x=x_vals, y=y_vals,
+                    mode="lines+markers+text",
+                    name="화제성 점수",
+                    text=labels,
+                    textposition="top center",
+                    textfont=dict(size=11, color="#333"),
+                    line=dict(color='#ec407a', width=3),
+                    marker=dict(size=7, color='#ec407a')
+                ))
+                
+                # Y축 범위 설정 (텍스트 잘림 방지 위해 상단 여유)
+                if y_vals:
+                    max_y = max(y_vals)
+                    fig_comb.update_yaxes(range=[0, max_y * 1.25], title=None, fixedrange=True)
+                else:
+                    fig_comb.update_yaxes(title=None, fixedrange=True)
+
+                if use_category:
+                    fig_comb.update_xaxes(categoryorder="array", categoryarray=x_vals, title=None, fixedrange=True)
+                else:
+                    fig_comb.update_xaxes(title=None, fixedrange=True)
+                    
+                fig_comb.update_layout(
+                    legend_title=None, 
+                    height=chart_h, 
+                    margin=dict(l=8, r=8, t=20, b=8)
+                )
+                st.plotly_chart(fig_comb, use_container_width=True, config=common_cfg)
+            else:
+                st.info("표시할 화제성 점수 데이터가 없습니다.")
+        else:
+            st.info("표시할 화제성 점수 데이터가 없습니다.")
+
+    with cF:
+        # [수정] 더미 카드 (빈 공간 유지용)
+        st.markdown("""
+        <div style='height:320px; 
+                    background:transparent; 
+                    border-radius:10px; 
+                    border:none;
+                    display:flex; align-items:center; justify-content:center; 
+                    color:#ccc;'>
+        </div>
+        """, unsafe_allow_html=True)
 
 
     # === [Row4] TV/TVING 데모분포  ===
