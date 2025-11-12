@@ -2548,7 +2548,7 @@ def render_demographic():
 
 #region [ 10. 페이지 4: IP간 비교분석 ]
 # =====================================================
-# [수정] 시청률/디지털 차트 스타일(색상, 타이틀, 라인스타일) 2페이지와 통일 (2025-11-12)
+# [수정] 그룹비교 색상 회색통일 / 시청률 회차제한 강화 / 범례 중앙정렬 (2025-11-12)
 
 # ===== 10.1. [페이지 4] KPI 백분위 계산 (캐싱) =====
 @st.cache_data(ttl=600)
@@ -2732,20 +2732,27 @@ def _render_unified_charts(
 
     # [우측] 시청률 비교 (가구/타깃 통합 + 기준IP 회차제한)
     with col_rating:
-        # [수정] 제목 괄호 제거
         st.markdown(f"###### 시청률")
         
-        # 기준 IP의 최대 회차 확인
-        if "회차_numeric" not in df_target.columns:
-            df_target["회차_numeric"] = df_target["회차"].str.extract(r"(\d+)", expand=False).astype(float)
-        max_ep = df_target["회차_numeric"].max()
+        # [수정] 기준 IP의 '시청률' 데이터에서만 최대 회차 확인 (디지털/화제성 데이터 혼입 방지)
+        df_target_rating = df_target[df_target["metric"].isin(["T시청률", "H시청률"])].copy()
+        if "회차_numeric" not in df_target_rating.columns:
+            df_target_rating["회차_numeric"] = df_target_rating["회차"].str.extract(r"(\d+)", expand=False).astype(float)
+            
+        max_ep = df_target_rating["회차_numeric"].max()
         if pd.isna(max_ep): max_ep = 999
         
         # 데이터 필터링 (회차 <= max_ep)
         def _get_trend(df, metric):
             if "회차_numeric" not in df.columns:
                 df["회차_numeric"] = df["회차"].str.extract(r"(\d+)", expand=False).astype(float)
-            sub = df[(df["metric"] == metric) & (df["회차_numeric"] <= max_ep)].copy()
+            
+            # metric 일치 & 회차 제한 조건 동시 적용
+            mask = (df["metric"] == metric)
+            if pd.notna(max_ep):
+                mask = mask & (df["회차_numeric"] <= max_ep)
+            
+            sub = df[mask].copy()
             # Group일 경우 회차별 평균, IP일 경우 그냥 값
             return sub.groupby("회차_numeric")["value"].mean().sort_index()
 
@@ -2754,8 +2761,8 @@ def _render_unified_charts(
         t_comp   = _get_trend(df_comp,   "T시청률")
         h_comp   = _get_trend(df_comp,   "H시청률")
         
-        # [수정] 색상 2페이지와 통일: 타깃(#3949ab), 가구(#90a4ae)
-        # [수정] 라인 스타일: 기준(Solid), 비교군(Dot)
+        # 색상 2페이지와 통일: 타깃(#3949ab), 가구(#90a4ae)
+        # 라인 스타일: 기준(Solid), 비교군(Dot)
         fig_line = go.Figure()
         
         # 기준 IP (실선)
@@ -2764,7 +2771,7 @@ def _render_unified_charts(
         fig_line.add_trace(go.Scatter(x=t_target.index, y=t_target.values, name=f"{target_name}(타깃)",
                                       mode='lines+markers', line=dict(color="#3949ab", width=2)))
         
-        # 비교군 (점선) - 색상은 동일하게 유지하되 점선으로 구분
+        # 비교군 (점선)
         fig_line.add_trace(go.Scatter(x=h_comp.index, y=h_comp.values, name=f"{comp_name}(가구)",
                                       mode='lines+markers', line=dict(color="#90a4ae", width=2, dash='dot')))
         fig_line.add_trace(go.Scatter(x=t_comp.index, y=t_comp.values, name=f"{comp_name}(타깃)",
@@ -2849,7 +2856,6 @@ def _render_unified_charts(
     st.divider()
 
     # --- 4. 디지털 비교 (도넛차트) ---
-    # [수정] 제목 괄호 제거
     st.markdown("#### 4. 디지털 반응")
     col_dig_view, col_dig_buzz = st.columns(2)
 
@@ -2863,8 +2869,6 @@ def _render_unified_charts(
         
         if sub.empty: return pd.DataFrame(columns=["매체", "val"])
         
-        # Group 일 경우: Group 내 IP들의 평균 총합? Or Sum of averages?
-        # "상대적 스케일"을 위해선 '평균적인 IP의 볼륨'을 비교해야 함.
         per_ip = sub.groupby(["IP", "매체"])["value"].sum().reset_index()
         avg_per_media = per_ip.groupby("매체")["value"].mean().reset_index().rename(columns={"value":"val"})
         return avg_per_media
@@ -2872,17 +2876,16 @@ def _render_unified_charts(
     def _draw_scaled_donuts(df_t, df_c, title, t_name, c_name, color_c):
         from plotly.subplots import make_subplots
         
-        # [수정] 2페이지와 동일한 디지털 컬러 팔레트 적용
+        # 2페이지와 동일한 디지털 컬러 팔레트
         digital_colors = ['#5c6bc0', '#7e57c2', '#26a69a', '#66bb6a', '#ffa726', '#ef5350']
         
-        # 색상 일관성을 위해 매체명 정렬 (필요시)
+        # 색상 일관성을 위해 매체명 정렬
         df_t = df_t.sort_values("매체")
         df_c = df_c.sort_values("매체")
 
         fig = make_subplots(rows=1, cols=2, specs=[[{'type':'domain'}, {'type':'domain'}]],
                             subplot_titles=[f"{t_name}", f"{c_name}"])
         
-        # Total Value for label
         sum_t = df_t["val"].sum() if not df_t.empty else 0
         sum_c = df_c["val"].sum() if not df_c.empty else 0
         
@@ -2891,7 +2894,7 @@ def _render_unified_charts(
                 labels=df_t["매체"], values=df_t["val"], 
                 name=t_name, scalegroup='one', hole=0.4,
                 title=f"Total<br>{int(sum_t):,}", title_font=dict(size=14),
-                marker=dict(colors=digital_colors), # [수정] 컬러 적용
+                marker=dict(colors=digital_colors),
                 domain=dict(column=0)
             ), 1, 1)
         
@@ -2900,12 +2903,13 @@ def _render_unified_charts(
                 labels=df_c["매체"], values=df_c["val"], 
                 name=c_name, scalegroup='one', hole=0.4,
                 title=f"Total<br>{int(sum_c):,}", title_font=dict(size=14),
-                marker=dict(colors=digital_colors), # [수정] 컬러 적용
+                marker=dict(colors=digital_colors),
                 domain=dict(column=1)
             ), 1, 2)
-            
+        
+        # [수정] 범례 가운데 정렬 (x=0.5, xanchor='center')
         fig.update_layout(height=320, margin=dict(t=30, b=10, l=10, r=10),
-                          legend=dict(orientation="h", y=-0.1))
+                          legend=dict(orientation="h", y=-0.15, x=0.5, xanchor="center"))
         return fig
 
     # Digital Views
@@ -3037,8 +3041,8 @@ def render_comparison():
         # KPI Row
         _render_kpi_row_ip_vs_group(kpis_target, kpis_comp, comp_name)
         
-        # Unified Charts (Blue Color for Group)
-        _render_unified_charts(df_target, df_comp, selected_ip1, comp_name, kpi_percentiles, comp_color="#2a61cc")
+        # [수정] 그룹 색상(comp_color)을 IPvsIP 모드와 동일하게 회색(#aaaaaa)으로 변경
+        _render_unified_charts(df_target, df_comp, selected_ip1, comp_name, kpi_percentiles, comp_color="#aaaaaa")
 
     else: # IP vs IP
         if not selected_ip2:
@@ -3052,7 +3056,7 @@ def render_comparison():
         # KPI Row
         _render_kpi_row_ip_vs_ip(kpis_target, kpis_comp, selected_ip1, selected_ip2)
         
-        # Unified Charts (Grey Color for IP2)
+        # Unified Charts (IP2 is Grey)
         _render_unified_charts(df_target, df_comp, selected_ip1, comp_name, kpi_percentiles, comp_color="#aaaaaa")
 #endregion
 
