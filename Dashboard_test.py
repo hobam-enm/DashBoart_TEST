@@ -1689,7 +1689,12 @@ def render_ip_detail():
         )
 
     def sublines_dummy():
-        return "<div class='kpi-subwrap' style='visibility:hidden;'><span class='kpi-sublabel'>_</span></div>"
+        return (
+            "<div class='kpi-subwrap' style='visibility:hidden;'>"
+            "<span class='kpi-sublabel'>공간차지용 텍스트</span><br/>" # 첫 번째 줄
+            "<span class='kpi-sublabel'>공간차지용 텍스트</span>"     # 두 번째 줄
+            "</div>"
+        )
 
     def kpi_with_rank(col, title, value, base_val, rank_tuple, prog_label, intlike=False, digits=3, value_suffix=""):
         with col:
