@@ -1684,7 +1684,12 @@ def render_ip_detail():
         )
 
     def sublines_dummy():
-        return "<div class='kpi-subwrap' style='visibility:hidden;'><span class='kpi-sublabel'>_</span></div>"
+        return (
+         "<div class='kpi-subwrap' style='visibility:hidden;'>"
+         "<span class='kpi-sublabel'>_</span> <span class='kpi-substrong'>_</span><br/>"
+         "<span class='kpi-sublabel'>_</span> <span class='kpi-subpct'>_</span>"
+          "</div>"
+        )
 
     def kpi_with_rank(col, title, value, base_val, rank_tuple, prog_label, intlike=False, digits=3, value_suffix=""):
         with col:
