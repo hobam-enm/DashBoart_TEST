@@ -2548,7 +2548,7 @@ def render_demographic():
 
 #region [ 10. 페이지 4: IP간 비교분석 ]
 # =====================================================
-# [수정] 하단 그래프 통일 및 디지털 도넛차트(스케일반영) 적용 (2025-11-12)
+# [수정] 시청률/디지털 차트 스타일(색상, 타이틀, 라인스타일) 2페이지와 통일 (2025-11-12)
 
 # ===== 10.1. [페이지 4] KPI 백분위 계산 (캐싱) =====
 @st.cache_data(ttl=600)
@@ -2592,10 +2592,9 @@ def get_kpi_data_for_all_ips(df_all: pd.DataFrame) -> pd.DataFrame:
     kpi_view = _get_view_data(df).groupby("IP")["value"].sum().rename("디지털 조회수") # [3. 공통 함수]
     kpi_buzz = df[df["metric"] == "언급량"].groupby("IP")["value"].sum().rename("디지털 언급량")
     
-    # [수정] 3. 화제성 점수(F_Score) KPI 추가
+    # [수정] 화제성 점수(F_Score) KPI 추가
     kpi_f_score = _ip_mean_of_ep_mean("F_Score").rename("화제성 점수")
 
-    # [수정] 3. kpi_df에 화제성 점수 추가
     kpi_df = pd.concat([kpi_t_rating, kpi_h_rating, kpi_vod, kpi_livequick, kpi_view, kpi_buzz, kpi_f_score], axis=1)
     kpi_percentiles = kpi_df.rank(pct=True) * 100
     return kpi_percentiles.fillna(0)
@@ -2733,7 +2732,8 @@ def _render_unified_charts(
 
     # [우측] 시청률 비교 (가구/타깃 통합 + 기준IP 회차제한)
     with col_rating:
-        st.markdown(f"###### 시청률 트렌드 ({target_name} 회차 기준)")
+        # [수정] 제목 괄호 제거
+        st.markdown(f"###### 시청률")
         
         # 기준 IP의 최대 회차 확인
         if "회차_numeric" not in df_target.columns:
@@ -2754,17 +2754,21 @@ def _render_unified_charts(
         t_comp   = _get_trend(df_comp,   "T시청률")
         h_comp   = _get_trend(df_comp,   "H시청률")
         
+        # [수정] 색상 2페이지와 통일: 타깃(#3949ab), 가구(#90a4ae)
+        # [수정] 라인 스타일: 기준(Solid), 비교군(Dot)
         fig_line = go.Figure()
-        # Target IP (Red)
+        
+        # 기준 IP (실선)
         fig_line.add_trace(go.Scatter(x=h_target.index, y=h_target.values, name=f"{target_name}(가구)",
-                                      mode='lines+markers', line=dict(color="#d93636", width=2)))
+                                      mode='lines+markers', line=dict(color="#90a4ae", width=2)))
         fig_line.add_trace(go.Scatter(x=t_target.index, y=t_target.values, name=f"{target_name}(타깃)",
-                                      mode='lines+markers', line=dict(color="#d93636", width=2, dash='dot')))
-        # Comp IP/Group (Grey/Blue)
+                                      mode='lines+markers', line=dict(color="#3949ab", width=2)))
+        
+        # 비교군 (점선) - 색상은 동일하게 유지하되 점선으로 구분
         fig_line.add_trace(go.Scatter(x=h_comp.index, y=h_comp.values, name=f"{comp_name}(가구)",
-                                      mode='lines+markers', line=dict(color=comp_color, width=2)))
+                                      mode='lines+markers', line=dict(color="#90a4ae", width=2, dash='dot')))
         fig_line.add_trace(go.Scatter(x=t_comp.index, y=t_comp.values, name=f"{comp_name}(타깃)",
-                                      mode='lines+markers', line=dict(color=comp_color, width=2, dash='dot')))
+                                      mode='lines+markers', line=dict(color="#3949ab", width=2, dash='dot')))
         
         fig_line.update_layout(height=350, margin=dict(t=30, b=10), 
                                legend=dict(orientation="h", yanchor="bottom", y=1.02),
@@ -2785,15 +2789,9 @@ def _render_unified_charts(
         sub = sub[sub["성별"].isin(["남","여"]) & (sub["연령"]!="기타")]
         sub["label"] = sub.apply(lambda r: f"{r['연령']}{'남성' if r['성별']=='남' else '여성'}", axis=1)
         
-        # IP별 회차별 합 -> 회차 평균 -> 데모별 평균? (Group)
-        # Logic: (Group Sum of Val by Ep/Demo) / (Num Eps * Num IPs)?
-        # Simply: Mean of value by Demo label across all relevant rows
-        # But for proper weighting: Sum per IP/Ep/Demo -> Mean per Demo?
-        # For Comparison Page consistency: "Avg Pop per Episode"
         if "회차_numeric" not in sub.columns:
              sub["회차_numeric"] = sub["회차"].str.extract(r"(\d+)", expand=False).astype(float)
         
-        # Groupby [IP, Ep, Label] sum -> Groupby [Label] mean
         agg = sub.groupby(["IP","회차_numeric","label"])["value"].sum().reset_index()
         return agg.groupby("label")["value"].mean()
 
@@ -2851,7 +2849,8 @@ def _render_unified_charts(
     st.divider()
 
     # --- 4. 디지털 비교 (도넛차트) ---
-    st.markdown("#### 4. 디지털 반응 (매체별 비중 & 상대적 스케일)")
+    # [수정] 제목 괄호 제거
+    st.markdown("#### 4. 디지털 반응")
     col_dig_view, col_dig_buzz = st.columns(2)
 
     # Helper for Pie
@@ -2866,17 +2865,20 @@ def _render_unified_charts(
         
         # Group 일 경우: Group 내 IP들의 평균 총합? Or Sum of averages?
         # "상대적 스케일"을 위해선 '평균적인 IP의 볼륨'을 비교해야 함.
-        # Group Dataframe has multiple IPs.
-        # Step 1: Calc Sum per IP per Media
         per_ip = sub.groupby(["IP", "매체"])["value"].sum().reset_index()
-        # Step 2: Average across IPs per Media
         avg_per_media = per_ip.groupby("매체")["value"].mean().reset_index().rename(columns={"value":"val"})
         return avg_per_media
 
     def _draw_scaled_donuts(df_t, df_c, title, t_name, c_name, color_c):
-        # Plotly Subplots with scalegroup
         from plotly.subplots import make_subplots
         
+        # [수정] 2페이지와 동일한 디지털 컬러 팔레트 적용
+        digital_colors = ['#5c6bc0', '#7e57c2', '#26a69a', '#66bb6a', '#ffa726', '#ef5350']
+        
+        # 색상 일관성을 위해 매체명 정렬 (필요시)
+        df_t = df_t.sort_values("매체")
+        df_c = df_c.sort_values("매체")
+
         fig = make_subplots(rows=1, cols=2, specs=[[{'type':'domain'}, {'type':'domain'}]],
                             subplot_titles=[f"{t_name}", f"{c_name}"])
         
@@ -2884,14 +2886,12 @@ def _render_unified_charts(
         sum_t = df_t["val"].sum() if not df_t.empty else 0
         sum_c = df_c["val"].sum() if not df_c.empty else 0
         
-        # Colors? Use default plotly sequence or specific mapping?
-        # Use default for media distinction.
-        
         if not df_t.empty:
             fig.add_trace(go.Pie(
                 labels=df_t["매체"], values=df_t["val"], 
                 name=t_name, scalegroup='one', hole=0.4,
                 title=f"Total<br>{int(sum_t):,}", title_font=dict(size=14),
+                marker=dict(colors=digital_colors), # [수정] 컬러 적용
                 domain=dict(column=0)
             ), 1, 1)
         
@@ -2900,6 +2900,7 @@ def _render_unified_charts(
                 labels=df_c["매체"], values=df_c["val"], 
                 name=c_name, scalegroup='one', hole=0.4,
                 title=f"Total<br>{int(sum_c):,}", title_font=dict(size=14),
+                marker=dict(colors=digital_colors), # [수정] 컬러 적용
                 domain=dict(column=1)
             ), 1, 2)
             
