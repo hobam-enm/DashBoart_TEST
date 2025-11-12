@@ -1072,7 +1072,7 @@ def get_avg_demo_pop_by_episode(df_src: pd.DataFrame, medias: List[str]) -> pd.D
 
 #region [ 7. 페이지 1: Overview ]
 # =====================================================
-# [수정] 티빙퀵 KPI 삭제 및 VOD 합산 로직 반영 (2025-11-12)
+# [수정] 그래프 제목 간소화 및 호버 숫자 포맷(N억NNNN만) 적용 (2025-11-12)
 def render_overview():
     df = load_data() # [3. 공통 함수]
   
@@ -1147,7 +1147,7 @@ def render_overview():
     def avg_of_ip_tving_epSum_mean(media_name: str):
         return mean_of_ip_episode_sum(f, "시청인구", [media_name]) # [5. 공통 함수]
 
-    # [수정] 티빙 VOD + QUICK 합산 계산 함수 추가
+    # [수정] 티빙 VOD + QUICK 합산 계산 함수
     def avg_of_ip_tving_vod_combined():
         return mean_of_ip_episode_sum(f, "시청인구", ["TVING VOD", "TVING QUICK"]) # [5. 공통 함수]
 
@@ -1227,21 +1227,42 @@ def render_overview():
                                   value_vars=["TV 본방","티빙 본방","티빙 VOD"],
                                   var_name="구분", value_name="시청자수")
 
+            # [수정] 호버 포맷팅 함수 (N억NNNN만, 만단위 미만 반올림)
+            def fmt_kor_hover(x):
+                if pd.isna(x) or x == 0: return "0"
+                val = int(round(x / 10000)) # 만 단위 반올림
+                uk = val // 10000
+                man = val % 10000
+                if uk > 0:
+                    return f"{uk}억{man:04d}만"
+                else:
+                    return f"{man}만"
+
+            df_long["hover_txt"] = df_long["시청자수"].apply(fmt_kor_hover)
+
             fig = px.bar(
                 df_long, x="주차시작일", y="시청자수", color="구분", text="시청자수",
-                title="📊 주차별 시청자수 (TV 본방 / 티빙 본방 / 티빙 VOD(Quick포함), 누적)",
+                # [수정] 제목 간소화 (설명 제거)
+                title="📊 주차별 시청자수",
                 color_discrete_map={
                     "TV 본방": "#1f77b4",
                     "티빙 본방": "#d62728",
                     "티빙 VOD": "#ff7f7f"
-                }
+                },
+                # [수정] 커스텀 데이터 추가 (호버용)
+                custom_data=["hover_txt"]
             )
             fig.update_layout(
                 xaxis_title=None, yaxis_title=None,
                 barmode="stack", legend_title="구분",
                 title_font=dict(size=20)
             )
-            fig.update_traces(texttemplate='%{text:,.0f}', textposition="inside")
+            # [수정] 호버 템플릿 적용 (커스텀 데이터 사용)
+            fig.update_traces(
+                texttemplate='%{text:,.0f}', 
+                textposition="inside",
+                hovertemplate="<b>%{x}</b><br>%{data.name}: %{customdata[0]}<extra></extra>"
+            )
             
             c_trend, = st.columns(1)
             with c_trend:
