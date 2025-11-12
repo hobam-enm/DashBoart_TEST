@@ -1425,7 +1425,7 @@ def render_ip_detail():
             **지표 기준**
         - **시청률** `회차평균`: 전국 기준 가구 / 타깃(2049) 시청률
         - **티빙 LIVE** `회차평균`: 업데이트 예정
-        - **티빙 VOD** `회차평균`: 회차 방영일부터 +6일까지의 7일간 VOD UV
+        - **티빙 주간 VOD** `회차평균`: 회차 방영일부터 +6일까지의 7일간 VOD UV
         - **디지털 조회/언급량** `회차총합`: 방영주차(월~일) 내 총합
         - **화제성 점수** `회차평균`: 방영기간 주차별 화제성 점수 평균
         """).strip())
@@ -1739,7 +1739,7 @@ def render_ip_detail():
     kpi_with_rank(r1c1, "🎯 타깃시청률",    val_T,   base_T,   rk_T,     prog_label, intlike=False, digits=3)
     kpi_with_rank(r1c2, "🏠 가구시청률",    val_H,   base_H,   rk_H,     prog_label, intlike=False, digits=3)
     kpi_with_rank(r1c3, "📺 TVING LIVE",     val_live,  base_live,  rk_live,  prog_label, intlike=True)
-    kpi_with_rank(r1c4, "▶️ TVING VOD",      val_vod,   base_vod,   rk_vod,   prog_label, intlike=True)
+    kpi_with_rank(r1c4, "▶️ TVING 주간 VOD",      val_vod,   base_vod,   rk_vod,   prog_label, intlike=True)
 
     r2c1, r2c2, r2c3, r2c4 = st.columns(4)
     kpi_with_rank(r2c1, "💬 총 언급량",     val_buzz,  base_buzz,  rk_buzz,  prog_label, intlike=True)
@@ -1852,7 +1852,7 @@ def render_ip_detail():
                 height=chart_h, margin=dict(l=8, r=8, t=10, b=8),
                 legend=dict(orientation='h', yanchor='bottom', y=1.02),
                 yaxis=dict(
-                    title="VOD (합산)", 
+                    title="주간 VOD", 
                     titlefont=dict(color="#1565c0"),
                     tickfont=dict(color="#1565c0"),
                     side="left",
