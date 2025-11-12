@@ -1410,7 +1410,7 @@ def render_overview():
 
 #region [ 8. 페이지 2: IP 성과 자세히보기 ]
 # =====================================================
-# [수정] 화제성 순위/점수 그래프 통합 및 빈칸 더미카드 처리 (2025-11-12)
+# [수정] 티빙 라이브 Y축 0 고정, 데모 차트 3분할 및 색상 개선 반영 (2025-11-12)
 def render_ip_detail():
 
     df_full = load_data() # [3. 공통 함수]
@@ -1870,7 +1870,9 @@ def render_ip_detail():
                     tickvals=live_ticks_val,
                     ticktext=live_ticks_txt,
                     fixedrange=True,
-                    showgrid=False
+                    showgrid=False,
+                    # [수정] 라이브 꺾은선 그래프 최하단값 0으로 설정
+                    range=[0, max_live * 1.2 if pd.notna(max_live) and max_live > 0 else 10]
                 )
             )
             fig_tving.update_xaxes(categoryorder="array", categoryarray=ep_order, title=None, fixedrange=True)
@@ -2113,19 +2115,124 @@ def render_ip_detail():
         """, unsafe_allow_html=True)
 
 
-    # === [Row4] TV/TVING 데모분포  ===
-    cG, cH = st.columns(2)
+    # === [Row4] 데모 분포 (3분할: TV / TVING LIVE / TVING VOD) ===
+    # [수정] 3개 컬럼으로 분할 및 색상 개선 적용
+    cG, cH, cI = st.columns(3)
+
+    # [내부 함수] 로컬 피라미드 렌더러 (세련된 색상 적용)
+    def _render_pyramid_local(container, title, df_src, height=260):
+        if df_src.empty:
+            container.info("표시할 데이터가 없습니다.")
+            return
+
+        # [수정] 개선된 파랑/빨강 색상 정의
+        COLOR_MALE_NEW = "#5B85D9"   # Soft Royal Blue
+        COLOR_FEMALE_NEW = "#E66C6C" # Soft Red
+
+        df_demo = df_src.copy()
+        df_demo["성별"] = df_demo["데모"].apply(_gender_from_demo)
+        df_demo["연령대_대"] = df_demo["데모"].apply(_to_decade_label)
+        df_demo = df_demo[df_demo["성별"].isin(["남","여"]) & df_demo["연령대_대"].notna()]
+
+        if df_demo.empty:
+            container.info("표시할 데모 데이터가 없습니다.")
+            return
+
+        order = sorted(df_demo["연령대_대"].unique().tolist(), key=_decade_key)
+
+        pvt = (
+            df_demo.groupby(["연령대_대","성별"])["value"]
+                   .sum()
+                   .unstack("성별")
+                   .reindex(order)
+                   .fillna(0)
+        )
+
+        male = -pvt.get("남", pd.Series(0, index=pvt.index))
+        female = pvt.get("여", pd.Series(0, index=pvt.index))
+
+        max_abs = float(max(male.abs().max(), female.max()) or 1)
+
+        male_share = (male.abs() / male.abs().sum() * 100) if male.abs().sum() else male.abs()
+        female_share = (female / female.sum() * 100) if female.sum() else female
+
+        male_text = [f"{v:.1f}%" for v in male_share]
+        female_text = [f"{v:.1f}%" for v in female_share]
+
+        fig = go.Figure()
+        fig.add_trace(go.Bar(
+            y=pvt.index, x=male, name="남",
+            orientation="h",
+            marker_color=COLOR_MALE_NEW, # [적용]
+            text=male_text,
+            textposition="inside",
+            insidetextanchor="end",
+            textfont=dict(color="#ffffff", size=12),
+            hovertemplate="연령대=%{y}<br>남성=%{customdata[0]:,.0f}명<br>성별내 비중=%{customdata[1]:.1f}%<extra></extra>",
+            customdata=np.column_stack([male.abs(), male_share])
+        ))
+        fig.add_trace(go.Bar(
+            y=pvt.index, x=female, name="여",
+            orientation="h",
+            marker_color=COLOR_FEMALE_NEW, # [적용]
+            text=female_text,
+            textposition="inside",
+            insidetextanchor="start",
+            textfont=dict(color="#ffffff", size=12),
+            hovertemplate="연령대=%{y}<br>여성=%{customdata[0]:,.0f}명<br>성별내 비중=%{customdata[1]:.1f}%<extra></extra>",
+            customdata=np.column_stack([female, female_share])
+        ))
+
+        fig.update_layout(
+            barmode="overlay",
+            height=height,
+            margin=dict(l=8, r=8, t=48, b=8),
+            legend_title=None,
+            bargap=0.15,
+            bargroupgap=0.05,
+            title=dict(
+                text=title,
+                x=0.0, xanchor="left",
+                y=0.98, yanchor="top",
+                font=dict(size=14)
+            )
+        )
+        fig.update_yaxes(
+            categoryorder="array",
+            categoryarray=order,
+            title=None,
+            tickfont=dict(size=12),
+            fixedrange=True
+        )
+        fig.update_xaxes(
+            range=[-max_abs*1.05, max_abs*1.05],
+            title=None,
+            showticklabels=False,
+            showgrid=False,
+            zeroline=True,
+            zerolinewidth=1,
+            zerolinecolor="#888",
+            fixedrange=True
+        )
+        container.plotly_chart(fig, use_container_width=True,
+                               config={"scrollZoom": False, "staticPlot": False, "displayModeBar": False})
 
     with cG:
-        st.markdown("<div class='sec-title'>🎯 TV 데모 분포</div>", unsafe_allow_html=True)
+        st.markdown("<div class='sec-title'>🎯 TV 데모</div>", unsafe_allow_html=True)
         tv_demo = f[(f["매체"] == "TV") & (f["metric"] == "시청인구") & f["데모"].notna()].copy()
-        render_gender_pyramid(cG, "", tv_demo, height=260) # [6. 공통 함수]
+        _render_pyramid_local(cG, "", tv_demo, height=260)
 
     with cH:
-        st.markdown("<div class='sec-title'>📺 TVING 데모 분포</div>", unsafe_allow_html=True)
-        t_keep = ["TVING LIVE", "TVING QUICK", "TVING VOD"]
-        tving_demo = f[(f["매체"].isin(t_keep)) & (f["metric"] == "시청인구") & f["데모"].notna()].copy()
-        render_gender_pyramid(cH, "", tving_demo, height=260) # [6. 공통 함수]
+        st.markdown("<div class='sec-title'>⚡ TVING LIVE 데모</div>", unsafe_allow_html=True)
+        live_demo = f[(f["매체"] == "TVING LIVE") & (f["metric"] == "시청인구") & f["데모"].notna()].copy()
+        _render_pyramid_local(cH, "", live_demo, height=260)
+
+    with cI:
+        st.markdown("<div class='sec-title'>▶️ TVING VOD 데모</div>", unsafe_allow_html=True)
+        # VOD + QUICK 합산
+        vod_demo = f[(f["매체"].isin(["TVING VOD", "TVING QUICK"])) & (f["metric"] == "시청인구") & f["데모"].notna()].copy()
+        _render_pyramid_local(cI, "", vod_demo, height=260)
+
 
     st.divider()
 
