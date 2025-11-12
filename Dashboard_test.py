@@ -1087,7 +1087,7 @@ def render_overview():
             **지표 기준**
         - **시청률** `회차평균`: 전국 기준 가구 / 타깃(2049) 시청률
         - **티빙 LIVE** `회차평균`: 업데이트 예정
-        - **티빙 VOD** `회차평균`: 방영일+1부터 +6까지 **6days** VOD UV + **QUICK** VOD 합산
+        - **티빙 VOD** `회차평균`: 회차 방영일부터 +6일까지의 7일간 VOD UV
         - **디지털 조회/언급량** `회차총합`: 방영주차(월~일) 내 총합
         - **화제성 점수** `회차평균`: 방영기간 주차별 화제성 점수 평균
         - **앵커드라마 기준**: 토일 3%↑, 월화 2%↑
@@ -1410,7 +1410,7 @@ def render_overview():
 
 #region [ 8. 페이지 2: IP 성과 자세히보기 ]
 # =====================================================
-# [수정] 기존 Region 9
+# [수정] 티빙퀵 통합(VOD합산), 그래프 색상/제목 스타일 개선 (2025-11-12)
 def render_ip_detail():
 
     df_full = load_data() # [3. 공통 함수]
@@ -1425,8 +1425,7 @@ def render_ip_detail():
             **지표 기준**
         - **시청률** `회차평균`: 전국 기준 가구 / 타깃(2049) 시청률
         - **티빙 LIVE** `회차평균`: 업데이트 예정
-        - **티빙 QUICK** `회차평균`: 방영당일 VOD 시청 UV
-        - **티빙 VOD** `회차평균`: 방영일+1부터 +6까지 **6days** VOD UV
+        - **티빙 VOD** `회차평균`: 회차 방영일부터 +6일까지의 7일간 VOD UV
         - **디지털 조회/언급량** `회차총합`: 방영주차(월~일) 내 총합
         - **화제성 점수** `회차평균`: 방영기간 주차별 화제성 점수 평균
         """).strip())
@@ -1544,8 +1543,10 @@ def render_ip_detail():
     val_T = mean_of_ip_episode_mean(f, "T시청률") # [5. 공통 함수]
     val_H = mean_of_ip_episode_mean(f, "H시청률") # [5. 공통 함수]
     val_live = mean_of_ip_episode_sum(f, "시청인구", ["TVING LIVE"]) # [5. 공통 함수]
-    val_quick = mean_of_ip_episode_sum(f, "시청인구", ["TVING QUICK"]) # [5. 공통 함수]
-    val_vod = mean_of_ip_episode_sum(f, "시청인구", ["TVING VOD"]) # [5. 공통 함수]
+    
+    # [수정] VOD = VOD + QUICK 합산
+    val_vod = mean_of_ip_episode_sum(f, "시청인구", ["TVING VOD", "TVING QUICK"]) 
+    
     val_buzz = mean_of_ip_sums(f, "언급량") # [5. 공통 함수]
     val_view = mean_of_ip_sums(f, "조회수") # [5. 공통 함수]
 
@@ -1582,16 +1583,15 @@ def render_ip_detail():
     base_T = mean_of_ip_episode_mean(base, "T시청률")
     base_H = mean_of_ip_episode_mean(base, "H시청률")
     base_live = mean_of_ip_episode_sum(base, "시청인구", ["TVING LIVE"])
-    base_quick = mean_of_ip_episode_sum(base, "시청인구", ["TVING QUICK"])
-    base_vod = mean_of_ip_episode_sum(base, "시청인구", ["TVING VOD"])
+    
+    # [수정] 베이스 VOD도 QUICK 합산
+    base_vod = mean_of_ip_episode_sum(base, "시청인구", ["TVING VOD", "TVING QUICK"]) 
+    
     base_buzz = mean_of_ip_sums(base, "언급량")
     base_view = mean_of_ip_sums(base, "조회수")
 
     # --- 화제성 베이스값 (페이지 2 전용) ---
-    # [수정] _series_ip_metric 함수 수정 (조회수 필터 적용 및 value 클리닝)
     def _series_ip_metric(base_df: pd.DataFrame, metric_name: str, mode: str = "mean", media: List[str] | None = None):
-        
-        # [수정] '조회수' metric일 경우 PGC/UGC 필터(_get_view_data) 적용
         if metric_name == "조회수":
             sub = _get_view_data(base_df) # [3. 공통 함수]
         else:
@@ -1604,14 +1604,10 @@ def render_ip_detail():
 
         ep_col = _episode_col(sub) # [5. 공통 함수]
         sub = sub.dropna(subset=[ep_col])
-        if sub.empty: 
-            return pd.Series(dtype=float)
-
-        # [추가] 집계 전 value 컬럼 처리 (데이터 일관성 확보)
         sub["value"] = pd.to_numeric(sub["value"], errors="coerce").replace(0, np.nan)
         sub = sub.dropna(subset=["value"])
-        if sub.empty:
-            return pd.Series(dtype=float)
+
+        if sub.empty: return pd.Series(dtype=float)
 
         if mode == "mean":
             ep_mean = sub.groupby(["IP", ep_col], as_index=False)["value"].mean()
@@ -1624,9 +1620,7 @@ def render_ip_detail():
         elif mode == "min":
             s = sub.groupby("IP")["value"].min()
         else:
-            # ep_col이 '회차_numeric' 또는 '회차_num'이 아닌 경우(예: '회차')
-            s = sub.groupby("IP")["value"].mean() # mode="mean"의 폴백
-            
+            s = sub.groupby("IP")["value"].mean()
         return pd.to_numeric(s, errors="coerce").dropna()
 
     base_topic_min_series = _series_ip_metric(base, "F_Total", mode="min")
@@ -1641,18 +1635,10 @@ def render_ip_detail():
         s = _series_ip_metric(base_df, metric_name, mode=mode, media=media)
         if s.empty or value is None or pd.isna(value):
             return (None, 0)
-        if ip_name not in s.index:
-            if low_is_good:
-                r = int((s < value).sum() + 1)
-            else:
-                r = int((s > value).sum() + 1)
-            return (r, int(s.shape[0]))
-        
-        # [수정] NaN 값이 순위 계산에 포함되지 않도록 .loc[ip_name] 전에 드롭
         s = s.dropna()
         if ip_name not in s.index:
-            return (None, int(s.shape[0]))
-            
+             return (None, int(s.shape[0]))
+
         ranks = s.rank(method="min", ascending=low_is_good)
         r = int(ranks.loc[ip_name])
         return (r, int(s.shape[0]))
@@ -1660,10 +1646,12 @@ def render_ip_detail():
     rk_T     = _rank_within_program(base, "T시청률", ip_selected, val_T,   mode="mean",        media=None)
     rk_H     = _rank_within_program(base, "H시청률", ip_selected, val_H,   mode="mean",        media=None)
     rk_live  = _rank_within_program(base, "시청인구", ip_selected, val_live,  mode="ep_sum_mean", media=["TVING LIVE"])
-    rk_quick = _rank_within_program(base, "시청인구", ip_selected, val_quick, mode="ep_sum_mean", media=["TVING QUICK"])
-    rk_vod   = _rank_within_program(base, "시청인구", ip_selected, val_vod,   mode="ep_sum_mean", media=["TVING VOD"])
+    
+    # [수정] 랭킹 계산 시 미디어 리스트 합산 적용
+    rk_vod   = _rank_within_program(base, "시청인구", ip_selected, val_vod,   mode="ep_sum_mean", media=["TVING VOD", "TVING QUICK"])
+    
     rk_buzz  = _rank_within_program(base, "언급량",   ip_selected, val_buzz,  mode="sum",        media=None)
-    rk_view  = _rank_within_program(base, "조회수",   ip_selected, val_view,  mode="sum",        media=None) # [수정] 이 부분이 _series_ip_metric을 호출
+    rk_view  = _rank_within_program(base, "조회수",   ip_selected, val_view,  mode="sum",        media=None)
     rk_fmin  = _rank_within_program(base, "F_Total",  ip_selected, val_topic_min, mode="min",   media=None, low_is_good=True)
     rk_fscr  = _rank_within_program(base, "F_score",  ip_selected, val_topic_avg, mode="mean",  media=None, low_is_good=False)
 
@@ -1715,26 +1703,15 @@ def render_ip_detail():
                 unsafe_allow_html=True
             )
 
-    def kpi_dummy(col):
-        with col:
-            st.markdown(
-                "<div class='kpi-card'>"
-                "<div class='kpi-title' style='visibility:hidden;'>_</div>"
-                "<div class='kpi-value' style='visibility:hidden;'>_</div>"
-                f"{sublines_dummy()}"
-                "</div>",
-                unsafe_allow_html=True
-            )
-
-    # === KPI 배치 ===
-    r1c1, r1c2, r1c3, r1c4, r1c5 = st.columns(5)
+    # === KPI 배치 (4열 구조로 변경) ===
+    r1c1, r1c2, r1c3, r1c4 = st.columns(4)
     kpi_with_rank(r1c1, "🎯 타깃시청률",    val_T,   base_T,   rk_T,     prog_label, intlike=False, digits=3)
     kpi_with_rank(r1c2, "🏠 가구시청률",    val_H,   base_H,   rk_H,     prog_label, intlike=False, digits=3)
     kpi_with_rank(r1c3, "📺 TVING LIVE",     val_live,  base_live,  rk_live,  prog_label, intlike=True)
-    kpi_with_rank(r1c4, "⚡ TVING QUICK",    val_quick, base_quick, rk_quick, prog_label, intlike=True)
-    kpi_with_rank(r1c5, "▶️ TVING VOD",      val_vod,   base_vod,   rk_vod,   prog_label, intlike=True)
+    # [수정] 티빙 VOD (퀵 합산)
+    kpi_with_rank(r1c4, "▶️ TVING VOD",      val_vod,   base_vod,   rk_vod,   prog_label, intlike=True)
 
-    r2c1, r2c2, r2c3, r2c4, r2c5 = st.columns(5)
+    r2c1, r2c2, r2c3, r2c4 = st.columns(4)
     kpi_with_rank(r2c1, "💬 총 언급량",     val_buzz,  base_buzz,  rk_buzz,  prog_label, intlike=True)
     kpi_with_rank(r2c2, "👀 디지털 조회수", val_view,  base_view,  rk_view,  prog_label, intlike=True)
 
@@ -1752,8 +1729,6 @@ def render_ip_detail():
 
     kpi_with_rank(r2c4, "🔥 화제성 점수",     val_topic_avg, base_topic_avg, rk_fscr,
                   prog_label, intlike=True)
-
-    kpi_dummy(r2c5)
 
     st.divider()
 
@@ -1778,11 +1753,15 @@ def render_ip_detail():
             fig_rate.add_trace(go.Scatter(
                 x=h_series["회차"], y=h_series["value"],
                 mode="lines+markers+text", name="가구시청률",
+                # [수정] 색상 변경 (Gray)
+                line=dict(color='#90a4ae', width=2),
                 text=[f"{v:.2f}" for v in h_series["value"]], textposition="top center"
             ))
             fig_rate.add_trace(go.Scatter(
                 x=t_series["회차"], y=t_series["value"],
                 mode="lines+markers+text", name="타깃시청률",
+                # [수정] 색상 변경 (Indigo)
+                line=dict(color='#3949ab', width=3),
                 text=[f"{v:.2f}" for v in t_series["value"]], textposition="top center"
             ))
             fig_rate.update_xaxes(categoryorder="array", categoryarray=ep_order, title=None, fixedrange=True)
@@ -1797,14 +1776,22 @@ def render_ip_detail():
         t_keep = ["TVING LIVE", "TVING QUICK", "TVING VOD"]
         tsub = f[(f["metric"] == "시청인구") & (f["매체"].isin(t_keep))].dropna(subset=["회차", "회차_num"]).copy()
         tsub = tsub.sort_values("회차_num")
+        
         if not tsub.empty:
+            # [수정] TVING VOD에 QUICK 합산 처리
+            tsub["매체_통합"] = tsub["매체"].apply(lambda x: "TVING VOD" if x in ["TVING VOD", "TVING QUICK"] else x)
+            pvt = tsub.pivot_table(index="회차", columns="매체_통합", values="value", aggfunc="sum").fillna(0)
+            
             ep_order = tsub[["회차", "회차_num"]].drop_duplicates().sort_values("회차_num")["회차"].tolist()
-            pvt = tsub.pivot_table(index="회차", columns="매체", values="value", aggfunc="sum").fillna(0)
             pvt = pvt.reindex(ep_order)
 
             fig_tving = go.Figure()
-            for col in [c for c in ["TVING LIVE", "TVING QUICK", "TVING VOD"] if c in pvt.columns]:
-                fig_tving.add_trace(go.Bar(name=col, x=pvt.index, y=pvt[col], text=None))
+            # [수정] 색상 변경 (Blue Tone-on-Tone)
+            if "TVING LIVE" in pvt.columns:
+                fig_tving.add_trace(go.Bar(name="TVING LIVE", x=pvt.index, y=pvt["TVING LIVE"], marker_color="#90caf9"))
+            if "TVING VOD" in pvt.columns:
+                fig_tving.add_trace(go.Bar(name="TVING VOD", x=pvt.index, y=pvt["TVING VOD"], marker_color="#1565c0"))
+                
             fig_tving.update_layout(
                 barmode="stack", legend_title=None,
                 bargap=0.15, bargroupgap=0.05,
@@ -1818,9 +1805,13 @@ def render_ip_detail():
 
     # === [Row2] 디지털조회수 | 디지털언급량 ===
     cC, cD = st.columns(2)
+    
+    # [수정] 세련된 컬러 팔레트 (Slate/Indigo/Teal 계열)
+    digital_colors = ['#5c6bc0', '#7e57c2', '#26a69a', '#66bb6a', '#ffa726', '#ef5350']
+    
     with cC:
         st.markdown("<div class='sec-title'>▶ 디지털 조회수</div>", unsafe_allow_html=True)
-        dview = _get_view_data(f) # [3. 공통 함수] (피드백 3번)
+        dview = _get_view_data(f) # [3. 공통 함수]
         if not dview.empty:
             if has_week_col and dview["주차"].notna().any():
                 order = (dview[["주차", "주차_num"]].dropna().drop_duplicates().sort_values("주차_num")["주차"].tolist())
@@ -1833,8 +1824,10 @@ def render_ip_detail():
                 x_vals = pvt.index.tolist(); use_category = False
 
             fig_view = go.Figure()
-            for col in pvt.columns:
-                fig_view.add_trace(go.Bar(name=col, x=x_vals, y=pvt[col], text=None))
+            for i, col in enumerate(pvt.columns):
+                c_code = digital_colors[i % len(digital_colors)]
+                fig_view.add_trace(go.Bar(name=col, x=x_vals, y=pvt[col], marker_color=c_code))
+                
             fig_view.update_layout(
                 barmode="stack", legend_title=None,
                 bargap=0.15, bargroupgap=0.05,
@@ -1864,8 +1857,10 @@ def render_ip_detail():
                 x_vals = pvt.index.tolist(); use_category = False
 
             fig_buzz = go.Figure()
-            for col in pvt.columns:
-                fig_buzz.add_trace(go.Bar(name=col, x=x_vals, y=pvt[col], text=None))
+            for i, col in enumerate(pvt.columns):
+                c_code = digital_colors[(i+2) % len(digital_colors)] # Shift colors
+                fig_buzz.add_trace(go.Bar(name=col, x=x_vals, y=pvt[col], marker_color=c_code))
+                
             fig_buzz.update_layout(
                 barmode="stack", legend_title=None,
                 bargap=0.15, bargroupgap=0.05,
@@ -1911,7 +1906,10 @@ def render_ip_detail():
                     mode="lines+markers+text", name="화제성 순위",
                     text=labels, textposition=text_positions,
                     textfont=dict(size=12, color="#111"),
-                    cliponaxis=False, marker=dict(size=8)
+                    # [수정] 색상 변경 (Purple/Pink)
+                    line=dict(color='#ab47bc', width=2),
+                    marker=dict(size=8, color='#8e24aa'),
+                    cliponaxis=False
                 ))
                 fig_fx.update_yaxes(autorange=False, range=[y_max, y_min], dtick=1,
                                     title=None, fixedrange=True)
@@ -1951,8 +1949,10 @@ def render_ip_detail():
                     fig_fscore.add_trace(go.Scatter(
                         x=x_vals, y=fs_plot.values,
                         mode="lines", 
-                        name="화제성 점수", # [수정] 피드백 5번 반영: 'F_score' -> '화제성 점수'
-                        line_shape="spline"
+                        name="화제성 점수", 
+                        line_shape="spline",
+                        # [수정] 색상 변경 (Deep Pink)
+                        line=dict(color='#ec407a', width=3)
                     ))
                     fig_fscore.update_xaxes(categoryorder="array", categoryarray=x_vals, title=None, fixedrange=True)
                     fig_fscore.update_yaxes(title=None, fixedrange=True)
@@ -1969,12 +1969,17 @@ def render_ip_detail():
     # === [Row4] TV/TVING 데모분포  ===
     cG, cH = st.columns(2)
 
-    tv_demo = f[(f["매체"] == "TV") & (f["metric"] == "시청인구") & f["데모"].notna()].copy()
-    render_gender_pyramid(cG, "🎯 TV 데모 분포", tv_demo, height=260) # [6. 공통 함수]
+    # [수정] 제목 스타일 일치 (sec-title 사용) + 함수에 title="" 전달
+    with cG:
+        st.markdown("<div class='sec-title'>🎯 TV 데모 분포</div>", unsafe_allow_html=True)
+        tv_demo = f[(f["매체"] == "TV") & (f["metric"] == "시청인구") & f["데모"].notna()].copy()
+        render_gender_pyramid(cG, "", tv_demo, height=260) # [6. 공통 함수]
 
-    t_keep = ["TVING LIVE", "TVING QUICK", "TVING VOD"]
-    tving_demo = f[(f["매체"].isin(t_keep)) & (f["metric"] == "시청인구") & f["데모"].notna()].copy()
-    render_gender_pyramid(cH, "📺 TVING 데모 분포", tving_demo, height=260) # [6. 공통 함수]
+    with cH:
+        st.markdown("<div class='sec-title'>📺 TVING 데모 분포</div>", unsafe_allow_html=True)
+        t_keep = ["TVING LIVE", "TVING QUICK", "TVING VOD"]
+        tving_demo = f[(f["매체"].isin(t_keep)) & (f["metric"] == "시청인구") & f["데모"].notna()].copy()
+        render_gender_pyramid(cH, "", tving_demo, height=260) # [6. 공통 함수]
 
     st.divider()
 
@@ -1995,7 +2000,7 @@ def render_ip_detail():
         sub["연령대_대"] = sub["데모"].apply(_decade_label_clamped) # [6. 공통 함수]
         sub = sub[sub["성별"].isin(["남", "여"]) & sub["연령대_대"].notna()].copy()
         
-        if "회차_num" not in sub.columns: # [수정] 방어 코드
+        if "회차_num" not in sub.columns:
             sub["회차_num"] = sub["회차"].str.extract(r"(\d+)", expand=False).astype(float)
 
         sub = sub.dropna(subset=["회차_num"])
