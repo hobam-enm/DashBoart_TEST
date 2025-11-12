@@ -1410,7 +1410,7 @@ def render_overview():
 
 #region [ 8. 페이지 2: IP 성과 자세히보기 ]
 # =====================================================
-# [수정] KPI/차트 로직 개선 (Base 동기화, 퀵 분리, 누적막대, 피라미드 정렬/비중 수정)
+# [수정] KPI 2열 더미카드 추가, TVING 차트 레이블/제목 정리, AgGrid 높이 자동화 (2025-11-12)
 def render_ip_detail():
 
     df_full = load_data() # [3. 공통 함수]
@@ -1460,13 +1460,11 @@ def render_ip_detail():
     # --- 선택 IP 데이터 필터링 ---
     f = df_full[df_full["IP"] == ip_selected].copy()
 
-    # 회차 숫자 컬럼 생성
     if "회차_numeric" in f.columns:
         f["회차_num"] = pd.to_numeric(f["회차_numeric"], errors="coerce")
     else:
         f["회차_num"] = pd.to_numeric(f["회차"].str.extract(r"(\d+)", expand=False), errors="coerce")
     
-    # [수정] 선택된 IP의 최대 회차 확인 (비교 그룹 데이터 동기화용)
     my_max_ep = f["회차_num"].max()
 
     def _week_to_num(x: str):
@@ -1515,7 +1513,6 @@ def render_ip_detail():
     elif not group_name_parts:
         group_name_parts.append("전체")
 
-    # [수정] Base 데이터도 선택된 IP의 최대 회차까지만 자름 (KPI 공정 비교)
     if "회차_numeric" in base_raw.columns:
         base_raw["회차_num"] = pd.to_numeric(base_raw["회차_numeric"], errors="coerce")
     else:
@@ -1534,7 +1531,7 @@ def render_ip_detail():
     )
     st.markdown("---")
 
-    # --- Metric Normalizer ---
+    # --- Metric Normalizer & Formatters ---
     def _normalize_metric(s: str) -> str:
         if s is None: return ""
         s2 = re.sub(r"[^A-Za-z0-9가-힣]+", "", str(s)).lower()
@@ -1547,7 +1544,6 @@ def render_ip_detail():
             df["metric_norm"] = df["metric"].apply(_normalize_metric)
         return df[df["metric_norm"] == target]
 
-    # --- [Helper] 포맷팅 함수들 ---
     def fmt_kor(x):
         if pd.isna(x): return "0"
         val = float(x)
@@ -1579,7 +1575,7 @@ def render_ip_detail():
         texts = [formatter(v) for v in vals]
         return vals, texts
     
-    # --- [Helper] 집계 함수 ---
+    # --- Aggregation Helpers ---
     def _series_ip_metric(base_df: pd.DataFrame, metric_name: str, mode: str = "mean", media: List[str] | None = None):
         if metric_name == "조회수": sub = _get_view_data(base_df)
         else: sub = _metric_filter(base_df, metric_name).copy()
@@ -1622,8 +1618,7 @@ def render_ip_detail():
             return float(g["val"].mean())
         return float(sub["val"].mean())
 
-    # --- KPI 값 계산 (Target & Base) ---
-    # [수정] 티빙 VOD, QUICK 분리
+    # --- KPI Calculation ---
     val_T = mean_of_ip_episode_mean(f, "T시청률")
     val_H = mean_of_ip_episode_mean(f, "H시청률")
     val_live = mean_of_ip_episode_sum(f, "시청인구", ["TVING LIVE"])
@@ -1645,7 +1640,7 @@ def render_ip_detail():
     base_topic_min = float(base_topic_min_series.mean()) if not base_topic_min_series.empty else None
     base_topic_avg = _mean_like_rating(base, "F_score")
 
-    # --- 랭킹 계산 ---
+    # --- Ranking ---
     def _rank_within_program(base_df, metric_name, ip_name, value, mode="mean", media=None, low_is_good=False):
         s = _series_ip_metric(base_df, metric_name, mode=mode, media=media)
         if s.empty or value is None or pd.isna(value): return (None, 0)
@@ -1664,7 +1659,7 @@ def render_ip_detail():
     rk_fmin  = _rank_within_program(base, "F_Total",  ip_selected, val_topic_min, mode="min",   media=None, low_is_good=True)
     rk_fscr  = _rank_within_program(base, "F_score",  ip_selected, val_topic_avg, mode="mean",  media=None, low_is_good=False)
 
-    # --- KPI 렌더 유틸 ---
+    # --- KPI Render Helpers ---
     def _pct_color(val, base_val):
         if val is None or pd.isna(val) or base_val in (None, 0) or pd.isna(base_val): return "#888"
         pct = (val / base_val) * 100
@@ -1689,12 +1684,7 @@ def render_ip_detail():
         )
 
     def sublines_dummy():
-        return (
-            "<div class='kpi-subwrap' style='visibility:hidden;'>"
-            "<span class='kpi-sublabel'>공간차지용 텍스트</span><br/>" # 첫 번째 줄
-            "<span class='kpi-sublabel'>공간차지용 텍스트</span>"     # 두 번째 줄
-            "</div>"
-        )
+        return "<div class='kpi-subwrap' style='visibility:hidden;'><span class='kpi-sublabel'>_</span></div>"
 
     def kpi_with_rank(col, title, value, base_val, rank_tuple, prog_label, intlike=False, digits=3, value_suffix=""):
         with col:
@@ -1706,17 +1696,17 @@ def render_ip_detail():
                 unsafe_allow_html=True
             )
 
-    # === KPI 배치 (1행 5열: 시청률/티빙) ===
+    # === KPI 배치 (Row 1) ===
     c1, c2, c3, c4, c5 = st.columns(5)
     kpi_with_rank(c1, "🎯 타깃시청률",    val_T, base_T, rk_T, prog_label, digits=3)
     kpi_with_rank(c2, "🏠 가구시청률",    val_H, base_H, rk_H, prog_label, digits=3)
     kpi_with_rank(c3, "📺 TVING LIVE",     val_live, base_live, rk_live, prog_label, intlike=True)
-    # [수정] QUICK 분리, 라벨 '당일 VOD'로 표기
     kpi_with_rank(c4, "⚡ TVING 당일 VOD",  val_quick, base_quick, rk_quick, prog_label, intlike=True)
     kpi_with_rank(c5, "▶️ TVING 주간 VOD", val_vod, base_vod, rk_vod, prog_label, intlike=True)
 
-    # === KPI 배치 (2행 4열: 디지털/화제성) ===
-    c6, c7, c8, c9 = st.columns(4)
+    # === KPI 배치 (Row 2) ===
+    # [수정] 5열로 확장하고 마지막에 더미 카드 추가
+    c6, c7, c8, c9, c10 = st.columns(5)
     kpi_with_rank(c6, "👀 디지털 조회수", val_view, base_view, rk_view, prog_label, intlike=True)
     kpi_with_rank(c7, "💬 디지털 언급량", val_buzz, base_buzz, rk_buzz, prog_label, intlike=True)
     with c8:
@@ -1728,14 +1718,21 @@ def render_ip_detail():
             unsafe_allow_html=True
         )
     kpi_with_rank(c9, "🔥 화제성 점수", val_topic_avg, base_topic_avg, rk_fscr, prog_label, intlike=True)
+    with c10:
+        # 더미 카드 (레이아웃 맞춤용, 투명 처리)
+        st.markdown(
+            f"<div class='kpi-card' style='opacity:0; pointer-events:none;'><div class='kpi-title'>-</div>"
+            f"<div class='kpi-value'>-</div>{sublines_dummy()}</div>",
+            unsafe_allow_html=True
+        )
 
     st.divider()
 
-    # --- 공통 그래프 설정 ---
+    # --- Charts ---
     chart_h = 320
     common_cfg = {"scrollZoom": False, "staticPlot": False, "displayModeBar": False}
 
-    # === [Row1] 시청률 추이 | 티빙 누적막대 ===
+    # === [Row1] 시청률 | 티빙 ===
     cA, cB = st.columns(2)
     with cA:
         st.markdown("<div class='sec-title'>📈 시청률</div>", unsafe_allow_html=True)
@@ -1765,14 +1762,13 @@ def render_ip_detail():
             st.info("표시할 시청률 데이터가 없습니다.")
 
     with cB:
-        # [수정] 티빙 시청자수: 누적 막대 그래프 (LIVE, QUICK, VOD)
-        st.markdown("<div class='sec-title'>📱 TVING 시청자수 (누적)</div>", unsafe_allow_html=True)
+        # [수정] 제목 누적 텍스트 제거
+        st.markdown("<div class='sec-title'>📱 TVING 시청자수</div>", unsafe_allow_html=True)
         t_keep = ["TVING LIVE", "TVING QUICK", "TVING VOD"]
         tsub = f[(f["metric"] == "시청인구") & (f["매체"].isin(t_keep))].dropna(subset=["회차", "회차_num"]).copy()
         tsub = tsub.sort_values("회차_num")
         
         if not tsub.empty:
-            # 매체명 변경 (QUICK -> 당일 VOD)
             media_map = {"TVING LIVE": "LIVE", "TVING QUICK": "당일 VOD", "TVING VOD": "주간 VOD"}
             tsub["매체_표기"] = tsub["매체"].map(media_map)
             
@@ -1780,26 +1776,25 @@ def render_ip_detail():
             ep_order = tsub[["회차", "회차_num"]].drop_duplicates().sort_values("회차_num")["회차"].tolist()
             pvt = pvt.reindex(ep_order)
             
-            # 누적 막대 순서 정의 (아래에서 위로 쌓임): Live -> Quick -> VOD
             stack_order = ["LIVE", "당일 VOD", "주간 VOD"]
             colors = {"LIVE": "#90caf9", "당일 VOD": "#64b5f6", "주간 VOD": "#1565c0"}
             
             fig_tving = go.Figure()
             for m in stack_order:
                 if m in pvt.columns:
-                    txt = [fmt_live_kor(v) for v in pvt[m]]
+                    # [수정] 계열별 레이블(text) 제거
                     fig_tving.add_trace(go.Bar(
                         name=m, x=pvt.index, y=pvt[m],
                         marker_color=colors[m],
-                        text=txt, textposition='inside',
-                        hovertemplate=f"<b>%{{x}}</b><br>{m}: %{{text}}<extra></extra>"
+                        text=None, # 레이블 제거
+                        hovertemplate=f"<b>%{{x}}</b><br>{m}: %{{y:,.0f}}<extra></extra>"
                     ))
             
-            # 총합 텍스트
             total_vals = pvt[list(set(pvt.columns) & set(stack_order))].sum(axis=1)
             max_val = total_vals.max()
             total_txt = [fmt_live_kor(v) for v in total_vals]
             
+            # 총합 레이블만 유지
             fig_tving.add_trace(go.Scatter(
                 x=pvt.index, y=total_vals, mode='text',
                 text=total_txt, textposition='top center',
@@ -1817,9 +1812,7 @@ def render_ip_detail():
         else:
             st.info("표시할 TVING 시청자 데이터가 없습니다.")
 
-    # === [Row2: 위치이동] 데모 분포 (3분할: TV / LIVE / VOD) ===
-    # [수정] 배치 이동: 시청률/티빙 차트 바로 아래로 이동
-    # [수정] 정렬: 높은 연령(60대)이 아래, 10대가 위 / 비중: 전체 시청자 수 대비
+    # === [Row2] 데모 분포 ===
     cG, cH, cI = st.columns(3)
 
     def _render_pyramid_local(container, title, df_src, height=260):
@@ -1835,24 +1828,17 @@ def render_ip_detail():
 
         if df_demo.empty: container.info("데이터 없음"); return
 
-        # [수정] Y축 정렬: 60대가 하단(0)에 오도록 순서 지정
-        # Plotly Bar(orientation='h')에서 y축 categoryarray의 0번 인덱스가 가장 하단에 그려짐
         order = ["60대", "50대", "40대", "30대", "20대", "10대"]
 
         pvt = df_demo.groupby(["연령대_대","성별"])["value"].sum().unstack("성별").reindex(order).fillna(0)
         male = -pvt.get("남", pd.Series(0, index=pvt.index))
         female = pvt.get("여", pd.Series(0, index=pvt.index))
 
-        # [수정] 전체 비중 기준 계산
         total_pop = male.abs().sum() + female.sum()
         if total_pop == 0: total_pop = 1
         
         male_share = (male.abs() / total_pop * 100)
         female_share = (female / total_pop * 100)
-        
-        max_share = max(male_share.max(), female_share.max())
-        # X축 범위 설정을 위해 값 자체의 Max가 아닌 Share 기준 Max를 역산하거나,
-        # 여기서는 X축을 '인구수'로 그리되 텍스트를 '전체비중'으로 표시
         max_abs = float(max(male.abs().max(), female.max()) or 1)
 
         male_text = [f"{v:.1f}%" if v > 0 else "" for v in male_share]
@@ -1898,7 +1884,7 @@ def render_ip_detail():
         vod_demo = f[(f["매체"].isin(["TVING VOD", "TVING QUICK"])) & (f["metric"] == "시청인구") & f["데모"].notna()].copy()
         _render_pyramid_local(cI, "", vod_demo, height=260)
 
-    # === [Row3] 디지털조회수 | 디지털언급량 ===
+    # === [Row3] 디지털 ===
     cC, cD = st.columns(2)
     digital_colors = ['#5c6bc0', '#7e57c2', '#26a69a', '#66bb6a', '#ffa726', '#ef5350']
     
@@ -1981,7 +1967,7 @@ def render_ip_detail():
         else:
             st.info("표시할 언급량 데이터가 없습니다.")
 
-    # === [Row4] 화제성 (통합) ===
+    # === [Row4] 화제성 ===
     cE, cF = st.columns(2)
     with cE:
         st.markdown("<div class='sec-title'>🔥 화제성 점수 & 순위</div>", unsafe_allow_html=True)
@@ -2092,16 +2078,19 @@ def render_ip_detail():
       return {{'background-color': bg, 'text-align': 'right', 'padding': '2px 4px', 'font-weight': '500'}};
     }}""")
 
-    def _render_aggrid_table(df_numeric, title, height=320):
+    # [수정] 높이 자동(autoHeight) 및 height=None 적용하여 잘림 해결
+    def _render_aggrid_table(df_numeric, title):
         st.markdown(f"###### {title}")
         if df_numeric.empty: st.info("데이터 없음"); return
         gb = GridOptionsBuilder.from_dataframe(df_numeric)
-        gb.configure_grid_options(rowHeight=34, suppressMenuHide=True, domLayout='normal')
+        # [수정] domLayout='autoHeight' 적용
+        gb.configure_grid_options(rowHeight=34, suppressMenuHide=True, domLayout='autoHeight')
         gb.configure_default_column(sortable=False, resizable=True, filter=False, cellStyle={'textAlign': 'right'}, headerClass='centered-header bold-header')
         gb.configure_column("회차", header_name="회차", cellStyle={'textAlign': 'left'})
         for c in [col for col in df_numeric.columns if col != "회차"]:
             gb.configure_column(c, header_name=c, cellRenderer=diff_renderer, cellStyle=cell_style_renderer)
-        AgGrid(df_numeric, gridOptions=gb.build(), theme="streamlit", height=height, update_mode=GridUpdateMode.NO_UPDATE, allow_unsafe_jscode=True)
+        # [수정] height=None으로 설정하여 자동 높이 사용
+        AgGrid(df_numeric, gridOptions=gb.build(), theme="streamlit", height=None, update_mode=GridUpdateMode.NO_UPDATE, allow_unsafe_jscode=True)
 
     tv_numeric = _build_demo_table_numeric(f, ["TV"])
     _render_aggrid_table(tv_numeric, "📺 TV (시청자수)")
