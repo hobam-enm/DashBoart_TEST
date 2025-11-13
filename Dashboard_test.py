@@ -1792,7 +1792,7 @@ def render_ip_detail():
 
     st.divider()
 
-    # === [Row5] 데모분석 상세 표 (AgGrid) ===
+# === [Row5] 데모분석 상세 표 (AgGrid) ===
     st.markdown("#### 👥 회차별 시청자수 분포")
 
     def _build_demo_table_numeric(df_src, medias):
@@ -1813,6 +1813,7 @@ def render_ip_detail():
         pvt.insert(0, "회차", pvt.index.map(_fmt_ep))
         return pvt.reset_index(drop=True)
 
+    # [수정] 괄호는 검정, 화살표만 색상 적용 & HTML 렌더링용 JS
     diff_renderer = JsCode("""
     function(params){
       const api = params.api;
@@ -1828,11 +1829,11 @@ def render_ip_detail():
         if (prev && prev.data && prev.data[colId] != null) {
           const pv = Number(prev.data[colId] || 0);
           
-          // 상승: 빨간색 화살표만 span으로 감쌈
+          // 상승: (▲) - 화살표만 빨간색
           if (val > pv) { 
             arrow = '<span style="margin-left:4px;">(<span style="color:#d93636;">▲</span>)</span>'; 
           } 
-          // 하락: 파란색 화살표만 span으로 감쌈
+          // 하락: (▼) - 화살표만 파란색
           else if (val < pv) { 
             arrow = '<span style="margin-left:4px;">(<span style="color:#2a61cc;">▼</span>)</span>'; 
           }
@@ -1873,8 +1874,10 @@ def render_ip_detail():
         gb.configure_grid_options(rowHeight=34, suppressMenuHide=True, domLayout='autoHeight')
         gb.configure_default_column(sortable=False, resizable=True, filter=False, cellStyle={'textAlign': 'right'}, headerClass='centered-header bold-header')
         gb.configure_column("회차", header_name="회차", cellStyle={'textAlign': 'left'})
+        
         for c in [col for col in df_numeric.columns if col != "회차"]:
             gb.configure_column(c, header_name=c, cellRenderer=diff_renderer, cellStyle=cell_style_renderer)
+            
         AgGrid(df_numeric, gridOptions=gb.build(), theme="streamlit", height=None, update_mode=GridUpdateMode.NO_UPDATE, allow_unsafe_jscode=True)
 
     tv_numeric = _build_demo_table_numeric(f, ["TV"])
@@ -1882,7 +1885,6 @@ def render_ip_detail():
 
     tving_numeric = _build_demo_table_numeric(f, ["TVING LIVE", "TVING QUICK", "TVING VOD"])
     _render_aggrid_table(tving_numeric, "▶︎ TVING 합산 시청자수")
-#endregion
 
 
 #region [ 9. 페이지 3: IP간 데모분석 ]
