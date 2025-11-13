@@ -3,12 +3,10 @@
 
 #region [ 1. 라이브러리 임포트 ]
 # =====================================================
-# [수정] 미사용 라이브러리 (os, datetime) 제거
 import re
 from typing import List, Dict, Any, Optional 
 import time, uuid
 import textwrap
-
 import numpy as np
 import pandas as pd
 import plotly.express as px
@@ -16,17 +14,15 @@ from plotly import graph_objects as go
 import plotly.io as pio
 import streamlit as st
 from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode, JsCode
-
-# [수정] gspread 관련 라이브러리 복구
 import gspread
 from google.oauth2.service_account import Credentials
 #endregion
 
 
-#region [ 1-0. 페이지 설정 — 반드시 첫 번째 Streamlit 명령 ]
+#region [ 1-0. 페이지 설정  ]
 # =====================================================
 st.set_page_config(
-    page_title="Drama Dashboard",
+    page_title="(TEST)Drama Dashboard",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -35,7 +31,6 @@ st.set_page_config(
 
 #region [ 1-1. 입장게이트 - URL 토큰 지속 인증 ]
 # =====================================================
-# (이 영역은 원본과 동일하게 유지됩니다)
 AUTH_TTL = 12*3600
 AUTH_QUERY_KEY = "auth"
 
@@ -125,426 +120,161 @@ if not check_password_with_token():
 
 #region [ 2. 공통 스타일 통합 ]
 # =====================================================
-# 모든 CSS <style> 블록을 하나로 통합
+# [수정] 2025-11-13: 사이드바 "Deep Blue & Solid White" 스타일 리뉴얼
+# - 사이드바 배경: 브랜드 블루 적용
+# - 네비게이션: 기본 흰색 텍스트 -> 선택 시 '흰색 배경 + 블루 텍스트'로 반전
+
 st.markdown("""
 <style>
-/* --- [기본] Hover foundation & Title/Box exceptions --- */
-div[data-testid="stVerticalBlockBorderWrapper"]{
-    transition: transform .18s ease, box-shadow .18s ease !important;
-    will-change: transform, box-shadow;
-    overflow: visible !important;
-    position: relative;
-    pointer-events: auto;
-}
-section[data-testid="stVerticalBlock"] h1,
-section[data-testid="stVerticalBlock"] h2,
-section[data-testid="stVerticalBlock"] h3 {
-    font-weight: 800;
-    letter-spacing: -0.02em;
-    line-height: 1.25;
-}
-section[data-testid="stVerticalBlock"] h1 { font-size: clamp(28px, 2.8vw, 38px); }
-section[data-testid="stVerticalBlock"] h2 { font-size: clamp(24px, 2.4vw, 34px); }
-section[data-testid="stVerticalBlock"] h3 { font-size: clamp(22px, 2.0vw, 30px); }
+    /* ---------------------------------------------------------
+       1. Global Layout & Typography
+       --------------------------------------------------------- */
+    @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
 
-.page-title {
-    font-size: clamp(26px, 2.4vw, 34px);
-    font-weight: 800;
-    line-height: 1.25;
-    letter-spacing: -0.02em;
-    margin: 6px 0 14px 0;
-    display: inline-flex;
-    align-items: center;
-    gap: 10px;
-}
+    html, body, [class*="css"] {
+        font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif !important;
+        color: #1F2937;
+    }
 
-/* Remove box background/border/shadow for KPI, titles, filters, mode switchers */
-div[data-testid="stVerticalBlockBorderWrapper"]:has(.kpi-card),
-div[data-testid="stVerticalBlockBorderWrapper"]:has(.page-title),
-div[data-testid="stVerticalBlockBorderWrapper"]:has(h1),
-div[data-testid="stVerticalBlockBorderWrapper"]:has(h2),
-div[data-testid="stVerticalBlockBorderWrapper"]:has(h3),
-div[data-testid="stVerticalBlockBorderWrapper"]:has(div[data-testid="stSelectbox"]),
-div[data-testid="stVerticalBlockBorderWrapper"]:has(div[data-testid="stMultiSelect"]),
-div[data-testid="stVerticalBlockBorderWrapper"]:has(div[data-testid="stSlider"]),
-div[data-testid="stVerticalBlockBorderWrapper"]:has(div[data-testid="stRadio"]),
-div[data-testid="stVerticalBlockBorderWrapper"]:has(.filter-group),
-div[data-testid="stVerticalBlockBorderWrapper"]:has(.mode-switch) {
-    background: transparent !important;
-    border: none !important;
-    box-shadow: none !important;
-    padding: 0 !important;
-    margin-bottom: 0.5rem !important;
-}
+    /* 앱 전체 배경: 쿨 그레이 (데이터 영역) */
+    [data-testid="stAppViewContainer"] {
+        background-color: #F3F4F6;
+    }
+    
+    .block-container {
+        padding-top: 3rem;
+        padding-bottom: 5rem;
+        max-width: 1600px !important;
+    }
 
-/* --- [기본] Background & Hover (Legacy) --- */
-[data-testid="stAppViewContainer"] {
-    background: radial-gradient(1200px 500px at 10% -10%, rgba(99, 102, 241, 0.05), transparent 40%),
-                radial-gradient(1200px 500px at 90% -20%, rgba(236, 72, 153, 0.05), transparent 40%),
-                #f7f8fb;
-}
-div[data-testid="stVerticalBlockBorderWrapper"]:hover{
-    transform: translateY(-2px);
-    box-shadow: 0 14px 36px rgba(16, 24, 40, 0.14), 0 4px 12px rgba(16, 24, 40, 0.08);
-}
-div[data-testid="stVerticalBlockBorderWrapper"]:hover{
-    transform: translate3d(0, -2px, 0) !important;
-    box-shadow: 0 14px 36px rgba(16, 24, 40, 0.14), 0 4px 12px rgba(16, 24, 40, 0.08) !important;
-    z-index: 2;
-}
-div[data-testid="stVerticalBlockBorderWrapper"]:hover{
-  transform: none !important;
-  box-shadow: inherit !important;
-  z-index: auto !important;
-}
-section[data-testid="stSidebar"] .kpi-card:hover,
-section[data-testid="stSidebar"] .block-card:hover,
-section[data-testid="stSidebar"] .stPlotlyChart:hover,
-section[data-testid="stSidebar"] .ag-theme-streamlit .ag-root-wrapper:hover{
-  transform: none !important;
-  box-shadow: inherit !important;
-}
-.kpi-card, .block-card, .stPlotlyChart, .ag-theme-streamlit .ag-root-wrapper{
-  transition: transform .18s ease, box-shadow .18s ease;
-  will-change: transform, box-shadow;
-  backface-visibility: hidden;
-  -webkit-font-smoothing: antialiased;
-}
-.kpi-card:hover, .block-card:hover, .stPlotlyChart:hover, .ag-theme-streamlit .ag-root-wrapper:hover{
-  transform: translateY(-2px);
-  box-shadow: 0 14px 36px rgba(16,24,40,.14), 0 4px 12px rgba(16,24,40,.08);
-}
+    /* ---------------------------------------------------------
+       2. Card UI Strategy (본문 컨텐츠)
+       --------------------------------------------------------- */
+    div[data-testid="stVerticalBlockBorderWrapper"] {
+        background-color: #FFFFFF;
+        border: 1px solid #E5E7EB;
+        border-radius: 12px;
+        box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+        padding: 1.2rem !important;
+        margin-bottom: 1rem;
+    }
+    
+    div[data-testid="stVerticalBlockBorderWrapper"] h4 {
+        margin-top: 0; margin-bottom: 1rem;
+        font-size: 16px; font-weight: 700; color: #374151;
+        border-bottom: 1px solid #F3F4F6; padding-bottom: 0.8rem;
+    }
 
+    /* ---------------------------------------------------------
+       3. Sidebar Styling (Brand Blue Theme)
+       --------------------------------------------------------- */
+    /* 사이드바 전체 배경색 변경 */
+    section[data-testid="stSidebar"] {
+        background-color: #1E40AF; /* Deep Brand Blue */
+        border-right: 1px solid #1E3A8A;
+    }
+    
+    /* 사이드바 내부 컨테이너 투명화 */
+    section[data-testid="stSidebar"] div[data-testid="stVerticalBlockBorderWrapper"] {
+        background: transparent; border: none; box-shadow: none; padding: 0 !important;
+    }
 
-/* --- [기본] 지표기준안내 (gd-guideline) --- */
-.gd-guideline { font-size: 13px; line-height: 1.35; }
-.gd-guideline ul { margin: .2rem 0 .6rem 1.1rem; padding: 0; }
-.gd-guideline li { margin: .15rem 0; }
-.gd-guideline b, .gd-guideline strong { font-weight: 600; }
-.gd-guideline code{
-  background: rgba(16,185,129,.10);
-  color: #16a34a;
-  padding: 1px 6px;
-  border-radius: 6px;
-  font-size: .92em;
-}
-
-/* --- [기본] 앱 배경 / 카드 스타일 --- */
-[data-testid="stAppViewContainer"] {
-    background-color: #f8f9fa; /* 매우 연한 회색 배경 */
-}
-div[data-testid="stVerticalBlockBorderWrapper"] {
-    background-color: #ffffff;
-    border: 1px solid #e9e9e9;
-    border-radius: 10px;
-    box-shadow: 0 2px 5px rgba(0,0,0,0.03);
-    padding: 1.25rem 1.25rem 1.5rem 1.25rem;
-    margin-bottom: 1.5rem;
-}
-
-/* --- [사이드바] 기본 스타일 + 접힘 방지 --- */
-section[data-testid="stSidebar"] {
-    background: #ffffff;
-    border-right: 1px solid #e0e0e0;
-    padding-top: 1rem;
-    padding-left: 0.5rem;
-    padding-right: 0.5rem;
-    min-width:320px !important;
-    max-width:320px !important;
-}
-div[data-testid="collapsedControl"] { display:none !important; }
-
-/* --- [사이드바] 그라디언트 타이틀 --- */
-.page-title-wrap{
-  display:flex; align-items:center; gap:8px; margin:4px 0 10px 0;
-}
-.page-title-emoji{ font-size:20px; line-height:1; }
-.page-title-main{
-  font-size: clamp(18px, 2.2vw, 24px);
-  font-weight: 800; letter-spacing:-0.2px; line-height:1.15;
-  background: linear-gradient(90deg,#6A5ACD 0%, #A663CC 40%, #FF7A8A 75%, #FF8A3D 100%);
-  -webkit-background-clip:text; background-clip:text; color:transparent;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 100%;
-}
-section[data-testid="stSidebar"] .page-title-wrap{justify-content:center;text-align:center;}
-section[data-testid="stSidebar"] .page-title-main{display:block;text-align:center;}
-section[data-testid="stSidebar"] [data-testid="stCaptionContainer"],
-section[data-testid="stSidebar"] .stCaption,
-section[data-testid="stSidebar"] .stMarkdown p.sidebar-contact{ text-align:center !important; }
-
-/* --- [사이드바] 네비게이션 버튼 (v2) --- */
-section[data-testid="stSidebar"] .block-container{padding-top:0.75rem;}
-section[data-testid="stSidebar"] div[data-testid="stVerticalBlock"]{margin:0 !important; padding:0 !important;}
-section[data-testid="stSidebar"] .stButton{margin:0 !important; padding:0 !important;}
-section[data-testid="stSidebar"] .stButton > button{margin:0 !important;}
-section[data-testid="stSidebar"] .stButton > button {
-  width: 100%;
-  box-sizing: border-box;
-  text-align: left;
-  padding: 20px 20px;
-  border-radius: 0;
-  border: 1px solid #E5E7EB;
-  background: transparent;
-  color: #333;
-  font-weight: 600;
-  box-shadow: none;
-  transition: background-color .12s ease, color .12s ease;
-}
-section[data-testid="stSidebar"] .stButton > button:hover {
-  background: rgba(11, 97, 255, 0.08);
-  color: #000;
-}
-section[data-testid="stSidebar"] [data-testid="baseButton-secondary"] > button,
-section[data-testid="stSidebar"] .stButton > button[kind="secondary"] {
-  background: transparent;
-  color: #333;
-}
-section[data-testid="stSidebar"] [data-testid="baseButton-primary"] > button,
-section[data-testid="stSidebar"] .stButton > button[kind="primary"],
-section[data-testid="stSidebar"] .nav-active .stButton > button{
-  background: #0b61ff !important;
-  color: #ffffff !important;
-  border-bottom: 1px solid #0b61ff;
-}
-section[data-testid="stSidebar"] [data-testid="baseButton-primary"] > button:hover,
-section[data-testid="stSidebar"] .stButton > button[kind="primary"]:hover,
-section[data-testid="stSidebar"] .nav-active .stButton > button:hover{
-  background: #0a56e5 !important;
-  border-color: #0a56e5 !important;
-}
-section[data-testid="stSidebar"] [data-testid="baseButton-primary"] > button svg,
-section[data-testid="stSidebar"] .stButton > button[kind="primary"] svg,
-section[data-testid="stSidebar"] .nav-active .stButton > button svg{
-  display: none !important;
-}
-.sidebar-hr { margin: 0; border-top: 1px solid #E5E7EB; }
-
-/* --- [사이드바] 내부 카드/여백 제거 (SIDEBAR CARD STRIP) --- */
-section[data-testid="stSidebar"] div[data-testid="stVerticalBlockBorderWrapper"] {
-  background: transparent !important;
-  border: none !important;
-  box-shadow: none !important;
-  padding: 0 !important;
-  margin-bottom: 0 !important; /* [수정] 네비게이션 버튼 간격 제거 */
-}
-section[data-testid="stSidebar"] div[data-testid="stVerticalBlockBorderWrapper"]:hover {
-  transform: none !important;
-  box-shadow: none !important;
-}
-section[data-testid="stSidebar"] [data-testid="stVerticalBlock"] > div {
-  background: transparent !important;
-  border: none !important;
-  box-shadow: none !important;
-}
-section[data-testid="stSidebar"] .block-container, 
-section[data-testid="stSidebar"] [data-testid="stSidebarContent"] {
-  padding-left: 0 !important;
-  padding-right: 0 !important;
-  box-shadow: none !important;
-  border: none !important;
-  background: transparent !important;
-}
-
-/* --- [컴포넌트] KPI 카드 --- */
-.kpi-card {
-  background: #ffffff;
-  border: 1px solid #e9e9e9;
-  border-radius: 10px;
-  padding: 20px 15px;
-  text-align: center;
-  box-shadow: 0 2px 5px rgba(0,0,0,0.03);
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-}
-.kpi-title { 
-    font-size: 15px; 
-    font-weight: 600; 
-    margin-bottom: 10px; 
-    color: #444; 
-}
-.kpi-value { 
-    font-size: 28px; 
-    font-weight: 700; 
-    color: #000; 
-    line-height: 1.2;
-}
-.kpi-subwrap { margin-top: 10px; line-height: 1.4; }
-.kpi-sublabel { font-size: 12px; font-weight: 500; color: #555; letter-spacing: 0.1px; margin-right: 6px; }
-.kpi-substrong { font-size: 14px; font-weight: 700; color: #111; }
-.kpi-subpct { font-size: 14px; font-weight: 700; }
-
-/* --- [컴포넌트] AgGrid 공통 --- */
-.ag-theme-streamlit { font-size: 13px; }
-.ag-theme-streamlit .ag-root-wrapper { border-radius: 8px; }
-.ag-theme-streamlit .ag-row-hover { background-color: #f5f8ff !important; }
-.ag-theme-streamlit .ag-header-cell-label { justify-content: center !important; }
-.ag-theme-streamlit .centered-header .ag-header-cell-label { justify-content: center !important; }
-.ag-theme-streamlit .centered-header .ag-sort-indicator-container { margin-left: 4px; }
-.ag-theme-streamlit .bold-header .ag-header-cell-text { 
-    font-weight: 700 !important; 
-    font-size: 13px; 
-    color: #111;
-}
-
-/* --- [컴포넌트] 기타 미세 조정 --- */
-.sec-title{ 
-    font-size: 20px; 
-    font-weight: 700; 
-    color: #111; 
-    margin: 0 0 10px 0;
-    padding-bottom: 0;
-    border-bottom: none;
-}
-div[data-testid="stMultiSelect"], div[data-testid="stSelectbox"] { margin-top: -10px; }
-h3 { margin-top: -15px; margin-bottom: 10px; }
-h4 { font-weight: 700; color: #111; margin-top: 0rem; margin-bottom: 0.5rem; }
-hr { margin: 1.5rem 0; background-color: #e0e0e0; }
+    /* 사이드바 텍스트 컬러 조정 (흰색 기반) */
+    section[data-testid="stSidebar"] h1, 
+    section[data-testid="stSidebar"] h2, 
+    section[data-testid="stSidebar"] h3, 
+    section[data-testid="stSidebar"] .page-title-main {
+        color: #FFFFFF !important; /* 타이틀 흰색 */
+    }
+    section[data-testid="stSidebar"] p, 
+    section[data-testid="stSidebar"] label, 
+    section[data-testid="stSidebar"] .sidebar-contact {
+        color: #BFDBFE !important; /* 연한 블루 텍스트 */
+    }
+    section[data-testid="stSidebar"] hr {
+        border-top: 1px solid rgba(255,255,255,0.2) !important;
+    }
+    
+    /* [핵심] 네비게이션 버튼 스타일 */
+    section[data-testid="stSidebar"] .stButton > button {
+        width: 100%;
+        text-align: left;
+        background: transparent; /* 기본 투명 */
+        border: none;
+        color: #E0F2FE; /* 아주 밝은 하늘색 텍스트 */
+        padding: 0.75rem 1rem;
+        font-weight: 500;
+        border-radius: 8px;
+        transition: all 0.2s ease;
+        margin-bottom: 4px;
+    }
+    
+    /* Hover 효과: 약간 밝아짐 */
+    section[data-testid="stSidebar"] .stButton > button:hover {
+        background: rgba(255, 255, 255, 0.1);
+        color: #FFFFFF;
+    }
+    
+    /* [Active] 선택된 버튼: 흰색 배경 + 파란 글씨 (반전 효과) */
+    section[data-testid="stSidebar"] [data-testid="baseButton-primary"] > button,
+    section[data-testid="stSidebar"] .stButton > button[kind="primary"] {
+        background: #FFFFFF !important; /* 순백색 배경 */
+        color: #1E40AF !important;      /* 사이드바 배경과 같은 짙은 블루 텍스트 */
+        font-weight: 700;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    }
+    /* 아이콘 숨김 */
+    section[data-testid="stSidebar"] [data-testid="baseButton-primary"] > button svg { display:none; }
 
 
-/* --- [수정] HOVER FIX OVERRIDE (v2) --- */
-.stPlotlyChart:hover,
-.ag-theme-streamlit .ag-root-wrapper:hover {
-  transform: none !important;
-  box-shadow: inherit !important;
-}
+    /* ---------------------------------------------------------
+       4. Custom Components & Typography
+       --------------------------------------------------------- */
+    .page-header { margin-bottom: 2rem; }
+    .page-title { font-size: 26px; font-weight: 800; color: #111827; margin: 0; }
+    .page-desc { font-size: 14px; color: #6B7280; margin-top: 4px; }
+    
+    /* Metric Card */
+    .metric-container {
+        background: #FFFFFF;
+        border: 1px solid #E5E7EB;
+        border-radius: 10px;
+        padding: 16px 20px;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.03);
+        display: flex; flex-direction: column; height: 100%; justify-content: space-between;
+    }
+    .metric-label {
+        font-size: 13px; font-weight: 600; color: #6B7280;
+        margin-bottom: 4px; display: flex; align-items: center; gap:6px;
+    }
+    .metric-value {
+        font-size: 24px; font-weight: 800; color: #111827;
+        letter-spacing: -0.5px;
+    }
+    .metric-delta {
+        font-size: 12px; font-weight: 600; margin-top: 6px;
+        display: inline-block; padding: 2px 6px; border-radius: 4px;
+    }
+    .delta-pos { background: #ECFDF5; color: #059669; }
+    .delta-neg { background: #FEF2F2; color: #DC2626; }
+    .delta-neu { background: #F3F4F6; color: #6B7280; }
 
-/* [수정] ._liftable 클래스 의존성 제거 및 중복 규칙 통합 */
-div[data-testid="stVerticalBlockBorderWrapper"] {
-  transition: transform .18s ease, box-shadow .18s ease !important;
-  will-change: transform, box-shadow;
-  backface-visibility: hidden;
-  position: relative;
-  /* emulate ._liftable (원본 주석 유지) */
-}
-
-div[data-testid="stVerticalBlockBorderWrapper"]:has(.stPlotlyChart:hover):not(:has(div[data-testid="stVerticalBlockBorderWrapper"] .stPlotlyChart:hover)) { /* [수정] ._liftable 제거 */
-  transform: translate3d(0,-4px,0) !important;
-  box-shadow: 0 16px 40px rgba(16,24,40,.16), 0 6px 14px rgba(16,24,40,.10) !important;
-  z-index: 3 !important;
-}
-div[data-testid="stVerticalBlockBorderWrapper"]:has(.ag-theme-streamlit .ag-root-wrapper:hover):not(:has(div[data-testid="stVerticalBlockBorderWrapper"] .ag-theme-streamlit .ag-root-wrapper:hover)) { /* [수정] ._liftable 제거 */
-  transform: translate3d(0,-4px,0) !important;
-  box-shadow: 0 16px 40px rgba(16,24,40,.16), 0 6px 14px rgba(16,24,40,.10) !important;
-  z-index: 3 !important;
-}
-div[data-testid="stVerticalBlockBorderWrapper"]:has(.kpi-card:hover):not(:has(div[data-testid="stVerticalBlockBorderWrapper"] .kpi-card:hover)), /* [수정] .*_liftable 제거 */
-div[data-testid="stVerticalBlockBorderWrapper"]:has(.block-card:hover):not(:has(div[data-testid="stVerticalBlockBorderWrapper"] .block-card:hover)) { /* [수정] .*_liftable 제거 */
-  transform: translate3d(0,-4px,0) !important;
-  box-shadow: 0 16px 40px rgba(16,24,40,.16), 0 6px 14px rgba(16,24,40,.10) !important;
-  z-index: 3 !important;
-}
-section[data-testid="stSidebar"] div[data-testid="stVerticalBlockBorderWrapper"] {
-  transform: none !important;
-  box-shadow: inherit !important;
-  z-index: auto !important;
-  /* [추가] 사이드바에서는 트랜지션 효과 제거 */
-  transition: none !important; 
-}
-/* [수정] 아래의 중복 규칙들은 위의 통합 규칙으로 병합됨 */
-/*
-div[data-testid="stVerticalBlockBorderWrapper"] {
-  position: relative;
-}
-div[data-testid="stVerticalBlockBorderWrapper"] {
-  /* emulate ._liftable */
-/*}
-*/
-            
-/* ===== Sidebar compact spacing (tunable) ===== */
-[data-testid="stSidebar"]{
-  --sb-gap: 6px;               /* 블록 간 간격(기존 4px → 6px로 살짝 띄움) */
-  --sb-pad-y: 8px;             /* 사이드바 컨테이너 상하 패딩 */
-  --sb-pad-x: 10px;            /* 사이드바 컨테이너 좌우 패딩 */
-  --btn-pad-y: 8px;            /* 버튼/링크 상하 패딩(기존 6px → 8px) */
-  --btn-pad-x: 12px;           /* 버튼/링크 좌우 패딩(기존 10px → 12px) */
-  --item-gap: 4px;             /* nav 아이템끼리 간격(기존 2px → 4px) */
-  --label-gap: 3px;            /* 라벨/텍스트 아래 여백 */
-}
-
-/* 컨테이너 패딩 */
-[data-testid="stSidebar"] .block-container{
-  padding: var(--sb-pad-y) var(--sb-pad-x) !important;
-}
-
-/* 수직 스택 기본 gap */
-[data-testid="stSidebar"] [data-testid="stVerticalBlock"]{
-  gap: var(--sb-gap) !important;
-}
-
-/* 텍스트/헤더 여백 */
-[data-testid="stSidebar"] h1, 
-[data-testid="stSidebar"] h2, 
-[data-testid="stSidebar"] h3, 
-[data-testid="stSidebar"] h4, 
-[data-testid="stSidebar"] h5, 
-[data-testid="stSidebar"] h6{
-  margin: 2px 0 calc(var(--label-gap)+1px) !important;
-}
-[data-testid="stSidebar"] .stMarkdown, 
-[data-testid="stSidebar"] label{
-  margin: 0 0 var(--label-gap) !important;
-  line-height: 1.18 !important;
-}
-
-/* 버튼 */
-[data-testid="stSidebar"] .stButton{ margin: 0 !important; }
-[data-testid="stSidebar"] .stButton > button{
-  padding: var(--btn-pad-y) var(--btn-pad-x) !important;
-  margin: 0 !important;
-  min-height: auto !important;
-  line-height: 1.15 !important;
-  border-radius: 8px !important;
-}
-
-/* 페이지 링크(nav) */
-[data-testid="stSidebar"] a[data-testid="stPageLink-NavLink"]{
-  display: block;
-  padding: var(--btn-pad-y) var(--btn-pad-x) !important;
-  margin: 0 !important;
-  line-height: 1.15 !important;
-  border-radius: 8px !important;
-}
-[data-testid="stSidebar"] a[data-testid="stPageLink-NavLink"] + a{
-  margin-top: var(--item-gap) !important;
-}
-
-/* 라디오 옵션 */
-[data-testid="stSidebar"] div[role="radiogroup"]{ gap: 3px !important; }
-[data-testid="stSidebar"] div[role="radiogroup"] label{
-  padding: 4px 8px !important;
-  margin: 0 !important;
-  line-height: 1.12 !important;
-}
-
-/* 셀렉트류 아래 여백 */
-[data-testid="stSidebar"] .stSelectbox,
-[data-testid="stSidebar"] .stMultiSelect{
-  margin-bottom: 6px !important;
-}
-
-/* 커스텀 구분선/문의문구 */
-.sidebar-hr{ height: 4px; margin: 8px 0 !important; }
-.sidebar-contact{ margin: 2px 0 8px !important; line-height: 1.2 !important; }
-
-/* nav 래퍼 여백 */
-.nav-active, .nav-inactive{ margin: 0 !important; padding: 0 !important; }
-
-/* Hover 시 높이 변형 방지 */
-[data-testid="stSidebar"] .stButton > button:hover,
-[data-testid="stSidebar"] a[data-testid="stPageLink-NavLink"]:hover{
-  transform: none !important;
-}
-
+    hr { margin: 2rem 0; border-top: 1px solid #E5E7EB; }
+    
+    .ag-theme-streamlit .ag-header {
+        background-color: #F9FAFB; font-weight: 600; font-size: 12px; color: #374151;
+    }
+    
+    /* 사이드바 타이틀 그라디언트 텍스트 -> 흰색으로 변경됨에 따라 그림자 추가 */
+    .page-title-main {
+        background: none !important;
+        -webkit-text-fill-color: #FFFFFF !important;
+        text-shadow: 0 1px 2px rgba(0,0,0,0.1);
+    }
 
 </style>
 """, unsafe_allow_html=True)
 #endregion
-
 
 #region [ 2.1. 기본 설정 및 공통 상수 ]
 # =====================================================
