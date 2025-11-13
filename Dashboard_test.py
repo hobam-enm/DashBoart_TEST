@@ -120,7 +120,6 @@ if not check_password_with_token():
 
 #region [ 2. 공통 스타일 통합 ]
 # =====================================================
-# [수정] 2025-11-13: 사이드바 네비게이션 버튼 스타일 (꽉 찬 리스트형)
 
 st.markdown("""
 <style>
@@ -175,9 +174,7 @@ div[data-testid="stVerticalBlockBorderWrapper"]:has(.mode-switch) {
 
 /* --- [기본] Background & Hover (Legacy) --- */
 [data-testid="stAppViewContainer"] {
-    background: radial-gradient(1200px 500px at 10% -10%, rgba(99, 102, 241, 0.05), transparent 40%),
-                radial-gradient(1200px 500px at 90% -20%, rgba(236, 72, 153, 0.05), transparent 40%),
-                #f7f8fb;
+    background: #ffffff
 }
 /* [수정] Hover 시 Floating 효과 제거 -> 고정된 그림자로 변경 (요청사항 반영) */
 div[data-testid="stVerticalBlockBorderWrapper"]:hover{
