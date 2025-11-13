@@ -241,8 +241,8 @@ section[data-testid="stSidebar"] button svg { display: none !important; }
 section[data-testid="stSidebar"] h1, section[data-testid="stSidebar"] h2, 
 section[data-testid="stSidebar"] h3, section[data-testid="stSidebar"] .stMarkdown, 
 section[data-testid="stSidebar"] .stSelectbox, section[data-testid="stSidebar"] .stMultiSelect {
-    padding-left: 14px !important;
-    padding-right: 14px !important;
+    padding-left: 0px !important;
+    padding-right: 0px !important;
 }
 
 /* [핵심 3] 사이드바 제목: 꽉 차고 크게 */
@@ -257,7 +257,7 @@ section[data-testid="stSidebar"] .stSelectbox, section[data-testid="stSidebar"] 
 }
 .page-title-emoji { font-size: 26px; line-height: 1; }
 .page-title-main {
-    font-size: 26px; /* [수정] 폰트 크기 확대 */
+    font-size: 30px; /* [수정] 폰트 크기 확대 */
     font-weight: 800; 
     letter-spacing: -0.5px;
     line-height: 1.2;
