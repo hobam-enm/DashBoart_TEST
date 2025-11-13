@@ -125,162 +125,421 @@ if not check_password_with_token():
 
 #region [ 2. 공통 스타일 통합 ]
 # =====================================================
+# 모든 CSS <style> 블록을 하나로 통합
 st.markdown("""
 <style>
-    /* ---------------------------------------------------------
-       1. Global Layout & Typography
-       --------------------------------------------------------- */
-    @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
+/* --- [기본] Hover foundation & Title/Box exceptions --- */
+div[data-testid="stVerticalBlockBorderWrapper"]{
+    transition: transform .18s ease, box-shadow .18s ease !important;
+    will-change: transform, box-shadow;
+    overflow: visible !important;
+    position: relative;
+    pointer-events: auto;
+}
+section[data-testid="stVerticalBlock"] h1,
+section[data-testid="stVerticalBlock"] h2,
+section[data-testid="stVerticalBlock"] h3 {
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    line-height: 1.25;
+}
+section[data-testid="stVerticalBlock"] h1 { font-size: clamp(28px, 2.8vw, 38px); }
+section[data-testid="stVerticalBlock"] h2 { font-size: clamp(24px, 2.4vw, 34px); }
+section[data-testid="stVerticalBlock"] h3 { font-size: clamp(22px, 2.0vw, 30px); }
 
-    html, body, [class*="css"] {
-        font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif !important;
-        color: #1F2937; /* Dark Gray Text */
-    }
+.page-title {
+    font-size: clamp(26px, 2.4vw, 34px);
+    font-weight: 800;
+    line-height: 1.25;
+    letter-spacing: -0.02em;
+    margin: 6px 0 14px 0;
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+}
 
-    /* 앱 전체 배경: Modern Cool Gray */
-    [data-testid="stAppViewContainer"] {
-        background-color: #F3F4F6;
-    }
-    
-    /* 상단 여백 확보 */
-    .block-container {
-        padding-top: 3rem;
-        padding-bottom: 5rem;
-        max-width: 1600px !important;
-    }
+/* Remove box background/border/shadow for KPI, titles, filters, mode switchers */
+div[data-testid="stVerticalBlockBorderWrapper"]:has(.kpi-card),
+div[data-testid="stVerticalBlockBorderWrapper"]:has(.page-title),
+div[data-testid="stVerticalBlockBorderWrapper"]:has(h1),
+div[data-testid="stVerticalBlockBorderWrapper"]:has(h2),
+div[data-testid="stVerticalBlockBorderWrapper"]:has(h3),
+div[data-testid="stVerticalBlockBorderWrapper"]:has(div[data-testid="stSelectbox"]),
+div[data-testid="stVerticalBlockBorderWrapper"]:has(div[data-testid="stMultiSelect"]),
+div[data-testid="stVerticalBlockBorderWrapper"]:has(div[data-testid="stSlider"]),
+div[data-testid="stVerticalBlockBorderWrapper"]:has(div[data-testid="stRadio"]),
+div[data-testid="stVerticalBlockBorderWrapper"]:has(.filter-group),
+div[data-testid="stVerticalBlockBorderWrapper"]:has(.mode-switch) {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    margin-bottom: 0.5rem !important;
+}
 
-    /* ---------------------------------------------------------
-       2. Card UI Strategy (st.container(border=True) styling)
-       --------------------------------------------------------- */
-    /* Streamlit의 border=True 컨테이너를 'Modern Card'로 변신 */
-    div[data-testid="stVerticalBlockBorderWrapper"] {
-        background-color: #FFFFFF;
-        border: 1px solid #E5E7EB;
-        border-radius: 12px;
-        box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05); /* 아주 은은한 그림자 */
-        padding: 1.2rem !important;
-        margin-bottom: 1rem;
-    }
-    
-    /* 카드 내부의 소제목 스타일링 */
-    div[data-testid="stVerticalBlockBorderWrapper"] h4 {
-        margin-top: 0;
-        margin-bottom: 1rem;
-        font-size: 16px;
-        font-weight: 700;
-        color: #374151;
-        border-bottom: 1px solid #F3F4F6; /* 헤더 구분선 */
-        padding-bottom: 0.8rem;
-    }
+/* --- [기본] Background & Hover (Legacy) --- */
+[data-testid="stAppViewContainer"] {
+    background: radial-gradient(1200px 500px at 10% -10%, rgba(99, 102, 241, 0.05), transparent 40%),
+                radial-gradient(1200px 500px at 90% -20%, rgba(236, 72, 153, 0.05), transparent 40%),
+                #f7f8fb;
+}
+div[data-testid="stVerticalBlockBorderWrapper"]:hover{
+    transform: translateY(-2px);
+    box-shadow: 0 14px 36px rgba(16, 24, 40, 0.14), 0 4px 12px rgba(16, 24, 40, 0.08);
+}
+div[data-testid="stVerticalBlockBorderWrapper"]:hover{
+    transform: translate3d(0, -2px, 0) !important;
+    box-shadow: 0 14px 36px rgba(16, 24, 40, 0.14), 0 4px 12px rgba(16, 24, 40, 0.08) !important;
+    z-index: 2;
+}
+div[data-testid="stVerticalBlockBorderWrapper"]:hover{
+  transform: none !important;
+  box-shadow: inherit !important;
+  z-index: auto !important;
+}
+section[data-testid="stSidebar"] .kpi-card:hover,
+section[data-testid="stSidebar"] .block-card:hover,
+section[data-testid="stSidebar"] .stPlotlyChart:hover,
+section[data-testid="stSidebar"] .ag-theme-streamlit .ag-root-wrapper:hover{
+  transform: none !important;
+  box-shadow: inherit !important;
+}
+.kpi-card, .block-card, .stPlotlyChart, .ag-theme-streamlit .ag-root-wrapper{
+  transition: transform .18s ease, box-shadow .18s ease;
+  will-change: transform, box-shadow;
+  backface-visibility: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+.kpi-card:hover, .block-card:hover, .stPlotlyChart:hover, .ag-theme-streamlit .ag-root-wrapper:hover{
+  transform: translateY(-2px);
+  box-shadow: 0 14px 36px rgba(16,24,40,.14), 0 4px 12px rgba(16,24,40,.08);
+}
 
-    /* ---------------------------------------------------------
-       3. Sidebar Styling (Clean & Flat)
-       --------------------------------------------------------- */
-    section[data-testid="stSidebar"] {
-        background-color: #FFFFFF;
-        border-right: 1px solid #E5E7EB;
-    }
-    
-    /* 사이드바 내부 컨테이너들은 카드 스타일 해제 (투명하게) */
-    section[data-testid="stSidebar"] div[data-testid="stVerticalBlockBorderWrapper"] {
-        background: transparent;
-        border: none;
-        box-shadow: none;
-        padding: 0 !important;
-    }
 
-    /* 네비게이션 버튼 */
-    section[data-testid="stSidebar"] .stButton > button {
-        width: 100%;
-        text-align: left;
-        background: transparent;
-        border: none;
-        color: #4B5563;
-        padding: 0.6rem 0.8rem;
-        font-weight: 500;
-        border-radius: 6px;
-        transition: background 0.2s;
-    }
-    section[data-testid="stSidebar"] .stButton > button:hover {
-        background: #F9FAFB;
-        color: #111827;
-    }
-    
-    /* Active Nav Button */
-    section[data-testid="stSidebar"] [data-testid="baseButton-primary"] > button,
-    section[data-testid="stSidebar"] .stButton > button[kind="primary"] {
-        background: #EFF6FF !important;
-        color: #2563EB !important; /* Brand Blue */
-        font-weight: 700;
-    }
-    section[data-testid="stSidebar"] [data-testid="baseButton-primary"] > button svg { display:none; }
+/* --- [기본] 지표기준안내 (gd-guideline) --- */
+.gd-guideline { font-size: 13px; line-height: 1.35; }
+.gd-guideline ul { margin: .2rem 0 .6rem 1.1rem; padding: 0; }
+.gd-guideline li { margin: .15rem 0; }
+.gd-guideline b, .gd-guideline strong { font-weight: 600; }
+.gd-guideline code{
+  background: rgba(16,185,129,.10);
+  color: #16a34a;
+  padding: 1px 6px;
+  border-radius: 6px;
+  font-size: .92em;
+}
 
-    /* ---------------------------------------------------------
-       4. Custom Components
-       --------------------------------------------------------- */
-    /* Page Title Area */
-    .page-header {
-        margin-bottom: 2rem;
-    }
-    .page-title {
-        font-size: 26px;
-        font-weight: 800;
-        color: #111827;
-        margin: 0;
-    }
-    .page-desc {
-        font-size: 14px;
-        color: #6B7280;
-        margin-top: 4px;
-    }
-    
-    /* Metric Card (New Design) */
-    .metric-container {
-        background: #FFFFFF;
-        border: 1px solid #E5E7EB;
-        border-radius: 10px;
-        padding: 16px 20px;
-        box-shadow: 0 1px 2px rgba(0,0,0,0.03);
-        display: flex;
-        flex-direction: column;
-        height: 100%;
-        justify-content: space-between;
-    }
-    .metric-label {
-        font-size: 13px;
-        font-weight: 600;
-        color: #6B7280;
-        margin-bottom: 4px;
-        display: flex; align-items: center; gap:6px;
-    }
-    .metric-value {
-        font-size: 24px;
-        font-weight: 800;
-        color: #111827;
-        letter-spacing: -0.5px;
-    }
-    .metric-delta {
-        font-size: 12px;
-        font-weight: 600;
-        margin-top: 6px;
-        display: inline-block;
-        padding: 2px 6px;
-        border-radius: 4px;
-    }
-    .delta-pos { background: #ECFDF5; color: #059669; } /* Green */
-    .delta-neg { background: #FEF2F2; color: #DC2626; } /* Red */
-    .delta-neu { background: #F3F4F6; color: #6B7280; } /* Gray */
+/* --- [기본] 앱 배경 / 카드 스타일 --- */
+[data-testid="stAppViewContainer"] {
+    background-color: #f8f9fa; /* 매우 연한 회색 배경 */
+}
+div[data-testid="stVerticalBlockBorderWrapper"] {
+    background-color: #ffffff;
+    border: 1px solid #e9e9e9;
+    border-radius: 10px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.03);
+    padding: 1.25rem 1.25rem 1.5rem 1.25rem;
+    margin-bottom: 1.5rem;
+}
 
-    /* Divider Reset */
-    hr { margin: 2rem 0; border-top: 1px solid #E5E7EB; }
-    
-    /* AgGrid Header Clean */
-    .ag-theme-streamlit .ag-header {
-        background-color: #F9FAFB;
-        font-weight: 600;
-        font-size: 12px;
-        color: #374151;
-    }
+/* --- [사이드바] 기본 스타일 + 접힘 방지 --- */
+section[data-testid="stSidebar"] {
+    background: #ffffff;
+    border-right: 1px solid #e0e0e0;
+    padding-top: 1rem;
+    padding-left: 0.5rem;
+    padding-right: 0.5rem;
+    min-width:320px !important;
+    max-width:320px !important;
+}
+div[data-testid="collapsedControl"] { display:none !important; }
+
+/* --- [사이드바] 그라디언트 타이틀 --- */
+.page-title-wrap{
+  display:flex; align-items:center; gap:8px; margin:4px 0 10px 0;
+}
+.page-title-emoji{ font-size:20px; line-height:1; }
+.page-title-main{
+  font-size: clamp(18px, 2.2vw, 24px);
+  font-weight: 800; letter-spacing:-0.2px; line-height:1.15;
+  background: linear-gradient(90deg,#6A5ACD 0%, #A663CC 40%, #FF7A8A 75%, #FF8A3D 100%);
+  -webkit-background-clip:text; background-clip:text; color:transparent;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+section[data-testid="stSidebar"] .page-title-wrap{justify-content:center;text-align:center;}
+section[data-testid="stSidebar"] .page-title-main{display:block;text-align:center;}
+section[data-testid="stSidebar"] [data-testid="stCaptionContainer"],
+section[data-testid="stSidebar"] .stCaption,
+section[data-testid="stSidebar"] .stMarkdown p.sidebar-contact{ text-align:center !important; }
+
+/* --- [사이드바] 네비게이션 버튼 (v2) --- */
+section[data-testid="stSidebar"] .block-container{padding-top:0.75rem;}
+section[data-testid="stSidebar"] div[data-testid="stVerticalBlock"]{margin:0 !important; padding:0 !important;}
+section[data-testid="stSidebar"] .stButton{margin:0 !important; padding:0 !important;}
+section[data-testid="stSidebar"] .stButton > button{margin:0 !important;}
+section[data-testid="stSidebar"] .stButton > button {
+  width: 100%;
+  box-sizing: border-box;
+  text-align: left;
+  padding: 20px 20px;
+  border-radius: 0;
+  border: 1px solid #E5E7EB;
+  background: transparent;
+  color: #333;
+  font-weight: 600;
+  box-shadow: none;
+  transition: background-color .12s ease, color .12s ease;
+}
+section[data-testid="stSidebar"] .stButton > button:hover {
+  background: rgba(11, 97, 255, 0.08);
+  color: #000;
+}
+section[data-testid="stSidebar"] [data-testid="baseButton-secondary"] > button,
+section[data-testid="stSidebar"] .stButton > button[kind="secondary"] {
+  background: transparent;
+  color: #333;
+}
+section[data-testid="stSidebar"] [data-testid="baseButton-primary"] > button,
+section[data-testid="stSidebar"] .stButton > button[kind="primary"],
+section[data-testid="stSidebar"] .nav-active .stButton > button{
+  background: #0b61ff !important;
+  color: #ffffff !important;
+  border-bottom: 1px solid #0b61ff;
+}
+section[data-testid="stSidebar"] [data-testid="baseButton-primary"] > button:hover,
+section[data-testid="stSidebar"] .stButton > button[kind="primary"]:hover,
+section[data-testid="stSidebar"] .nav-active .stButton > button:hover{
+  background: #0a56e5 !important;
+  border-color: #0a56e5 !important;
+}
+section[data-testid="stSidebar"] [data-testid="baseButton-primary"] > button svg,
+section[data-testid="stSidebar"] .stButton > button[kind="primary"] svg,
+section[data-testid="stSidebar"] .nav-active .stButton > button svg{
+  display: none !important;
+}
+.sidebar-hr { margin: 0; border-top: 1px solid #E5E7EB; }
+
+/* --- [사이드바] 내부 카드/여백 제거 (SIDEBAR CARD STRIP) --- */
+section[data-testid="stSidebar"] div[data-testid="stVerticalBlockBorderWrapper"] {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+  margin-bottom: 0 !important; /* [수정] 네비게이션 버튼 간격 제거 */
+}
+section[data-testid="stSidebar"] div[data-testid="stVerticalBlockBorderWrapper"]:hover {
+  transform: none !important;
+  box-shadow: none !important;
+}
+section[data-testid="stSidebar"] [data-testid="stVerticalBlock"] > div {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+section[data-testid="stSidebar"] .block-container, 
+section[data-testid="stSidebar"] [data-testid="stSidebarContent"] {
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+  box-shadow: none !important;
+  border: none !important;
+  background: transparent !important;
+}
+
+/* --- [컴포넌트] KPI 카드 --- */
+.kpi-card {
+  background: #ffffff;
+  border: 1px solid #e9e9e9;
+  border-radius: 10px;
+  padding: 20px 15px;
+  text-align: center;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.03);
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+.kpi-title { 
+    font-size: 15px; 
+    font-weight: 600; 
+    margin-bottom: 10px; 
+    color: #444; 
+}
+.kpi-value { 
+    font-size: 28px; 
+    font-weight: 700; 
+    color: #000; 
+    line-height: 1.2;
+}
+.kpi-subwrap { margin-top: 10px; line-height: 1.4; }
+.kpi-sublabel { font-size: 12px; font-weight: 500; color: #555; letter-spacing: 0.1px; margin-right: 6px; }
+.kpi-substrong { font-size: 14px; font-weight: 700; color: #111; }
+.kpi-subpct { font-size: 14px; font-weight: 700; }
+
+/* --- [컴포넌트] AgGrid 공통 --- */
+.ag-theme-streamlit { font-size: 13px; }
+.ag-theme-streamlit .ag-root-wrapper { border-radius: 8px; }
+.ag-theme-streamlit .ag-row-hover { background-color: #f5f8ff !important; }
+.ag-theme-streamlit .ag-header-cell-label { justify-content: center !important; }
+.ag-theme-streamlit .centered-header .ag-header-cell-label { justify-content: center !important; }
+.ag-theme-streamlit .centered-header .ag-sort-indicator-container { margin-left: 4px; }
+.ag-theme-streamlit .bold-header .ag-header-cell-text { 
+    font-weight: 700 !important; 
+    font-size: 13px; 
+    color: #111;
+}
+
+/* --- [컴포넌트] 기타 미세 조정 --- */
+.sec-title{ 
+    font-size: 20px; 
+    font-weight: 700; 
+    color: #111; 
+    margin: 0 0 10px 0;
+    padding-bottom: 0;
+    border-bottom: none;
+}
+div[data-testid="stMultiSelect"], div[data-testid="stSelectbox"] { margin-top: -10px; }
+h3 { margin-top: -15px; margin-bottom: 10px; }
+h4 { font-weight: 700; color: #111; margin-top: 0rem; margin-bottom: 0.5rem; }
+hr { margin: 1.5rem 0; background-color: #e0e0e0; }
+
+
+/* --- [수정] HOVER FIX OVERRIDE (v2) --- */
+.stPlotlyChart:hover,
+.ag-theme-streamlit .ag-root-wrapper:hover {
+  transform: none !important;
+  box-shadow: inherit !important;
+}
+
+/* [수정] ._liftable 클래스 의존성 제거 및 중복 규칙 통합 */
+div[data-testid="stVerticalBlockBorderWrapper"] {
+  transition: transform .18s ease, box-shadow .18s ease !important;
+  will-change: transform, box-shadow;
+  backface-visibility: hidden;
+  position: relative;
+  /* emulate ._liftable (원본 주석 유지) */
+}
+
+div[data-testid="stVerticalBlockBorderWrapper"]:has(.stPlotlyChart:hover):not(:has(div[data-testid="stVerticalBlockBorderWrapper"] .stPlotlyChart:hover)) { /* [수정] ._liftable 제거 */
+  transform: translate3d(0,-4px,0) !important;
+  box-shadow: 0 16px 40px rgba(16,24,40,.16), 0 6px 14px rgba(16,24,40,.10) !important;
+  z-index: 3 !important;
+}
+div[data-testid="stVerticalBlockBorderWrapper"]:has(.ag-theme-streamlit .ag-root-wrapper:hover):not(:has(div[data-testid="stVerticalBlockBorderWrapper"] .ag-theme-streamlit .ag-root-wrapper:hover)) { /* [수정] ._liftable 제거 */
+  transform: translate3d(0,-4px,0) !important;
+  box-shadow: 0 16px 40px rgba(16,24,40,.16), 0 6px 14px rgba(16,24,40,.10) !important;
+  z-index: 3 !important;
+}
+div[data-testid="stVerticalBlockBorderWrapper"]:has(.kpi-card:hover):not(:has(div[data-testid="stVerticalBlockBorderWrapper"] .kpi-card:hover)), /* [수정] .*_liftable 제거 */
+div[data-testid="stVerticalBlockBorderWrapper"]:has(.block-card:hover):not(:has(div[data-testid="stVerticalBlockBorderWrapper"] .block-card:hover)) { /* [수정] .*_liftable 제거 */
+  transform: translate3d(0,-4px,0) !important;
+  box-shadow: 0 16px 40px rgba(16,24,40,.16), 0 6px 14px rgba(16,24,40,.10) !important;
+  z-index: 3 !important;
+}
+section[data-testid="stSidebar"] div[data-testid="stVerticalBlockBorderWrapper"] {
+  transform: none !important;
+  box-shadow: inherit !important;
+  z-index: auto !important;
+  /* [추가] 사이드바에서는 트랜지션 효과 제거 */
+  transition: none !important; 
+}
+/* [수정] 아래의 중복 규칙들은 위의 통합 규칙으로 병합됨 */
+/*
+div[data-testid="stVerticalBlockBorderWrapper"] {
+  position: relative;
+}
+div[data-testid="stVerticalBlockBorderWrapper"] {
+  /* emulate ._liftable */
+/*}
+*/
+            
+/* ===== Sidebar compact spacing (tunable) ===== */
+[data-testid="stSidebar"]{
+  --sb-gap: 6px;               /* 블록 간 간격(기존 4px → 6px로 살짝 띄움) */
+  --sb-pad-y: 8px;             /* 사이드바 컨테이너 상하 패딩 */
+  --sb-pad-x: 10px;            /* 사이드바 컨테이너 좌우 패딩 */
+  --btn-pad-y: 8px;            /* 버튼/링크 상하 패딩(기존 6px → 8px) */
+  --btn-pad-x: 12px;           /* 버튼/링크 좌우 패딩(기존 10px → 12px) */
+  --item-gap: 4px;             /* nav 아이템끼리 간격(기존 2px → 4px) */
+  --label-gap: 3px;            /* 라벨/텍스트 아래 여백 */
+}
+
+/* 컨테이너 패딩 */
+[data-testid="stSidebar"] .block-container{
+  padding: var(--sb-pad-y) var(--sb-pad-x) !important;
+}
+
+/* 수직 스택 기본 gap */
+[data-testid="stSidebar"] [data-testid="stVerticalBlock"]{
+  gap: var(--sb-gap) !important;
+}
+
+/* 텍스트/헤더 여백 */
+[data-testid="stSidebar"] h1, 
+[data-testid="stSidebar"] h2, 
+[data-testid="stSidebar"] h3, 
+[data-testid="stSidebar"] h4, 
+[data-testid="stSidebar"] h5, 
+[data-testid="stSidebar"] h6{
+  margin: 2px 0 calc(var(--label-gap)+1px) !important;
+}
+[data-testid="stSidebar"] .stMarkdown, 
+[data-testid="stSidebar"] label{
+  margin: 0 0 var(--label-gap) !important;
+  line-height: 1.18 !important;
+}
+
+/* 버튼 */
+[data-testid="stSidebar"] .stButton{ margin: 0 !important; }
+[data-testid="stSidebar"] .stButton > button{
+  padding: var(--btn-pad-y) var(--btn-pad-x) !important;
+  margin: 0 !important;
+  min-height: auto !important;
+  line-height: 1.15 !important;
+  border-radius: 8px !important;
+}
+
+/* 페이지 링크(nav) */
+[data-testid="stSidebar"] a[data-testid="stPageLink-NavLink"]{
+  display: block;
+  padding: var(--btn-pad-y) var(--btn-pad-x) !important;
+  margin: 0 !important;
+  line-height: 1.15 !important;
+  border-radius: 8px !important;
+}
+[data-testid="stSidebar"] a[data-testid="stPageLink-NavLink"] + a{
+  margin-top: var(--item-gap) !important;
+}
+
+/* 라디오 옵션 */
+[data-testid="stSidebar"] div[role="radiogroup"]{ gap: 3px !important; }
+[data-testid="stSidebar"] div[role="radiogroup"] label{
+  padding: 4px 8px !important;
+  margin: 0 !important;
+  line-height: 1.12 !important;
+}
+
+/* 셀렉트류 아래 여백 */
+[data-testid="stSidebar"] .stSelectbox,
+[data-testid="stSidebar"] .stMultiSelect{
+  margin-bottom: 6px !important;
+}
+
+/* 커스텀 구분선/문의문구 */
+.sidebar-hr{ height: 4px; margin: 8px 0 !important; }
+.sidebar-contact{ margin: 2px 0 8px !important; line-height: 1.2 !important; }
+
+/* nav 래퍼 여백 */
+.nav-active, .nav-inactive{ margin: 0 !important; padding: 0 !important; }
+
+/* Hover 시 높이 변형 방지 */
+[data-testid="stSidebar"] .stButton > button:hover,
+[data-testid="stSidebar"] a[data-testid="stPageLink-NavLink"]:hover{
+  transform: none !important;
+}
+
 
 </style>
 """, unsafe_allow_html=True)
@@ -553,45 +812,10 @@ with st.sidebar:
 #endregion
 
 
-#region [ 5. 공통 UI 컴포넌트 ]
+#region [ 5. 공통 집계 유틸: KPI 계산 ]
 # =====================================================
-# [수정] 기존 kpi 함수 제거 -> ui_metric_card로 전면 교체
+# [수정] 기존 Region 6
 
-def ui_metric_card(col, label, value, delta=None, prefix="", suffix="", icon=""):
-    """
-    Modern Metric Card Component
-    - col: Streamlit column object
-    - label: 지표 이름
-    - value: 메인 값 (문자열 or 숫자)
-    - delta: 변동률 or 부가정보 (문자열) -> 있으면 뱃지로 표시
-    """
-    
-    # Delta 스타일링
-    delta_html = ""
-    if delta:
-        # 단순 문자열 체크로 색상 결정 (상승/하락 키워드 혹은 +/- 기호)
-        d_str = str(delta)
-        if any(x in d_str for x in ["+", "▲", "상승"]):
-            cls = "delta-pos"
-        elif any(x in d_str for x in ["-", "▼", "하락"]):
-            cls = "delta-neg"
-        else:
-            cls = "delta-neu"
-        delta_html = f'<span class="metric-delta {cls}">{delta}</span>'
-    
-    icon_html = f'<span style="font-size:14px;">{icon}</span>' if icon else ""
-    
-    html = f"""
-    <div class="metric-container">
-        <div class="metric-label">{icon_html} {label}</div>
-        <div class="metric-value">{prefix}{value}{suffix}</div>
-        <div>{delta_html}</div>
-    </div>
-    """
-    with col:
-        st.markdown(html, unsafe_allow_html=True)
-
-# (기존 _episode_col, mean_of_ip... 등 집계 함수들은 그대로 둡니다. UI 함수만 교체)
 def _episode_col(df: pd.DataFrame) -> str:
     """데이터프레임에 존재하는 회차 숫자 컬럼명을 반환합니다."""
     return "회차_numeric" if "회차_numeric" in df.columns else ("회차_num" if "회차_num" in df.columns else "회차")
@@ -600,40 +824,57 @@ def mean_of_ip_episode_sum(df: pd.DataFrame, metric_name: str, media=None) -> fl
     sub = df[(df["metric"] == metric_name)].copy()
     if media is not None:
         sub = sub[sub["매체"].isin(media)]
-    if sub.empty: return None
+    if sub.empty:
+        return None
     ep_col = _episode_col(sub)
     sub = sub.dropna(subset=[ep_col]).copy()
+    
     sub["value"] = pd.to_numeric(sub["value"], errors="coerce").replace(0, np.nan)
     sub = sub.dropna(subset=["value"])
+
     ep_sum = sub.groupby(["IP", ep_col], as_index=False)["value"].sum()
     per_ip_mean = ep_sum.groupby("IP")["value"].mean()
     return float(per_ip_mean.mean()) if not per_ip_mean.empty else None
+
 
 def mean_of_ip_episode_mean(df: pd.DataFrame, metric_name: str, media=None) -> float | None:
     sub = df[(df["metric"] == metric_name)].copy()
     if media is not None:
         sub = sub[sub["매체"].isin(media)]
-    if sub.empty: return None
+    if sub.empty:
+        return None
     ep_col = _episode_col(sub)
     sub = sub.dropna(subset=[ep_col]).copy()
+    
     sub["value"] = pd.to_numeric(sub["value"], errors="coerce").replace(0, np.nan)
     sub = sub.dropna(subset=["value"])
+
     ep_mean = sub.groupby(["IP", ep_col], as_index=False)["value"].mean()
     per_ip_mean = ep_mean.groupby("IP")["value"].mean()
     return float(per_ip_mean.mean()) if not per_ip_mean.empty else None
 
+
 def mean_of_ip_sums(df: pd.DataFrame, metric_name: str, media=None) -> float | None:
+    
+    # [수정] PGC/UGC 필터 로직을 _get_view_data 함수로 분리 (피드백 3번)
     if metric_name == "조회수":
-        sub = _get_view_data(df)
+        sub = _get_view_data(df) # [3. 공통 함수]
     else:
         sub = df[df["metric"] == metric_name].copy()
+
     if media is not None:
         sub = sub[sub["매체"].isin(media)]
-    if sub.empty: return None
+    
+    if sub.empty:
+        return None
+        
     sub["value"] = pd.to_numeric(sub["value"], errors="coerce").replace(0, np.nan)
     sub = sub.dropna(subset=["value"])
+
     per_ip_sum = sub.groupby("IP")["value"].sum()
     return float(per_ip_sum.mean()) if not per_ip_sum.empty else None
+
+
 #endregion
 
 
@@ -831,231 +1072,310 @@ def get_avg_demo_pop_by_episode(df_src: pd.DataFrame, medias: List[str]) -> pd.D
 
 #region [ 7. 페이지 1: Overview ]
 # =====================================================
+# [수정] KPI/차트/테이블: 티빙 VOD를 '당일'과 '주간'으로 분리 (2025-11-12)
 def render_overview():
     df = load_data() # [3. 공통 함수]
   
-    # --- [Page Header] 카드 밖에서 시원하게 보여줌 ---
-    st.markdown("""
-    <div class="page-header">
-        <h1 class="page-title">📊 Overview</h1>
-        <p class="page-desc">전체 IP의 통합 성과와 핵심 지표를 한눈에 파악합니다.</p>
-    </div>
-    """, unsafe_allow_html=True)
+    # --- 페이지 전용 필터 ---   
+    filter_cols = st.columns(4)
     
-    # --- [Filter Section] 깔끔하게 한 줄로 ---
-    with st.container():
-        filter_cols = st.columns([2, 1, 1, 1])
-        with filter_cols[0]:
-            # 지표 가이드라인을 팝오버(버튼형)로 변경하여 공간 절약
-            with st.popover("ℹ️ 지표 기준 보기"):
-                st.markdown("<div class='gd-guideline'>", unsafe_allow_html=True)
-                st.markdown(textwrap.dedent("""
-                    **지표 기준**
-                - **시청률** `회차평균`: 전국 기준 가구 / 타깃(2049) 시청률
-                - **티빙 LIVE** `회차평균`: 실시간 시청 UV
-                - **티빙 당일 VOD** `회차평균`: (구 티빙 퀵) 본방송 당일 VOD UV
-                - **티빙 주간 VOD** `회차평균`: 회차 방영일부터 +6일까지의 7일간 VOD UV
-                - **디지털 조회/언급량** `회차총합`: 방영주차(월~일) 내 총합
-                - **화제성 점수** `회차평균`: 방영기간 주차별 화제성 점수 평균
-                """).strip())
-                st.markdown("</div>", unsafe_allow_html=True)
+    with filter_cols[0]:
+        st.markdown("### 📊 Overview")
+    with st.expander("ℹ️ 지표 기준 안내", expanded=False):
+        st.markdown("<div class='gd-guideline'>", unsafe_allow_html=True)
+        st.markdown(textwrap.dedent("""
+            **지표 기준**
+        - **시청률** `회차평균`: 전국 기준 가구 / 타깃(2049) 시청률
+        - **티빙 LIVE** `회차평균`: 실시간 시청 UV
+        - **티빙 당일 VOD** `회차평균`: (구 티빙 퀵) 본방송 당일 VOD UV
+        - **티빙 주간 VOD** `회차평균`: 회차 방영일부터 +6일까지의 7일간 VOD UV
+        - **디지털 조회/언급량** `회차총합`: 방영주차(월~일) 내 총합
+        - **화제성 점수** `회차평균`: 방영기간 주차별 화제성 점수 평균
+        - **앵커드라마 기준**: 토일 3%↑, 월화 2%↑
+        """).strip())
+        st.markdown("</div>", unsafe_allow_html=True)
 
-        with filter_cols[1]:
-            prog_sel = st.multiselect(
-                "편성", sorted(df["편성"].dropna().unique().tolist()),
-                placeholder="전체 편성", label_visibility="collapsed"
+
+    with filter_cols[1]:
+        prog_sel = st.multiselect(
+            "편성", 
+            sorted(df["편성"].dropna().unique().tolist()),
+            placeholder="편성 선택",
+            label_visibility="collapsed"
+        )
+
+    if "방영시작일" in df.columns and df["방영시작일"].notna().any():
+        date_col_for_filter = "방영시작일"
+    else:
+        date_col_for_filter = "주차시작일"
+        
+    date_series = df[date_col_for_filter].dropna()
+    if not date_series.empty:
+        all_years = sorted(date_series.dt.year.unique().tolist(), reverse=True)
+        all_months = sorted(date_series.dt.month.unique().tolist())
+        
+        with filter_cols[2]:
+            year_sel = st.multiselect(
+                "연도", 
+                all_years, 
+                placeholder="연도 선택",
+                label_visibility="collapsed"
             )
-
-        # 날짜 필터 로직
-        if "방영시작일" in df.columns and df["방영시작일"].notna().any():
-            date_col_for_filter = "방영시작일"
-        else:
-            date_col_for_filter = "주차시작일"
-            
-        date_series = df[date_col_for_filter].dropna()
-        if not date_series.empty:
-            all_years = sorted(date_series.dt.year.unique().tolist(), reverse=True)
-            all_months = sorted(date_series.dt.month.unique().tolist())
-            
-            with filter_cols[2]:
-                year_sel = st.multiselect("연도", all_years, placeholder="전체 연도", label_visibility="collapsed")
-            with filter_cols[3]:
-                month_sel = st.multiselect("월", all_months, placeholder="전체 월", label_visibility="collapsed")
-        else:
-            year_sel = None; month_sel = None
+        with filter_cols[3]:
+            month_sel = st.multiselect(
+                "월", 
+                all_months, 
+                placeholder="월 선택",
+                label_visibility="collapsed"
+            )
+    else:
+        year_sel = None
+        month_sel = None
 
     # --- 필터 적용 ---
     f = df.copy()
-    if prog_sel: f = f[f["편성"].isin(prog_sel)]
+    if prog_sel:
+        f = f[f["편성"].isin(prog_sel)]
     if year_sel and date_col_for_filter in f.columns:
         f = f[f[date_col_for_filter].dt.year.isin(year_sel)]
     if month_sel and date_col_for_filter in f.columns:
         f = f[f[date_col_for_filter].dt.month.isin(month_sel)]
 
-    # --- 지표 계산 (기존 로직 유지) ---
-    def avg_of_ip_means(metric_name): return mean_of_ip_episode_mean(f, metric_name)
-    def avg_of_ip_tving_epSum_mean(media): return mean_of_ip_episode_sum(f, "시청인구", [media])
-    def avg_of_ip_tving_quick(): return mean_of_ip_episode_sum(f, "시청인구", ["TVING QUICK"])
-    def avg_of_ip_tving_vod_weekly(): return mean_of_ip_episode_sum(f, "시청인구", ["TVING VOD"])
-    def avg_of_ip_sums(metric): return mean_of_ip_sums(f, metric)
-    def count_ip_with_min1(metric):
-        sub = f[f["metric"] == metric]
+    # --- 요약카드 계산 서브함수 (KPI 공통 유틸 사용) ---
+    def avg_of_ip_means(metric_name: str):
+        return mean_of_ip_episode_mean(f, metric_name) # [5. 공통 함수]
+
+    def avg_of_ip_tving_epSum_mean(media_name: str):
+        return mean_of_ip_episode_sum(f, "시청인구", [media_name]) # [5. 공통 함수]
+
+    # [수정] VOD 분리: 당일 VOD(Quick)
+    def avg_of_ip_tving_quick():
+        return mean_of_ip_episode_sum(f, "시청인구", ["TVING QUICK"])
+
+    # [수정] VOD 분리: 주간 VOD (순수 VOD)
+    def avg_of_ip_tving_vod_weekly():
+        return mean_of_ip_episode_sum(f, "시청인구", ["TVING VOD"])
+
+    def avg_of_ip_sums(metric_name: str):
+        return mean_of_ip_sums(f, metric_name) # [5. 공통 함수]
+
+    def count_ip_with_min1(metric_name: str):
+        sub = f[f["metric"] == metric_name]
         if sub.empty: return 0
-        return (sub.groupby("IP")["value"].min() == 1).sum()
+        ip_min = sub.groupby("IP")["value"].min()
+        return (ip_min == 1).sum()
+
     def count_anchor_dramas():
         sub = f[f["metric"]=="T시청률"].groupby(["IP","편성"])["value"].mean().reset_index()
-        return sub[(sub["편성"]=="월화") & (sub["value"]>2)].shape[0] + sub[(sub["편성"]=="토일") & (sub["value"]>3)].shape[0]
+        mon_tue = sub[(sub["편성"]=="월화") & (sub["value"]>2)].shape[0]
+        sat_sun = sub[(sub["편성"]=="토일") & (sub["value"]>3)].shape[0]
+        return mon_tue + sat_sun
 
-    # --- [Section 1] KPI Cards (배경 없이 플랫하게 배치) ---
-    st.markdown("### 📌 Key Metrics")
-    
-    # Row 1: 시청률 & 티빙
+    # --- 요약 카드 ---
+    st.caption('▶ IP별 평균')
+
+    # [수정] KPI 카드 4열 -> 5열로 확장 (Quick, VOD 분리)
     c1, c2, c3, c4, c5 = st.columns(5)
-    ui_metric_card(c1, "타깃 시청률", fmt(avg_of_ip_means("T시청률")), icon="🎯", suffix="%")
-    ui_metric_card(c2, "가구 시청률", fmt(avg_of_ip_means("H시청률")), icon="🏠", suffix="%")
-    ui_metric_card(c3, "티빙 LIVE", fmt(avg_of_ip_tving_epSum_mean("TVING LIVE"), intlike=True), icon="📺")
-    ui_metric_card(c4, "티빙 당일 VOD", fmt(avg_of_ip_tving_quick(), intlike=True), icon="⚡")
-    ui_metric_card(c5, "티빙 주간 VOD", fmt(avg_of_ip_tving_vod_weekly(), intlike=True), icon="▶️")
-    
-    st.markdown("<div style='margin-top:12px'></div>", unsafe_allow_html=True)
-    
-    # Row 2: 디지털 & 성과
-    c6, c7, c8, c9, c10 = st.columns(5)
-    ui_metric_card(c6, "디지털 조회", fmt(avg_of_ip_sums("조회수"), intlike=True), icon="👀")
-    ui_metric_card(c7, "디지털 언급", fmt(avg_of_ip_sums("언급량"), intlike=True), icon="💬")
-    ui_metric_card(c8, "화제성 점수", fmt(avg_of_ip_means("F_Score"), intlike=True), icon="🔥")
-    ui_metric_card(c9, "펀덱스 1위작", f"{count_ip_with_min1('F_Total')}개", icon="🥇")
-    ui_metric_card(c10, "앵커 달성작", f"{count_anchor_dramas()}개", icon="⚓")
-
-    st.markdown("<div style='margin-top:30px'></div>", unsafe_allow_html=True)
-
-    # --- [Section 2] Main Chart (Card UI 적용) ---
-    # 여기서부터는 st.container(border=True)를 사용하여 흰색 카드를 만듭니다.
-    
-    with st.container(border=True):
-        st.markdown("#### 📈 주차별 시청자수 트렌드")
-        
-        df_trend = f[f["metric"]=="시청인구"].copy()
-        if not df_trend.empty:
-            # (차트 데이터 처리 로직 동일)
-            tv_weekly = df_trend[df_trend["매체"]=="TV"].groupby("주차시작일")["value"].sum()
-            tving_live = df_trend[df_trend["매체"]=="TVING LIVE"].groupby("주차시작일")["value"].sum()
-            tving_quick = df_trend[df_trend["매체"]=="TVING QUICK"].groupby("주차시작일")["value"].sum()
-            tving_vod = df_trend[df_trend["매체"]=="TVING VOD"].groupby("주차시작일")["value"].sum()
-            
-            all_dates = sorted(list(set(tv_weekly.index) | set(tving_live.index) | set(tving_quick.index) | set(tving_vod.index)))
-            
-            if all_dates:
-                df_bar = pd.DataFrame({"주차시작일": all_dates})
-                df_bar["TV 본방"] = df_bar["주차시작일"].map(tv_weekly).fillna(0)
-                df_bar["티빙 본방"] = df_bar["주차시작일"].map(tving_live).fillna(0)
-                df_bar["티빙 당일"] = df_bar["주차시작일"].map(tving_quick).fillna(0)
-                df_bar["티빙 주간"] = df_bar["주차시작일"].map(tving_vod).fillna(0)
-
-                df_long = df_bar.melt(id_vars="주차시작일", value_vars=["TV 본방","티빙 본방","티빙 당일","티빙 주간"], var_name="구분", value_name="시청자수")
-                
-                # Hover format helper
-                def fmt_kor_hover(x):
-                    if pd.isna(x) or x == 0: return "0"
-                    val = int(round(x / 10000))
-                    uk = val // 10000; man = val % 10000
-                    return f"{uk}억{man:04d}만" if uk > 0 else f"{man}만"
-                df_long["hover_txt"] = df_long["시청자수"].apply(fmt_kor_hover)
-
-                fig = px.bar(
-                    df_long, x="주차시작일", y="시청자수", color="구분",
-                    color_discrete_map={"TV 본방": "#1f77b4", "티빙 본방": "#d62728", "티빙 당일": "#64b5f6", "티빙 주간": "#ff7f7f"},
-                    custom_data=["hover_txt"]
-                )
-                # [수정] 차트 스타일 클린하게
-                fig.update_layout(
-                    xaxis_title=None, yaxis_title=None, barmode="stack",
-                    legend_title=None,
-                    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-                    paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
-                    margin=dict(l=0, r=0, t=0, b=0),
-                    height=320
-                )
-                fig.update_yaxes(showgrid=True, gridcolor='#F3F4F6') # 연한 그리드
-                fig.update_traces(hovertemplate="%{customdata[0]}<extra></extra>")
-                st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
-            else:
-                st.info("데이터가 없습니다.")
-        else:
-            st.info("데이터가 없습니다.")
-
     st.markdown("<div style='margin-top:20px'></div>", unsafe_allow_html=True)
+    c6, c7, c8, c9, c10 = st.columns(5)
 
-    # --- [Section 3] Data Grid (Card UI 적용) ---
-    with st.container(border=True):
-        st.markdown("#### 🎬 주요 작품 상세 성과")
+    t_rating   = avg_of_ip_means("T시청률")
+    h_rating   = avg_of_ip_means("H시청률")
+    tving_live = avg_of_ip_tving_epSum_mean("TVING LIVE")
+    tving_quick= avg_of_ip_tving_quick()        # [추가]
+    tving_vod  = avg_of_ip_tving_vod_weekly()   # [수정]
+
+    digital_view = avg_of_ip_sums("조회수")
+    digital_buzz = avg_of_ip_sums("언급량")
+    f_score      = avg_of_ip_means("F_Score")
+    fundex_top1 = count_ip_with_min1("F_Total")
+    anchor_total = count_anchor_dramas()
+
+    kpi(c1, "🎯 타깃 시청률", fmt(t_rating, digits=3))
+    kpi(c2, "🏠 가구 시청률", fmt(h_rating, digits=3))
+    kpi(c3, "📺 티빙 LIVE", fmt(tving_live, intlike=True))
+    kpi(c4, "⚡ 티빙 당일 VOD", fmt(tving_quick, intlike=True)) # [추가]
+    kpi(c5, "▶️ 티빙 주간 VOD", fmt(tving_vod, intlike=True))   # [수정]
+    
+    kpi(c6, "👀 디지털 조회", fmt(digital_view, intlike=True))
+    kpi(c7, "💬 디지털 언급량", fmt(digital_buzz, intlike=True))
+    kpi(c8, "🔥 화제성 점수",  fmt(f_score, intlike=True))
+    kpi(c9, "🥇 펀덱스 1위", f"{fundex_top1}작품")
+    kpi(c10, "⚓ 앵커드라마", f"{anchor_total}작품")
+
+    st.divider()
+
+    # --- 주차별 시청자수 트렌드 (Stacked Bar) ---
+    # [수정] 차트도 KPI와 동일하게 Quick/VOD 분리
+    df_trend = f[f["metric"]=="시청인구"].copy()
+    if not df_trend.empty:
+        tv_weekly = df_trend[df_trend["매체"]=="TV"].groupby("주차시작일")["value"].sum()
         
-        # (테이블 데이터 처리 로직 동일)
-        def calculate_overview_performance(df):
-            all_ips = df["IP"].unique()
-            if len(all_ips) == 0: return pd.DataFrame()
-            ep_col = _episode_col(df)
+        tving_live_weekly = df_trend[df_trend["매체"]=="TVING LIVE"].groupby("주차시작일")["value"].sum()
+        tving_quick_weekly = df_trend[df_trend["매체"]=="TVING QUICK"].groupby("주차시작일")["value"].sum() # [추가]
+        tving_vod_weekly = df_trend[df_trend["매체"]=="TVING VOD"].groupby("주차시작일")["value"].sum()     # [수정]
+
+        all_dates = sorted(list(
+            set(tv_weekly.index) | set(tving_live_weekly.index) | 
+            set(tving_quick_weekly.index) | set(tving_vod_weekly.index)
+        ))
+        
+        if all_dates:
+            df_bar = pd.DataFrame({"주차시작일": all_dates})
+            df_bar["TV 본방"] = df_bar["주차시작일"].map(tv_weekly).fillna(0)
+            df_bar["티빙 본방"] = df_bar["주차시작일"].map(tving_live_weekly).fillna(0)
+            df_bar["티빙 당일"] = df_bar["주차시작일"].map(tving_quick_weekly).fillna(0) # [추가]
+            df_bar["티빙 주간"] = df_bar["주차시작일"].map(tving_vod_weekly).fillna(0)   # [수정]
+
+            df_long = df_bar.melt(id_vars="주차시작일",
+                                  value_vars=["TV 본방","티빙 본방","티빙 당일","티빙 주간"],
+                                  var_name="구분", value_name="시청자수")
+
+            def fmt_kor_hover(x):
+                if pd.isna(x) or x == 0: return "0"
+                val = int(round(x / 10000))
+                uk = val // 10000
+                man = val % 10000
+                if uk > 0: return f"{uk}억{man:04d}만"
+                else: return f"{man}만"
+
+            df_long["hover_txt"] = df_long["시청자수"].apply(fmt_kor_hover)
+
+            fig = px.bar(
+                df_long, x="주차시작일", y="시청자수", color="구분", text="시청자수",
+                title="📊 주차별 시청자수",
+                color_discrete_map={
+                    "TV 본방": "#1f77b4",
+                    "티빙 본방": "#d62728",
+                    "티빙 당일": "#64b5f6", # Page 2 Quick Color
+                    "티빙 주간": "#ff7f7f"  # Light Red for VOD (or modify to match theme)
+                },
+                custom_data=["hover_txt"]
+            )
+            fig.update_layout(
+                xaxis_title=None, yaxis_title=None,
+                barmode="stack", legend_title="구분",
+                title_font=dict(size=20)
+            )
+            fig.update_traces(
+                texttemplate='%{text:,.0f}', 
+                textposition="inside",
+                hovertemplate="<b>%{x}</b><br>%{data.name}: %{customdata[0]}<extra></extra>"
+            )
             
-            # Helper
-            def _agg(metric, media=None, mode='mean'):
-                sub = df[df["metric"] == metric]
-                if metric == "조회수": sub = _get_view_data(df)
-                if media: sub = sub[sub["매체"].isin(media)]
-                if sub.empty: return pd.Series(0, index=all_ips)
-                
-                sub = sub.dropna(subset=[ep_col, "value"])
-                sub["value"] = pd.to_numeric(sub["value"], errors="coerce")
-                
-                if mode == 'sum': grp = sub.groupby("IP")["value"].sum()
-                elif mode == 'min': grp = sub.groupby("IP")["value"].min()
-                elif mode == 'ep_sum_mean':
-                    ep_sum = sub.groupby(["IP", ep_col])["value"].sum().reset_index()
-                    grp = ep_sum.groupby("IP")["value"].mean()
-                else: # mean of ep means
-                    ep_mean = sub.groupby(["IP", ep_col])["value"].mean().reset_index()
-                    grp = ep_mean.groupby("IP")["value"].mean()
-                return grp.reindex(all_ips).fillna(0)
+            c_trend, = st.columns(1)
+            with c_trend:
+                st.plotly_chart(fig, use_container_width=True)
+        else:
+            st.info("주차별 시청자수 트렌드 데이터가 없습니다.")
+    else:
+        st.info("주차별 시청자수 트렌드 데이터가 없습니다.")
 
-            data = {
-                "IP": all_ips,
-                "타깃시청률": _agg("T시청률").values,
-                "가구시청률": _agg("H시청률").values,
-                "티빙LIVE": _agg("시청인구", ["TVING LIVE"], 'ep_sum_mean').values,
-                "티빙당일": _agg("시청인구", ["TVING QUICK"], 'ep_sum_mean').values,
-                "티빙주간": _agg("시청인구", ["TVING VOD"], 'ep_sum_mean').values,
-                "디지털조회": _agg("조회수", mode='sum').values,
-                "디지털언급": _agg("언급량", mode='sum').values,
-                "화제성순위": _agg("F_Total", mode='min').values,
-                "화제성점수": _agg("F_Score", mode='ep_sum_mean').values
-            }
-            return pd.DataFrame(data).sort_values("타깃시청률", ascending=False)
 
-        df_perf = calculate_overview_performance(f)
+    st.divider()
 
-        # JS Formatter (천단위 등)
-        fmt_fixed3 = JsCode("function(p){ return p.value ? Number(p.value).toFixed(3) : ''; }")
-        fmt_int = JsCode("function(p){ return p.value ? Math.round(p.value).toLocaleString() : ''; }")
-        fmt_rank = JsCode("function(p){ return (p.value && p.value > 0) ? Math.round(p.value) + '위' : '-'; }")
+    # --- 주요작품 테이블 (AgGrid) ---
+    st.markdown("#### 🎬 전체 작품 RAW")
 
-        gb = GridOptionsBuilder.from_dataframe(df_perf)
-        gb.configure_default_column(sortable=True, resizable=True, cellStyle={'textAlign': 'center'})
-        gb.configure_column('IP', header_name='작품명', pinned='left', width=160, cellStyle={'textAlign':'left', 'fontWeight':'600'})
-        gb.configure_column('타깃시청률', valueFormatter=fmt_fixed3, width=100)
-        gb.configure_column('가구시청률', valueFormatter=fmt_fixed3, width=100)
-        gb.configure_column('티빙LIVE', valueFormatter=fmt_int, width=110)
-        gb.configure_column('티빙당일', header_name="티빙 당일", valueFormatter=fmt_int, width=110)
-        gb.configure_column('티빙주간', header_name="티빙 주간", valueFormatter=fmt_int, width=110)
-        gb.configure_column('디지털조회', header_name="조회수", valueFormatter=fmt_int, width=120)
-        gb.configure_column('디지털언급', header_name="언급량", valueFormatter=fmt_int, width=100)
-        gb.configure_column('화제성순위', header_name="최고순위", valueFormatter=fmt_rank, width=90)
-        gb.configure_column('화제성점수', valueFormatter=fmt_int, width=100)
+    def calculate_overview_performance(df):
+        all_ips = df["IP"].unique()
+        if len(all_ips) == 0: return pd.DataFrame()
+
+        ep_col = _episode_col(df) # [5. 공통 함수]
         
-        gb.configure_grid_options(domLayout='autoHeight', rowHeight=40, headerHeight=32) # 높이 자동조절
+        def _get_mean_of_ep_sums(df, metric_name, media_list=None):
+            sub = df[df["metric"] == metric_name]
+            if media_list: sub = sub[sub["매체"].isin(media_list)]
+            if sub.empty or ep_col not in sub.columns: 
+                return pd.Series(dtype=float).reindex(all_ips).fillna(0)
+            sub = sub.dropna(subset=[ep_col]).copy()
+            sub["value"] = pd.to_numeric(sub["value"], errors="coerce").replace(0, np.nan)
+            sub = sub.dropna(subset=["value"])
+            if sub.empty: return pd.Series(dtype=float).reindex(all_ips).fillna(0)
+            ep_sum = sub.groupby(["IP", ep_col], as_index=False)["value"].sum()
+            per_ip_mean = ep_sum.groupby("IP")["value"].mean()
+            return per_ip_mean.reindex(all_ips).fillna(0) 
+
+        def _get_mean_of_ep_means(df, metric_name):
+            sub = df[df["metric"] == metric_name]
+            if sub.empty or ep_col not in sub.columns:
+                return pd.Series(dtype=float).reindex(all_ips).fillna(0)
+            sub = sub.dropna(subset=[ep_col]).copy()
+            sub["value"] = pd.to_numeric(sub["value"], errors="coerce").replace(0, np.nan)
+            sub = sub.dropna(subset=["value"])
+            if sub.empty: return pd.Series(dtype=float).reindex(all_ips).fillna(0)
+            ep_mean = sub.groupby(["IP", ep_col], as_index=False)["value"].mean()
+            per_ip_mean = ep_mean.groupby("IP")["value"].mean()
+            return per_ip_mean.reindex(all_ips).fillna(0)
         
-        AgGrid(
-            df_perf, gridOptions=gb.build(), theme="streamlit",
-            height=None, update_mode=GridUpdateMode.NO_UPDATE, allow_unsafe_jscode=True
-        )
+        aggs = {}
+        aggs["타깃시청률"] = _get_mean_of_ep_means(df, "T시청률")
+        aggs["가구시청률"] = _get_mean_of_ep_means(df, "H시청률")
+        aggs["티빙LIVE"] = _get_mean_of_ep_sums(df, "시청인구", ["TVING LIVE"])
+        
+        # [수정] 테이블 컬럼도 분리
+        aggs["티빙당일"] = _get_mean_of_ep_sums(df, "시청인구", ["TVING QUICK"])
+        aggs["티빙주간"] = _get_mean_of_ep_sums(df, "시청인구", ["TVING VOD"]) 
+        
+        aggs["디지털언급량"] = df[df["metric"] == "언급량"].groupby("IP")["value"].sum().reindex(all_ips).fillna(0)
+        aggs["디지털조회수"] = _get_view_data(df).groupby("IP")["value"].sum().reindex(all_ips).fillna(0)
+        aggs["화제성순위"] = df[df["metric"] == "F_Total"].groupby("IP")["value"].min().reindex(all_ips).fillna(0)
+        aggs["화제성점수"] = _get_mean_of_ep_sums(df, "F_Score", media_list=None)
+
+        df_perf = pd.DataFrame(aggs).fillna(0).reset_index().rename(columns={"index": "IP"})
+        return df_perf.sort_values("타깃시청률", ascending=False)
+
+    df_perf = calculate_overview_performance(f)
+
+    fmt_fixed3 = JsCode("""
+    function(params){
+      if (params.value == null || isNaN(params.value)) return '';
+      return Number(params.value).toFixed(3);
+    }""")
+    fmt_thousands = JsCode("""
+    function(params){
+      if (params.value == null || isNaN(params.value)) return '';
+      return Math.round(params.value).toLocaleString();
+    }""")
+    fmt_rank = JsCode("""
+    function(params){
+      if (params.value == null || isNaN(params.value)) return '';
+      if (params.value == 0) return '–';
+      return Math.round(params.value) + '위';
+    }""")
+
+    gb = GridOptionsBuilder.from_dataframe(df_perf)
+    gb.configure_default_column(
+        sortable=True, resizable=True, filter=False,
+        cellStyle={'textAlign': 'center'},
+        headerClass='centered-header'
+    )
+    gb.configure_grid_options(rowHeight=34, suppressMenuHide=True, domLayout='normal')
+    
+    gb.configure_column('IP', header_name='IP', cellStyle={'textAlign':'left'}) 
+    gb.configure_column('타깃시청률', valueFormatter=fmt_fixed3, sort='desc')
+    gb.configure_column('가구시청률', valueFormatter=fmt_fixed3)
+    gb.configure_column('티빙LIVE', valueFormatter=fmt_thousands)
+    # [수정] 컬럼 분리 반영
+    gb.configure_column('티빙당일', header_name="티빙 당일 VOD", valueFormatter=fmt_thousands)
+    gb.configure_column('티빙주간', header_name="티빙 주간 VOD", valueFormatter=fmt_thousands)
+    
+    gb.configure_column('디지털조회수', valueFormatter=fmt_thousands)
+    gb.configure_column('디지털언급량', valueFormatter=fmt_thousands)
+    gb.configure_column('화제성순위', valueFormatter=fmt_rank)
+    gb.configure_column('화제성점수', valueFormatter=fmt_thousands)
+
+    grid_options = gb.build()
+
+    AgGrid(
+        df_perf,
+        gridOptions=grid_options,
+        theme="streamlit",
+        height=300,
+        fit_columns_on_grid_load=True, 
+        update_mode=GridUpdateMode.NO_UPDATE,
+        allow_unsafe_jscode=True
+    )
 #endregion
 
 
