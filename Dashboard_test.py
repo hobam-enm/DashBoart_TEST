@@ -278,7 +278,7 @@ section[data-testid="stSidebar"] .stButton > button {
   padding: var(--btn-pad-y) var(--btn-pad-x) !important;
   border-radius: 0px !important;
   border: none !important;
-  border-bottom: 1px solid #f0f2f6 !important;
+  border-bottom: 1px solid #DCDCDC !important;
   
   background: transparent !important;
   color: #333333 !important; /* 진한 회색 */
