@@ -278,11 +278,12 @@ section[data-testid="stSidebar"] .stButton > button {
   width: 100%;
   box-sizing: border-box;
   text-align: left;
-  padding: 20px 20px;
-  border-radius: 0;
-  border: 1px solid #E5E7EB;
+  padding: var(--btn-pad-y) var(--btn-pad-x);
+  border-radius: 0!important;
+  border: none !important;
+  border-bottom: 1px solid #f0f2f6 !important;
   background: transparent;
-  color: #333;
+  color: #D9D9D9;
   font-weight: 600;
   box-shadow: none;
   transition: background-color .12s ease, color .12s ease;
@@ -451,7 +452,7 @@ div[data-testid="stVerticalBlockBorderWrapper"] {
             
 /* ===== Sidebar compact spacing (tunable) ===== */
 [data-testid="stSidebar"]{
-  --sb-gap: 6px;               /* 블록 간 간격(기존 4px → 6px로 살짝 띄움) */
+  --sb-gap: 0px;               /* 블록 간 간격(기존 4px → 6px로 살짝 띄움) */
   --sb-pad-y: 8px;             /* 사이드바 컨테이너 상하 패딩 */
   --sb-pad-x: 10px;            /* 사이드바 컨테이너 좌우 패딩 */
   --btn-pad-y: 16px;            /* 버튼/링크 상하 패딩(기존 6px → 8px) */
