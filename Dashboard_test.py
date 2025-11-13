@@ -1062,10 +1062,10 @@ def render_overview():
                 df_long, x="주차시작일", y="시청자수", color="구분", text="시청자수",
                 title="📊 주차별 시청자수",
                 color_discrete_map={
-                    "TV 본방": "#1f77b4",
-                    "티빙 본방": "#d62728",
-                    "티빙 당일": "#64b5f6", # Page 2 Quick Color
-                    "티빙 주간": "#ff7f7f"  # Light Red for VOD (or modify to match theme)
+                    "TV 본방": "#2c3e50",
+                    "티빙 본방": "#d32f2f",
+                    "티빙 당일": "#ff5252", 
+                    "티빙 주간": "#ffcdd2"  
                 },
                 custom_data=["hover_txt"]
             )
