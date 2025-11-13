@@ -1814,6 +1814,7 @@ def render_ip_detail():
         return pvt.reset_index(drop=True)
 
     # [수정] 괄호는 검정, 화살표만 색상 적용 & HTML 렌더링용 JS
+    # [수정] 문자열 리턴 방식을 -> DOM Element 생성 방식으로 변경
     diff_renderer = JsCode("""
     function(params){
       const api = params.api;
@@ -1829,18 +1830,21 @@ def render_ip_detail():
         if (prev && prev.data && prev.data[colId] != null) {
           const pv = Number(prev.data[colId] || 0);
           
-          // 상승: (▲) - 화살표만 빨간색
           if (val > pv) { 
             arrow = '<span style="margin-left:4px;">(<span style="color:#d93636;">▲</span>)</span>'; 
           } 
-          // 하락: (▼) - 화살표만 파란색
           else if (val < pv) { 
             arrow = '<span style="margin-left:4px;">(<span style="color:#2a61cc;">▼</span>)</span>'; 
           }
         }
       }
       
-      return Math.round(val).toLocaleString() + arrow;
+      // [핵심 변경] 
+      // 문자열(string)을 리턴하면 AgGrid가 텍스트로 출력해버립니다.
+      // document.createElement로 진짜 HTML 태그를 만들어서 리턴해야 브라우저가 렌더링합니다.
+      const eSpan = document.createElement('span');
+      eSpan.innerHTML = Math.round(val).toLocaleString() + arrow;
+      return eSpan;
     }""")
 
     _js_demo_cols = "[" + ",".join([f'"{c}"' for c in DEMO_COLS_ORDER]) + "]"
