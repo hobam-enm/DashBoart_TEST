@@ -120,6 +120,8 @@ if not check_password_with_token():
 
 #region [ 2. 공통 스타일 통합 ]
 # =====================================================
+# [수정] 2025-11-13: 사이드바 네비게이션 버튼 스타일 (꽉 찬 리스트형)
+
 st.markdown("""
 <style>
 /* --- [기본] Hover foundation & Title/Box exceptions --- */
@@ -177,20 +179,14 @@ div[data-testid="stVerticalBlockBorderWrapper"]:has(.mode-switch) {
                 radial-gradient(1200px 500px at 90% -20%, rgba(236, 72, 153, 0.05), transparent 40%),
                 #f7f8fb;
 }
+/* [수정] Hover 시 Floating 효과 제거 -> 고정된 그림자로 변경 (요청사항 반영) */
 div[data-testid="stVerticalBlockBorderWrapper"]:hover{
-    transform: translateY(-2px);
-    box-shadow: 0 14px 36px rgba(16, 24, 40, 0.14), 0 4px 12px rgba(16, 24, 40, 0.08);
+    transform: none !important;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.03) !important; /* 기본 그림자 유지 */
+    z-index: auto;
 }
-div[data-testid="stVerticalBlockBorderWrapper"]:hover{
-    transform: translate3d(0, -2px, 0) !important;
-    box-shadow: 0 14px 36px rgba(16, 24, 40, 0.14), 0 4px 12px rgba(16, 24, 40, 0.08) !important;
-    z-index: 2;
-}
-div[data-testid="stVerticalBlockBorderWrapper"]:hover{
-  transform: none !important;
-  box-shadow: inherit !important;
-  z-index: auto !important;
-}
+
+/* kpi-card, block-card 등 내부 요소 Hover도 얌전하게 */
 section[data-testid="stSidebar"] .kpi-card:hover,
 section[data-testid="stSidebar"] .block-card:hover,
 section[data-testid="stSidebar"] .stPlotlyChart:hover,
@@ -199,14 +195,12 @@ section[data-testid="stSidebar"] .ag-theme-streamlit .ag-root-wrapper:hover{
   box-shadow: inherit !important;
 }
 .kpi-card, .block-card, .stPlotlyChart, .ag-theme-streamlit .ag-root-wrapper{
-  transition: transform .18s ease, box-shadow .18s ease;
-  will-change: transform, box-shadow;
-  backface-visibility: hidden;
-  -webkit-font-smoothing: antialiased;
+  transition: none !important;
+  will-change: auto;
 }
 .kpi-card:hover, .block-card:hover, .stPlotlyChart:hover, .ag-theme-streamlit .ag-root-wrapper:hover{
-  transform: translateY(-2px);
-  box-shadow: 0 14px 36px rgba(16,24,40,.14), 0 4px 12px rgba(16,24,40,.08);
+  transform: none !important;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.03) !important;
 }
 
 
@@ -241,8 +235,8 @@ section[data-testid="stSidebar"] {
     background: #ffffff;
     border-right: 1px solid #e0e0e0;
     padding-top: 1rem;
-    padding-left: 0.5rem;
-    padding-right: 0.5rem;
+    padding-left: 0rem !important; /* [수정] 강제 0 */
+    padding-right: 0rem !important; /* [수정] 강제 0 */
     min-width:320px !important;
     max-width:320px !important;
 }
@@ -274,42 +268,54 @@ section[data-testid="stSidebar"] .block-container{padding-top:0.75rem;}
 section[data-testid="stSidebar"] div[data-testid="stVerticalBlock"]{margin:0 !important; padding:0 !important;}
 section[data-testid="stSidebar"] .stButton{margin:0 !important; padding:0 !important;}
 section[data-testid="stSidebar"] .stButton > button{margin:0 !important;}
+
 section[data-testid="stSidebar"] .stButton > button {
   width: 100%;
   box-sizing: border-box;
   text-align: left;
-  padding: var(--btn-pad-y) var(--btn-pad-x);
-  border-radius: 0!important;
+  
+  /* [수정] 패딩, 보더, 배경색 등 */
+  padding: var(--btn-pad-y) var(--btn-pad-x) !important;
+  border-radius: 0px !important;
   border: none !important;
-  border-bottom: 1px solid #fff !important;
-  background: #F0F0F0 !important;
-  color: #333;
-  font-weight: 900;
+  border-bottom: 1px solid #f0f2f6 !important;
+  
+  background: transparent !important;
+  color: #333333 !important; /* 진한 회색 */
+  font-weight: 600;
+  
   box-shadow: none;
   transition: background-color .12s ease, color .12s ease;
+  margin: 0 !important;
 }
+
 section[data-testid="stSidebar"] .stButton > button:hover {
-  background: rgba(11, 97, 255, 0.08);
-  color: #000;
+  background: rgba(11, 97, 255, 0.08) !important;
+  color: #000 !important;
 }
+
 section[data-testid="stSidebar"] [data-testid="baseButton-secondary"] > button,
 section[data-testid="stSidebar"] .stButton > button[kind="secondary"] {
   background: transparent;
   color: #333;
 }
+
+/* Active 버튼 스타일 */
 section[data-testid="stSidebar"] [data-testid="baseButton-primary"] > button,
 section[data-testid="stSidebar"] .stButton > button[kind="primary"],
 section[data-testid="stSidebar"] .nav-active .stButton > button{
   background: #0b61ff !important;
   color: #ffffff !important;
-  border-bottom: 1px solid #0b61ff;
+  border-bottom: 1px solid #0b61ff !important;
 }
+
 section[data-testid="stSidebar"] [data-testid="baseButton-primary"] > button:hover,
 section[data-testid="stSidebar"] .stButton > button[kind="primary"]:hover,
 section[data-testid="stSidebar"] .nav-active .stButton > button:hover{
   background: #0a56e5 !important;
   border-color: #0a56e5 !important;
 }
+
 section[data-testid="stSidebar"] [data-testid="baseButton-primary"] > button svg,
 section[data-testid="stSidebar"] .stButton > button[kind="primary"] svg,
 section[data-testid="stSidebar"] .nav-active .stButton > button svg{
@@ -323,11 +329,11 @@ section[data-testid="stSidebar"] div[data-testid="stVerticalBlockBorderWrapper"]
   border: none !important;
   box-shadow: none !important;
   padding: 0 !important;
-  margin-bottom: 0 !important; /* [수정] 네비게이션 버튼 간격 제거 */
+  margin-bottom: 0 !important; 
 }
 section[data-testid="stSidebar"] div[data-testid="stVerticalBlockBorderWrapper"]:hover {
   transform: none !important;
-  box-shadow: none !important;W
+  box-shadow: none !important;
 }
 section[data-testid="stSidebar"] [data-testid="stVerticalBlock"] > div {
   background: transparent !important;
@@ -414,21 +420,20 @@ div[data-testid="stVerticalBlockBorderWrapper"] {
   will-change: transform, box-shadow;
   backface-visibility: hidden;
   position: relative;
-  /* emulate ._liftable (원본 주석 유지) */
 }
 
-div[data-testid="stVerticalBlockBorderWrapper"]:has(.stPlotlyChart:hover):not(:has(div[data-testid="stVerticalBlockBorderWrapper"] .stPlotlyChart:hover)) { /* [수정] ._liftable 제거 */
+div[data-testid="stVerticalBlockBorderWrapper"]:has(.stPlotlyChart:hover):not(:has(div[data-testid="stVerticalBlockBorderWrapper"] .stPlotlyChart:hover)) {
   transform: translate3d(0,-4px,0) !important;
   box-shadow: 0 16px 40px rgba(16,24,40,.16), 0 6px 14px rgba(16,24,40,.10) !important;
   z-index: 3 !important;
 }
-div[data-testid="stVerticalBlockBorderWrapper"]:has(.ag-theme-streamlit .ag-root-wrapper:hover):not(:has(div[data-testid="stVerticalBlockBorderWrapper"] .ag-theme-streamlit .ag-root-wrapper:hover)) { /* [수정] ._liftable 제거 */
+div[data-testid="stVerticalBlockBorderWrapper"]:has(.ag-theme-streamlit .ag-root-wrapper:hover):not(:has(div[data-testid="stVerticalBlockBorderWrapper"] .ag-theme-streamlit .ag-root-wrapper:hover)) {
   transform: translate3d(0,-4px,0) !important;
   box-shadow: 0 16px 40px rgba(16,24,40,.16), 0 6px 14px rgba(16,24,40,.10) !important;
   z-index: 3 !important;
 }
-div[data-testid="stVerticalBlockBorderWrapper"]:has(.kpi-card:hover):not(:has(div[data-testid="stVerticalBlockBorderWrapper"] .kpi-card:hover)), /* [수정] .*_liftable 제거 */
-div[data-testid="stVerticalBlockBorderWrapper"]:has(.block-card:hover):not(:has(div[data-testid="stVerticalBlockBorderWrapper"] .block-card:hover)) { /* [수정] .*_liftable 제거 */
+div[data-testid="stVerticalBlockBorderWrapper"]:has(.kpi-card:hover):not(:has(div[data-testid="stVerticalBlockBorderWrapper"] .kpi-card:hover)),
+div[data-testid="stVerticalBlockBorderWrapper"]:has(.block-card:hover):not(:has(div[data-testid="stVerticalBlockBorderWrapper"] .block-card:hover)) {
   transform: translate3d(0,-4px,0) !important;
   box-shadow: 0 16px 40px rgba(16,24,40,.16), 0 6px 14px rgba(16,24,40,.10) !important;
   z-index: 3 !important;
@@ -437,28 +442,18 @@ section[data-testid="stSidebar"] div[data-testid="stVerticalBlockBorderWrapper"]
   transform: none !important;
   box-shadow: inherit !important;
   z-index: auto !important;
-  /* [추가] 사이드바에서는 트랜지션 효과 제거 */
   transition: none !important; 
 }
-/* [수정] 아래의 중복 규칙들은 위의 통합 규칙으로 병합됨 */
-/*
-div[data-testid="stVerticalBlockBorderWrapper"] {
-  position: relative;
-}
-div[data-testid="stVerticalBlockBorderWrapper"] {
-  /* emulate ._liftable */
-/*}
-*/
-            
+
 /* ===== Sidebar compact spacing (tunable) ===== */
 [data-testid="stSidebar"]{
-  --sb-gap: 0px;               /* 블록 간 간격(기존 4px → 6px로 살짝 띄움) */
+  --sb-gap: 0px;               /* 블록 간 간격 */
   --sb-pad-y: 8px;             /* 사이드바 컨테이너 상하 패딩 */
-  --sb-pad-x: 0px;            /* 사이드바 컨테이너 좌우 패딩 */
-  --btn-pad-y: 26px;            /* 버튼/링크 상하 패딩(기존 6px → 8px) */
-  --btn-pad-x: 12px;           /* 버튼/링크 좌우 패딩(기존 10px → 12px) */
-  --item-gap: 0px;             /* nav 아이템끼리 간격(기존 2px → 4px) */
-  --label-gap: 3px;            /* 라벨/텍스트 아래 여백 */
+  --sb-pad-x: 0px;             /* [수정] 컨테이너 좌우 패딩 0 */
+  --btn-pad-y: 26px;           /* [수정] 버튼 상하 패딩 늘림 (높이 증가) */
+  --btn-pad-x: 20px;           /* [수정] 버튼 좌우 패딩 늘림 (글자 밀어넣기) */
+  --item-gap: 0px;             /* 버튼 간 간격 제거 */
+  --label-gap: 3px;            
 }
 
 /* 컨테이너 패딩 */
@@ -535,7 +530,24 @@ div[data-testid="stVerticalBlockBorderWrapper"] {
   transform: none !important;
 }
 
-
+/* 🚨 [긴급] 사이드바 강제 확장 (여백 0) 🚨 */
+section[data-testid="stSidebar"] .block-container {
+    padding-left: 0rem !important;
+    padding-right: 0rem !important;
+    max-width: 100% !important;
+}
+section[data-testid="stSidebar"] {
+    padding-left: 0rem !important;
+    padding-right: 0rem !important;
+}
+section[data-testid="stSidebar"] div[data-testid="stVerticalBlock"] {
+    width: 100% !important;
+    min-width: 100% !important;
+    gap: 0px !important; 
+}
+section[data-testid="stSidebar"] .stButton {
+    width: 100% !important;
+}
 </style>
 """, unsafe_allow_html=True)
 #endregion
