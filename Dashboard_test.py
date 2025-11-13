@@ -120,12 +120,12 @@ if not check_password_with_token():
 
 #region [ 2. 공통 스타일 통합 ]
 # =====================================================
-# [수정] 2025-11-13: 예외처리 제거 (단순 플로팅) + 사이드바 연회색 + 리스트형 버튼
+# [수정] 2025-11-13: 사이드바 버튼 간격 축소 + KPI 플로팅 복구 + 스마트 차트 고정
 
 st.markdown("""
 <style>
 /* -------------------------------------------------------------------
-   1. 앱 전체 설정
+   1. 앱 전체 기본 설정
    ------------------------------------------------------------------- */
 @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
 
@@ -147,7 +147,7 @@ html, body, [class*="css"] {
 
 
 /* -------------------------------------------------------------------
-   2. 메인 컨텐츠 카드 (깔끔한 플로팅)
+   2. 메인 컨텐츠 카드 (스마트 플로팅)
    ------------------------------------------------------------------- */
 div[data-testid="stVerticalBlockBorderWrapper"] {
     background-color: #ffffff;
@@ -158,12 +158,12 @@ div[data-testid="stVerticalBlockBorderWrapper"] {
     padding: 1.5rem;
     margin-bottom: 1.5rem;
     
-    /* [중요] 부드러운 플로팅을 위한 설정 */
+    /* 부드러운 움직임 설정 */
     transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1);
     will-change: transform, box-shadow;
 }
 
-/* 마우스 올렸을 때: 부드럽게 떠오름 (예외처리 없음) */
+/* [1] 기본 상태: 마우스 올리면 카드 전체가 떠오름 (플로팅 O) */
 div[data-testid="stVerticalBlockBorderWrapper"]:hover {
     transform: translateY(-4px);
     box-shadow: 0 12px 24px rgba(0,0,0,0.08);
@@ -171,7 +171,16 @@ div[data-testid="stVerticalBlockBorderWrapper"]:hover {
     z-index: 10;
 }
 
-/* 단, 투명해야 할 요소들(제목, 필터 등)만 스타일 제거 */
+/* [2] 예외 상태: 그래프나 테이블 위에 마우스가 있으면 -> 플로팅 멈춤 (고정) */
+div[data-testid="stVerticalBlockBorderWrapper"]:has(.stPlotlyChart:hover),
+div[data-testid="stVerticalBlockBorderWrapper"]:has(.ag-theme-streamlit .ag-root-wrapper:hover) {
+    transform: none !important; /* 움직임 취소 */
+    box-shadow: 0 2px 5px rgba(0,0,0,0.03) !important; /* 기본 그림자로 복귀 */
+    border-color: #e5e7eb !important;
+    z-index: auto;
+}
+
+/* 투명 배경이 필요한 요소들 (제목, 필터 등) 스타일 제거 */
 div[data-testid="stVerticalBlockBorderWrapper"]:has(.kpi-card),
 div[data-testid="stVerticalBlockBorderWrapper"]:has(.page-title),
 div[data-testid="stVerticalBlockBorderWrapper"]:has(h1),
@@ -193,10 +202,10 @@ div[data-testid="stVerticalBlockBorderWrapper"]:has(.mode-switch) {
 
 
 /* -------------------------------------------------------------------
-   3. 사이드바 스타일 (연한 회색 배경 + 리스트형)
+   3. 사이드바 스타일 (버튼 간격 좁게 복구)
    ------------------------------------------------------------------- */
 section[data-testid="stSidebar"] {
-    background-color: #f9fafb !important; /* [요청] 연한 회색 배경 */
+    background-color: #f9fafb !important; /* 연한 회색 배경 */
     border-right: 1px solid #e0e0e0;
     min-width: 320px !important;
     max-width: 320px !important;
@@ -205,7 +214,6 @@ section[data-testid="stSidebar"] {
     padding-right: 0 !important;
 }
 
-/* 내부 여백 정리 */
 section[data-testid="stSidebar"] .block-container,
 section[data-testid="stSidebar"] [data-testid="stSidebarContent"] {
     padding-left: 0 !important;
@@ -213,7 +221,6 @@ section[data-testid="stSidebar"] [data-testid="stSidebarContent"] {
     width: 100% !important;
 }
 
-/* 내부 카드 효과 제거 */
 section[data-testid="stSidebar"] div[data-testid="stVerticalBlockBorderWrapper"] {
     background: transparent !important;
     border: none !important;
@@ -222,7 +229,7 @@ section[data-testid="stSidebar"] div[data-testid="stVerticalBlockBorderWrapper"]
     transform: none !important;
 }
 
-/* 버튼 스타일 (리스트형) */
+/* 버튼 스타일 */
 section[data-testid="stSidebar"] .stButton {
     margin: 0 !important;
     padding: 0 !important;
@@ -233,12 +240,14 @@ section[data-testid="stSidebar"] .stButton > button {
     width: 100%;
     box-sizing: border-box;
     text-align: left;
-    padding: 16px 20px !important; 
+    
+    /* [수정] 패딩을 줄여서 버튼을 얇게 만듦 (16px -> 10px) */
+    padding: 10px 20px !important; 
     margin: 0 !important;
     
     border-radius: 0px !important;
     border: none !important;
-    border-bottom: 1px solid #e9ecef !important; /* 배경색에 맞춘 연한 선 */
+    border-bottom: 1px solid #e9ecef !important;
     
     background: transparent !important;
     color: #333333 !important;
@@ -250,7 +259,7 @@ section[data-testid="stSidebar"] .stButton > button {
 
 /* 버튼 호버 */
 section[data-testid="stSidebar"] .stButton > button:hover {
-    background: #e9ecef !important; /* 조금 더 진한 회색 */
+    background: #e5e7eb !important;
     color: #000000 !important;
 }
 
@@ -275,7 +284,7 @@ section[data-testid="stSidebar"] .stMultiSelect {
 
 
 /* -------------------------------------------------------------------
-   4. 기타 컴포넌트
+   4. KPI 카드 & 기타 컴포넌트
    ------------------------------------------------------------------- */
 h1, h2, h3 { color: #111827; font-weight: 800; letter-spacing: -0.02em; }
 
@@ -285,17 +294,24 @@ h1, h2, h3 { color: #111827; font-weight: 800; letter-spacing: -0.02em; }
     margin: 10px 0 20px 0;
 }
 
+/* [수정] KPI 카드 플로팅 복구 */
 .kpi-card {
     background: #ffffff;
     border: 1px solid #e5e7eb;
     border-radius: 12px;
     padding: 20px 15px;
     text-align: center;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.03); 
+    box-shadow: 0 2px 5px rgba(0,0,0,0.03); 
     height: 100%;
     display: flex; flex-direction: column; justify-content: center;
-    /* KPI 카드는 자체 애니메이션 없이 부모 컨테이너 움직임만 따름 */
-    transition: none; 
+    
+    /* 플로팅 애니메이션 부활 */
+    transition: transform 0.2s ease, box-shadow 0.2s ease !important;
+}
+.kpi-card:hover { 
+    transform: translateY(-4px) !important; 
+    box-shadow: 0 12px 24px rgba(0,0,0,0.08) !important;
+    border-color: #d1d5db;
 }
 
 .kpi-title { font-size: 14px; font-weight: 600; color: #6b7280; margin-bottom: 8px; }
