@@ -1813,36 +1813,46 @@ def render_ip_detail():
         pvt.insert(0, "회차", pvt.index.map(_fmt_ep))
         return pvt.reset_index(drop=True)
 
+    # [수정] 함수(function) 대신 클래스(class) 방식을 사용하여 HTML 강제 렌더링
     diff_renderer = JsCode("""
-    function(params){
-      const api = params.api;
-      const colId = params.column.getColId();
-      const rowIndex = params.node.rowIndex;
-      const val = Number(params.value || 0);
-      
-      if (colId === "회차") return params.value;
-      
-      let arrow = "";
-      if (rowIndex > 0) {
-        const prev = api.getDisplayedRowAtIndex(rowIndex - 1);
-        if (prev && prev.data && prev.data[colId] != null) {
-          const pv = Number(prev.data[colId] || 0);
-          
-          // 상승: (▲)
-          if (val > pv) { 
-            arrow = '<span style="color:#d93636; margin-left:4px; font-weight:bold;">(▲)</span>'; 
-          } 
-          // 하락: (▼)
-          else if (val < pv) { 
-            arrow = '<span style="color:#2a61cc; margin-left:4px; font-weight:bold;">(▼)</span>'; 
+    class DiffRenderer {
+      init(params) {
+        this.eGui = document.createElement('span');
+        
+        const api = params.api;
+        const colId = params.column.getColId();
+        const rowIndex = params.node.rowIndex;
+        const val = Number(params.value || 0);
+        
+        // 1. 숫자 포맷팅 (기본 텍스트)
+        let displayVal = colId === "회차" ? params.value : Math.round(val).toLocaleString();
+        
+        // 2. 화살표 로직
+        let arrow = "";
+        if (colId !== "회차" && rowIndex > 0) {
+          const prev = api.getDisplayedRowAtIndex(rowIndex - 1);
+          if (prev && prev.data && prev.data[colId] != null) {
+            const pv = Number(prev.data[colId] || 0);
+            
+            if (val > pv) {
+               // 상승: (▲) 빨간색
+               arrow = '<span style="margin-left:4px;">(<span style="color:#d93636;">▲</span>)</span>';
+            } else if (val < pv) {
+               // 하락: (▼) 파란색
+               arrow = '<span style="margin-left:4px;">(<span style="color:#2a61cc;">▼</span>)</span>';
+            }
           }
         }
+        
+        // 3. HTML 주입
+        this.eGui.innerHTML = displayVal + arrow;
       }
-      
-      // [핵심] 숫자와 화살표 전체를 하나의 <span>으로 묶어서 리턴합니다.
-      const finalHtml = '<span>' + Math.round(val).toLocaleString() + arrow + '</span>';
-      return finalHtml; 
-    }""")
+
+      getGui() {
+        return this.eGui;
+      }
+    }
+    """)
 
     _js_demo_cols = "[" + ",".join([f'"{c}"' for c in DEMO_COLS_ORDER]) + "]"
     cell_style_renderer = JsCode(f"""
