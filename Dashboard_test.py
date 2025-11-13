@@ -120,7 +120,7 @@ if not check_password_with_token():
 
 #region [ 2. 공통 스타일 통합 ]
 # =====================================================
-# [수정] 2025-11-13: 플로팅 들썩임 해결 + 그래프 영역 포함 전체 플로팅 + 사이드바 연회색
+# [수정] 2025-11-13: 긴급 복구 (사이드바 버튼 간격 좁게 + Active 색상 파랑/흰색 복구 + 플로팅 최적화)
 
 st.markdown("""
 <style>
@@ -148,57 +148,10 @@ html, body, [class*="css"] {
 
 
 /* -------------------------------------------------------------------
-   2. 메인 컨텐츠 카드 (안정적인 플로팅)
-   ------------------------------------------------------------------- */
-div[data-testid="stVerticalBlockBorderWrapper"] {
-    background-color: #ffffff;
-    border: 1px solid #e5e7eb;
-    border-radius: 12px;
-    box-shadow: 0 2px 5px rgba(0,0,0,0.03);
-    
-    padding: 1.5rem;
-    margin-bottom: 1.5rem;
-    
-    /* [핵심] 들썩임 방지: transform만 부드럽게 변화 (레이아웃 영향 X) */
-    transition: transform 0.25s ease, box-shadow 0.25s ease;
-    will-change: transform, box-shadow;
-    backface-visibility: hidden; /* 렌더링 최적화 */
-}
-
-/* 마우스 올렸을 때: 부드럽게 떠오름 (그래프 포함 모든 영역) */
-div[data-testid="stVerticalBlockBorderWrapper"]:hover {
-    transform: translateY(-4px);
-    box-shadow: 0 12px 24px rgba(0,0,0,0.08);
-    border-color: #d1d5db;
-    z-index: 5; /* 다른 요소 위로 살짝 띄움 */
-}
-
-/* 투명 배경이 필요한 요소들 (제목, 필터 등)은 플로팅 제외 */
-div[data-testid="stVerticalBlockBorderWrapper"]:has(.kpi-card),
-div[data-testid="stVerticalBlockBorderWrapper"]:has(.page-title),
-div[data-testid="stVerticalBlockBorderWrapper"]:has(h1),
-div[data-testid="stVerticalBlockBorderWrapper"]:has(h2),
-div[data-testid="stVerticalBlockBorderWrapper"]:has(h3),
-div[data-testid="stVerticalBlockBorderWrapper"]:has(div[data-testid="stSelectbox"]),
-div[data-testid="stVerticalBlockBorderWrapper"]:has(div[data-testid="stMultiSelect"]),
-div[data-testid="stVerticalBlockBorderWrapper"]:has(div[data-testid="stSlider"]),
-div[data-testid="stVerticalBlockBorderWrapper"]:has(div[data-testid="stRadio"]),
-div[data-testid="stVerticalBlockBorderWrapper"]:has(.filter-group),
-div[data-testid="stVerticalBlockBorderWrapper"]:has(.mode-switch) {
-    background: transparent !important;
-    border: none !important;
-    box-shadow: none !important;
-    padding: 0 !important;
-    margin-bottom: 0.5rem !important;
-    transform: none !important; /* 제목 등은 움직이지 않음 */
-}
-
-
-/* -------------------------------------------------------------------
-   3. 사이드바 스타일 (연한 회색 + 리스트형 버튼)
+   2. 사이드바 스타일 (연한 회색 + 컴팩트 버튼 + 파란색 강조)
    ------------------------------------------------------------------- */
 section[data-testid="stSidebar"] {
-    background-color: #f9fafb !important; /* [요청] 연한 회색 배경 */
+    background-color: #f9fafb !important; 
     border-right: 1px solid #e0e0e0;
     min-width: 320px !important;
     max-width: 320px !important;
@@ -215,7 +168,6 @@ section[data-testid="stSidebar"] [data-testid="stSidebarContent"] {
     width: 100% !important;
 }
 
-/* 내부 카드 효과 제거 */
 section[data-testid="stSidebar"] div[data-testid="stVerticalBlockBorderWrapper"] {
     background: transparent !important;
     border: none !important;
@@ -224,19 +176,21 @@ section[data-testid="stSidebar"] div[data-testid="stVerticalBlockBorderWrapper"]
     transform: none !important;
 }
 
-/* 버튼 스타일 (리스트형) */
+/* 버튼 컨테이너 간격 제거 (다닥다닥) */
 section[data-testid="stSidebar"] .stButton {
     margin: 0 !important;
     padding: 0 !important;
     width: 100% !important;
 }
 
+/* [복구] 버튼 스타일: 컴팩트한 패딩 */
 section[data-testid="stSidebar"] .stButton > button {
     width: 100%;
     box-sizing: border-box;
     text-align: left;
     
-    padding: 10px 20px !important; /* 컴팩트한 패딩 */
+    /* 패딩을 8px 20px로 줄여서 높이를 낮춤 */
+    padding: 8px 20px !important; 
     margin: 0 !important;
     
     border-radius: 0px !important;
@@ -257,23 +211,71 @@ section[data-testid="stSidebar"] .stButton > button:hover {
     color: #000000 !important;
 }
 
-/* 선택된 버튼 (Active) */
+/* [복구] 선택된 버튼 (Active): 파란 배경 + 흰색 글씨 */
 section[data-testid="stSidebar"] [data-testid="baseButton-primary"] > button,
 section[data-testid="stSidebar"] .stButton > button[kind="primary"] {
-    background: #ebf1ff !important;
-    color: #0b61ff !important;
+    background: #0b61ff !important;    /* 진한 파랑 */
+    color: #ffffff !important;         /* 흰색 글씨 */
     border-bottom: 1px solid #0b61ff !important;
     font-weight: 700;
 }
 
 section[data-testid="stSidebar"] button svg { display: none !important; }
 
+/* 텍스트 여백 */
 section[data-testid="stSidebar"] h1, section[data-testid="stSidebar"] h2, 
 section[data-testid="stSidebar"] h3, section[data-testid="stSidebar"] .page-title-wrap,
 section[data-testid="stSidebar"] .stMarkdown, section[data-testid="stSidebar"] .stSelectbox,
 section[data-testid="stSidebar"] .stMultiSelect {
     padding-left: 14px !important;
     padding-right: 14px !important;
+}
+
+
+/* -------------------------------------------------------------------
+   3. 메인 컨텐츠 카드 (플로팅 유지 + 들썩임 방지)
+   ------------------------------------------------------------------- */
+div[data-testid="stVerticalBlockBorderWrapper"] {
+    background-color: #ffffff;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.03);
+    
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+    
+    /* transform만 사용하여 들썩임 방지 */
+    transition: transform 0.25s ease, box-shadow 0.25s ease;
+    will-change: transform, box-shadow;
+    backface-visibility: hidden; 
+}
+
+/* 마우스 올렸을 때 플로팅 */
+div[data-testid="stVerticalBlockBorderWrapper"]:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 12px 24px rgba(0,0,0,0.08);
+    border-color: #d1d5db;
+    z-index: 5;
+}
+
+/* 투명 예외 처리 */
+div[data-testid="stVerticalBlockBorderWrapper"]:has(.kpi-card),
+div[data-testid="stVerticalBlockBorderWrapper"]:has(.page-title),
+div[data-testid="stVerticalBlockBorderWrapper"]:has(h1),
+div[data-testid="stVerticalBlockBorderWrapper"]:has(h2),
+div[data-testid="stVerticalBlockBorderWrapper"]:has(h3),
+div[data-testid="stVerticalBlockBorderWrapper"]:has(div[data-testid="stSelectbox"]),
+div[data-testid="stVerticalBlockBorderWrapper"]:has(div[data-testid="stMultiSelect"]),
+div[data-testid="stVerticalBlockBorderWrapper"]:has(div[data-testid="stSlider"]),
+div[data-testid="stVerticalBlockBorderWrapper"]:has(div[data-testid="stRadio"]),
+div[data-testid="stVerticalBlockBorderWrapper"]:has(.filter-group),
+div[data-testid="stVerticalBlockBorderWrapper"]:has(.mode-switch) {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    margin-bottom: 0.5rem !important;
+    transform: none !important; 
 }
 
 
@@ -289,7 +291,7 @@ h1, h2, h3 { color: #111827; font-weight: 800; letter-spacing: -0.02em; }
     margin: 10px 0 20px 0;
 }
 
-/* KPI 카드 (부드러운 플로팅) */
+/* KPI 카드 (자체 플로팅) */
 .kpi-card {
     background: #ffffff;
     border: 1px solid #e5e7eb;
@@ -300,7 +302,7 @@ h1, h2, h3 { color: #111827; font-weight: 800; letter-spacing: -0.02em; }
     height: 100%;
     display: flex; flex-direction: column; justify-content: center;
     
-    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    transition: transform 0.25s ease, box-shadow 0.25s ease;
     will-change: transform, box-shadow;
 }
 .kpi-card:hover { 
