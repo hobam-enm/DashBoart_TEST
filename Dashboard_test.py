@@ -120,7 +120,7 @@ if not check_password_with_token():
 
 #region [ 2. 공통 스타일 통합 ]
 # =====================================================
-# [수정] 2025-11-13: 긴급 복구 (사이드바 버튼 간격 좁게 + Active 색상 파랑/흰색 복구 + 플로팅 최적화)
+# [수정] 2025-11-13: 사이드바 버튼 간격 제거 (다른 스타일 유지)
 
 st.markdown("""
 <style>
@@ -176,21 +176,24 @@ section[data-testid="stSidebar"] div[data-testid="stVerticalBlockBorderWrapper"]
     transform: none !important;
 }
 
-/* 버튼 컨테이너 간격 제거 (다닥다닥) */
+/* [핵심 수정] 버튼 컨테이너 간격 제거 (다닥다닥) */
+section[data-testid="stSidebar"] div[data-testid="stVerticalBlock"] {
+    gap: 0rem !important; /* 버튼 사이 틈 제거 */
+}
+
 section[data-testid="stSidebar"] .stButton {
     margin: 0 !important;
     padding: 0 !important;
     width: 100% !important;
 }
 
-/* [복구] 버튼 스타일: 컴팩트한 패딩 */
+/* 버튼 스타일: 컴팩트한 패딩 */
 section[data-testid="stSidebar"] .stButton > button {
     width: 100%;
     box-sizing: border-box;
     text-align: left;
     
-    /* 패딩을 8px 20px로 줄여서 높이를 낮춤 */
-    padding: 0px 0px !important; 
+    padding: 8px 20px !important; 
     margin: 0 !important;
     
     border-radius: 0px !important;
@@ -211,7 +214,7 @@ section[data-testid="stSidebar"] .stButton > button:hover {
     color: #000000 !important;
 }
 
-/* [복구] 선택된 버튼 (Active): 파란 배경 + 흰색 글씨 */
+/* 선택된 버튼 (Active): 파란 배경 + 흰색 글씨 */
 section[data-testid="stSidebar"] [data-testid="baseButton-primary"] > button,
 section[data-testid="stSidebar"] .stButton > button[kind="primary"] {
     background: #0b61ff !important;    /* 진한 파랑 */
@@ -330,7 +333,6 @@ h1, h2, h3 { color: #111827; font-weight: 800; letter-spacing: -0.02em; }
 </style>
 """, unsafe_allow_html=True)
 #endregion
-
 
 #region [ 2.1. 기본 설정 및 공통 상수 ]
 # =====================================================
