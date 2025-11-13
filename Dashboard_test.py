@@ -1187,23 +1187,12 @@ def render_overview():
 # =====================================================
 def render_ip_detail():
     
-    # [수정] 체크박스(stCheckbox)의 카드 스타일(흰박스/테두리)을 강제로 제거하는 CSS 주입
-    st.markdown("""
-        <style>
-        div[data-testid="stVerticalBlockBorderWrapper"]:has(div[data-testid="stCheckbox"]) {
-            background: transparent !important;
-            border: none !important;
-            box-shadow: none !important;
-            padding: 0 !important;
-        }
-        </style>
-    """, unsafe_allow_html=True)
-
+    # [수정] 불필요해진 체크박스용 CSS 제거
     df_full = load_data() # [3. 공통 함수]
 
-    # [수정] 컬럼 순서 및 비율 변경
-    # 순서: 타이틀(3) | IP선택(2) | 방영연도(2) | 체크박스(1.2)
-    filter_cols = st.columns([3, 2, 2, 1.2])
+    # [수정] 컬럼 비율 조정 (체크박스가 셀렉트박스로 바뀌었으므로 너비 확보)
+    # 순서: 타이틀(3) | IP선택(2) | 방영연도(2) | 편성기준(2)
+    filter_cols = st.columns([3, 2, 2, 2])
 
     with filter_cols[0]:
         st.markdown("<div class='page-title'>📈 IP 성과 자세히보기</div>", unsafe_allow_html=True)
@@ -1267,11 +1256,15 @@ def render_ip_detail():
             label_visibility="collapsed"
         )
 
-    # [Col 3] 동일 편성 체크박스 (CSS 패치로 박스가 사라지므로, 높이만 맞춰줌)
+    # [Col 3] 동일 편성 여부 (체크박스 -> 셀렉트박스 변경)
     with filter_cols[3]:
-        # [높이 보정] Selectbox와 수평을 맞추기 위해 상단 여백 부여
-        st.markdown("<div style='margin-top: 12px;'></div>", unsafe_allow_html=True)
-        use_same_prog = st.checkbox("동일 편성", value=True, help="선택 IP와 같은 편성작만 비교")
+        comp_type = st.selectbox(
+            "편성 기준",
+            ["동일 편성", "전체"], # 옵션
+            index=0, # Default: 동일 편성
+            label_visibility="collapsed"
+        )
+        use_same_prog = (comp_type == "동일 편성")
 
     # --- 선택 IP 데이터 필터링 ---
     f = target_ip_rows.copy()
@@ -1937,6 +1930,7 @@ def render_ip_detail():
     tving_numeric = _build_demo_table_numeric(f, ["TVING LIVE", "TVING QUICK", "TVING VOD"])
     _render_aggrid_table(tving_numeric, "▶︎ TVING 합산 시청자수")
 #endregion
+
 
 #region [ 9. 페이지 3: IP간 데모분석 ]
 # =====================================================
