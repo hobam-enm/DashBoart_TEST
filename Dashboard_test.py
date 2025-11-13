@@ -282,7 +282,7 @@ section[data-testid="stSidebar"] .stButton > button {
   border-radius: 0!important;
   border: none !important;
   border-bottom: 1px solid #f0f2f6 !important;
-  background: #f0f2f6 !important;
+  background: #eef2ff !important;
   color: #333;
   font-weight: 600;
   box-shadow: none;
