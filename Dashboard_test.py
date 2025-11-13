@@ -282,8 +282,8 @@ section[data-testid="stSidebar"] .stButton > button {
   border-radius: 0!important;
   border: none !important;
   border-bottom: 1px solid #f0f2f6 !important;
-  background: transparent;
-  color: #D9D9D9;
+  background: #f0f2f6 !important;
+  color: #333;
   font-weight: 600;
   box-shadow: none;
   transition: background-color .12s ease, color .12s ease;
