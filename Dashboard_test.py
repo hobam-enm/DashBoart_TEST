@@ -1060,22 +1060,28 @@ def render_overview():
 
             fig = px.bar(
                 df_long, x="주차시작일", y="시청자수", color="구분",
+                # text="시청자수",  <-- [삭제 확인] 이 부분이 없어도 아래 update_traces로 확실히 제어합니다.
                 title="📊 주차별 시청자수",
                 color_discrete_map={
-                    "TV 본방": "#2c3e50",
-                    "티빙 본방": "#d32f2f",
-                    "티빙 당일": "#ff5252", 
-                    "티빙 주간": "#ffcdd2"  
+                    "TV 본방": "#2c3e50",     # [TV] 묵직한 다크 네이비
+                    "티빙 본방": "#d32f2f",   # [LIVE] 티빙 브랜드 레드
+                    "티빙 당일": "#ff5252",   # [QUICK] 화사한 코랄 레드
+                    "티빙 주간": "#ffcdd2"    # [VOD] 은은한 페일 핑크
                 },
                 custom_data=["hover_txt"]
             )
+            
             fig.update_layout(
                 xaxis_title=None, yaxis_title=None,
                 barmode="stack", legend_title="구분",
-                title_font=dict(size=20)
+                title_font=dict(size=20),
+                legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='right', x=1),
+                margin=dict(t=60) 
             )
+            
+            # [핵심] textposition='none'을 설정하여 숫자를 강제로 숨깁니다.
             fig.update_traces(
-                texttemplate='%{text:,.0f}', 
+                textposition='none', 
                 hovertemplate="<b>%{x}</b><br>%{data.name}: %{customdata[0]}<extra></extra>"
             )
             
