@@ -1059,7 +1059,7 @@ def render_overview():
             df_long["hover_txt"] = df_long["시청자수"].apply(fmt_kor_hover)
 
             fig = px.bar(
-                df_long, x="주차시작일", y="시청자수", color="구분", text="시청자수",
+                df_long, x="주차시작일", y="시청자수", color="구분",
                 title="📊 주차별 시청자수",
                 color_discrete_map={
                     "TV 본방": "#2c3e50",
