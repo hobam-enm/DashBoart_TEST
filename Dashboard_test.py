@@ -1187,10 +1187,9 @@ def render_overview():
 # =====================================================
 def render_ip_detail():
     
-    # [수정] 불필요해진 체크박스용 CSS 제거
     df_full = load_data() # [3. 공통 함수]
 
-    # [수정] 컬럼 비율 조정 (체크박스가 셀렉트박스로 바뀌었으므로 너비 확보)
+    # [수정] 컬럼 비율 조정
     # 순서: 타이틀(3) | IP선택(2) | 방영연도(2) | 편성기준(2)
     filter_cols = st.columns([3, 2, 2, 2])
 
@@ -1256,12 +1255,12 @@ def render_ip_detail():
             label_visibility="collapsed"
         )
 
-    # [Col 3] 동일 편성 여부 (체크박스 -> 셀렉트박스 변경)
+    # [Col 3] 동일 편성 여부 (셀렉트박스)
     with filter_cols[3]:
         comp_type = st.selectbox(
             "편성 기준",
-            ["동일 편성", "전체"], # 옵션
-            index=0, # Default: 동일 편성
+            ["동일 편성", "전체"], 
+            index=0,
             label_visibility="collapsed"
         )
         use_same_prog = (comp_type == "동일 편성")
@@ -1463,9 +1462,16 @@ def render_ip_detail():
         pct = (val / base_val) * 100
         return "#d93636" if pct > 100 else ("#2a61cc" if pct < 100 else "#444")
 
+    # [수정] 순위 표시에 '총 N개 중' 및 '1위 왕관' 추가
     def sublines_html(prog_label: str, rank_tuple: tuple, val, base_val):
         rnk, total = rank_tuple if rank_tuple else (None, 0)
-        rank_label = f"{rnk}위" if (rnk is not None and total > 0) else "–위"
+        
+        if rnk is not None and total > 0:
+            prefix = "👑 " if rnk == 1 else ""
+            rank_label = f"{prefix}{rnk}위<span style='font-size:11px;font-weight:400;color:#9ca3af;margin-left:2px'>(총{total}개)</span>"
+        else:
+            rank_label = "–위"
+
         pct_txt = "–"; col = "#888"
         try:
             if (val is not None) and (base_val not in (None, 0)) and (not (pd.isna(val) or pd.isna(base_val))):
