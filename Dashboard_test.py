@@ -251,7 +251,7 @@ section[data-testid="stSidebar"] .stSelectbox, section[data-testid="stSidebar"] 
     align-items: center; 
     justify-content: center; 
     gap: 8px; 
-    margin: 10px 0 20px 0; 
+    margin: 5px 0 5px 0; 
     padding: 0 10px;
     width: 100%;
 }
