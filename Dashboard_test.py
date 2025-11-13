@@ -190,7 +190,7 @@ section[data-testid="stSidebar"] .stButton > button {
     text-align: left;
     
     /* 패딩을 8px 20px로 줄여서 높이를 낮춤 */
-    padding: 8px 20px !important; 
+    padding: 0px 0px !important; 
     margin: 0 !important;
     
     border-radius: 0px !important;
