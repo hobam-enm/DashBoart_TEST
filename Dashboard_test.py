@@ -282,9 +282,9 @@ section[data-testid="stSidebar"] .stButton > button {
   border-radius: 0!important;
   border: none !important;
   border-bottom: 1px solid #fff !important;
-  background: #eef2ff !important;
+  background: #D9D9D9 !important;
   color: #333;
-  font-weight: 600;
+  font-weight: 900;
   box-shadow: none;
   transition: background-color .12s ease, color .12s ease;
 }
