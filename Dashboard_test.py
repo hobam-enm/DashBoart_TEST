@@ -281,7 +281,7 @@ section[data-testid="stSidebar"] .stButton > button {
   padding: var(--btn-pad-y) var(--btn-pad-x);
   border-radius: 0!important;
   border: none !important;
-  border-bottom: 1px solid #333 !important;
+  border-bottom: 1px solid #fff !important;
   background: #eef2ff !important;
   color: #333;
   font-weight: 600;
@@ -327,7 +327,7 @@ section[data-testid="stSidebar"] div[data-testid="stVerticalBlockBorderWrapper"]
 }
 section[data-testid="stSidebar"] div[data-testid="stVerticalBlockBorderWrapper"]:hover {
   transform: none !important;
-  box-shadow: none !important;
+  box-shadow: none !important;W
 }
 section[data-testid="stSidebar"] [data-testid="stVerticalBlock"] > div {
   background: transparent !important;
@@ -454,8 +454,8 @@ div[data-testid="stVerticalBlockBorderWrapper"] {
 [data-testid="stSidebar"]{
   --sb-gap: 0px;               /* 블록 간 간격(기존 4px → 6px로 살짝 띄움) */
   --sb-pad-y: 8px;             /* 사이드바 컨테이너 상하 패딩 */
-  --sb-pad-x: 10px;            /* 사이드바 컨테이너 좌우 패딩 */
-  --btn-pad-y: 16px;            /* 버튼/링크 상하 패딩(기존 6px → 8px) */
+  --sb-pad-x: 0px;            /* 사이드바 컨테이너 좌우 패딩 */
+  --btn-pad-y: 26px;            /* 버튼/링크 상하 패딩(기존 6px → 8px) */
   --btn-pad-x: 12px;           /* 버튼/링크 좌우 패딩(기존 10px → 12px) */
   --item-gap: 0px;             /* nav 아이템끼리 간격(기존 2px → 4px) */
   --label-gap: 3px;            /* 라벨/텍스트 아래 여백 */
