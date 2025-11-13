@@ -1076,7 +1076,6 @@ def render_overview():
             )
             fig.update_traces(
                 texttemplate='%{text:,.0f}', 
-                textposition="inside",
                 hovertemplate="<b>%{x}</b><br>%{data.name}: %{customdata[0]}<extra></extra>"
             )
             
