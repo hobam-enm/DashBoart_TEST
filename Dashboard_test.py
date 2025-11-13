@@ -3137,7 +3137,7 @@ def render_episode():
 
 #region [ 12. 페이지 6: 성장스코어-방영성과 ]
 # =====================================================
-# [수정] 2025-11-13: 회차별 등급 추이 계산 로직 최적화 (Pre-fetch + Numpy Slicing)
+# [수정] 2025-11-13: 회차별 등급 추이 계산 로직 최적화 (누락된 종합등급 컬럼 생성 추가)
 def render_growth_score():
     """
     [페이지 6] 성장스코어-방영지표 렌더링 함수
@@ -3231,7 +3231,6 @@ def render_growth_score():
             sub = sub[sub["매체"] == "TVING VOD"]
             # 넷플릭스 보정
             if "넷플릭스편성작" in sub.columns:
-                # 전체에 대해 보정 적용 (어차피 해당되지 않으면 0이거나 원본 유지)
                 is_netflix = (sub["넷플릭스편성작"] == 1)
                 if is_netflix.any():
                     sub.loc[is_netflix, "value"] = pd.to_numeric(sub.loc[is_netflix, "value"], errors="coerce") * NETFLIX_VOD_FACTOR
@@ -3250,7 +3249,6 @@ def render_growth_score():
         return s["회차_numeric"].values.astype(float), s["value"].values.astype(float)
 
     # 4. [Pre-Calculation] 모든 IP의 Metric별 전체 (x, y) 데이터를 미리 추출
-    # 구조: cache[ip][disp_key] = (x_array, y_array)
     ip_metric_cache = {}
     for ip in ips:
         ip_metric_cache[ip] = {}
@@ -3260,7 +3258,6 @@ def render_growth_score():
 
     # 5. [Calculation] Numpy Slicing을 이용한 통계 계산
     def _calc_stats_from_cache(xy_tuple, n_cutoff, metric_type):
-        """미리 추출된 (x,y)에서 n_cutoff 이하만 잘라서 Slope/Abs 계산"""
         if xy_tuple is None: return np.nan, np.nan
         
         x, y = xy_tuple
@@ -3272,7 +3269,7 @@ def render_growth_score():
         # Abs Value
         if metric_type in ["가구시청률", "타깃시청률"]:
             abs_val = np.mean(y_sub)
-        else: # TVING 합산 로직 (VOD, LIVE는 원본 함수에서 sum 기반 mean이었음. 여기선 회차별 sum된 데이터의 mean)
+        else:
             abs_val = np.mean(y_sub)
             
         # Slope
@@ -3283,7 +3280,6 @@ def render_growth_score():
                 slope = np.polyfit(x_sub, y_sub, 1)[0]
             except:
                 slope = np.nan
-                
         return abs_val, slope
 
     def _quintile_grade(series, labels):
@@ -3303,8 +3299,6 @@ def render_growth_score():
 
     # ---------- [메인 로직] 회차별 등급 산출 (Loop Optimized) ----------
     
-    # 사용할 Cutoff 목록 설정 (선택된 IP의 데이터 길이에 맞춰 최적화)
-    # 선택된 IP의 최대 회차를 구해 불필요한 Loop 방지
     sel_ip_df = ip_dfs[selected_ip]
     if "회차_numeric" in sel_ip_df.columns:
         _max_ep_val = pd.to_numeric(sel_ip_df["회차_numeric"], errors="coerce").max()
@@ -3316,15 +3310,14 @@ def render_growth_score():
     else:
         _Ns = [n for n in EP_CHOICES if n <= _max_ep_val]
     
-    # 만약 선택된 cutoff가 _Ns에 없다면(미래 회차 등), 단일 계산을 위해 추가
     needed_cutoffs = set(_Ns)
     needed_cutoffs.add(ep_cutoff)
     sorted_cutoffs = sorted(list(needed_cutoffs))
 
     evo_rows = []
-    base_for_current_cutoff = None # 현재 선택된 cutoff의 데이터프레임 저장용
+    base_for_current_cutoff = None 
 
-    # 통합 Loop: 필요한 모든 Cutoff에 대해 한 번씩만 순회
+    # 통합 Loop
     for n in sorted_cutoffs:
         tmp_rows = []
         for ip in ips:
@@ -3338,10 +3331,12 @@ def render_growth_score():
         
         tmp_df = pd.DataFrame(tmp_rows)
         
-        # 등급 산정
+        # 등급 산정 (여기에 [disp]_종합 생성 로직 추가됨)
         for disp, _, _ in METRICS:
             tmp_df[f"{disp}_절대등급"] = _quintile_grade(tmp_df[f"{disp}_절대"], ["S","A","B","C","D"])
             tmp_df[f"{disp}_상승등급"] = _quintile_grade(tmp_df[f"{disp}_기울기"], SLOPE_LABELS)
+            # [중요] 누락되었던 종합 등급 컬럼 생성 코드 복구
+            tmp_df[f"{disp}_종합"] = tmp_df[f"{disp}_절대등급"].astype(str) + tmp_df[f"{disp}_상승등급"].astype(str).replace("nan", "")
         
         tmp_df["_ABS_PCT_MEAN"] = pd.concat([_to_percentile(tmp_df[f"{d}_절대"]) for d,_,_ in METRICS], axis=1).mean(axis=1)
         tmp_df["_SLOPE_PCT_MEAN"] = pd.concat([_to_percentile(tmp_df[f"{d}_기울기"]) for d,_,_ in METRICS], axis=1).mean(axis=1)
@@ -3351,9 +3346,9 @@ def render_growth_score():
 
         # 현재 Cutoff(상단 카드용) 데이터 저장
         if n == ep_cutoff:
-            base = tmp_df.copy() # Snapshot for cards
+            base = tmp_df.copy() 
 
-        # 그래프용 데이터 수집 (현재 IP)
+        # 그래프용 데이터 수집
         if n in _Ns:
             row = tmp_df[tmp_df["IP"] == selected_ip]
             if not row.empty and pd.notna(row.iloc[0]["종합_절대등급"]):
@@ -3367,7 +3362,6 @@ def render_growth_score():
                     "ABS_NUM": ABS_NUM.get(ag, np.nan)
                 })
 
-    # base가 할당되지 않았을 경우(데이터 부족 등) 예외처리
     if 'base' not in locals(): base = tmp_df.copy()
 
     # ---------- [선택작품 요약카드] ----------
@@ -3554,8 +3548,8 @@ def render_growth_score():
           if (v.startsWith('S')) { bg='rgba(0,91,187,0.14)'; color='#003d80'; }
           else if (v.startsWith('A')) { bg='rgba(0,91,187,0.08)'; color='#004a99'; }
           else if (v.startsWith('B')) { bg='rgba(0,0,0,0.03)'; color='#333'; fw='600'; }
-          else if (v.startsWith('C')) { bg='rgba(42,97,204,0.08)'; color:'#2a61cc'; }
-          else if (v.startsWith('D')) { bg='rgba(42,97,204,0.14)'; color:'#1a44a3'; }
+          else if (v.startsWith('C')) { bg='rgba(42,97,204,0.08)'; color='#2a61cc'; }
+          else if (v.startsWith('D')) { bg='rgba(42,97,204,0.14)'; color='#1a44a3'; }
           return {'background-color':bg,'color':color,'font-weight':fw,'text-align':'center'};
         }
         return {'text-align':'center'};
