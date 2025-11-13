@@ -164,8 +164,8 @@ html, body, [class*="css"] {
 section[data-testid="stSidebar"] {
     background-color: #ffffff !important; 
     border-right: 1px solid #e0e0e0;
-    min-width: 300px !important;
-    max-width: 300px !important;
+    min-width: 280px !important;
+    max-width: 280px !important;
     padding-top: 1rem;
     padding-left: 0 !important;
     padding-right: 0 !important;
