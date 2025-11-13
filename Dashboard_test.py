@@ -129,9 +129,7 @@ st.markdown("""
    ------------------------------------------------------------------- */
 /* 앱 전체 배경 (그라데이션 유지) */
 [data-testid="stAppViewContainer"] {
-    background: radial-gradient(1200px 500px at 10% -10%, rgba(99, 102, 241, 0.05), transparent 40%),
-                radial-gradient(1200px 500px at 90% -20%, rgba(236, 72, 153, 0.05), transparent 40%),
-                #f7f8fb;
+    background:  #ffffff;
 }
 
 /* 메인 컨텐츠 카드 스타일 */
