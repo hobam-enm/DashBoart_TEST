@@ -120,7 +120,6 @@ if not check_password_with_token():
 
 #region [ 2. 공통 스타일 통합 ]
 # =====================================================
-# [수정] 2025-11-13: 최종 (버튼 간격 최소화 + 사이드바 제목 확대 + 플로팅 최적화 유지)
 
 st.markdown("""
 <style>
@@ -271,7 +270,7 @@ section[data-testid="stSidebar"] .stSelectbox, section[data-testid="stSidebar"] 
 
 
 /* -------------------------------------------------------------------
-   3. 메인 컨텐츠 카드 (들썩임 없는 플로팅 유지)
+   3. 메인 컨텐츠 카드 
    ------------------------------------------------------------------- */
 div[data-testid="stVerticalBlockBorderWrapper"] {
     background-color: #ffffff;
@@ -366,7 +365,7 @@ h1, h2, h3 { color: #111827; font-weight: 800; letter-spacing: -0.02em; }
 #region [ 2.1. 기본 설정 및 공통 상수 ]
 # =====================================================
 
-# ===== 네비게이션 아이템 정의 (v2.0) =====
+# ===== 네비게이션 아이템 정의 =====
 NAV_ITEMS = {
     "Overview": "Overview",
     "IP 성과": "IP 성과 자세히보기",
@@ -419,7 +418,6 @@ pio.templates.default = 'dashboard_theme'
 # =====================================================
 
 # ===== 3.1. 데이터 로드 (gspread) =====
-# [수정] read_csv -> gspread + 서비스 계정 인증 방식으로 복구
 @st.cache_data(ttl=600)
 def load_data() -> pd.DataFrame:
     """
@@ -437,7 +435,6 @@ def load_data() -> pd.DataFrame:
 
         # --- 2. 데이터 로드 ---
         sheet_id = st.secrets["SHEET_ID"]
-        # [수정] 피드백 1번 반영: GID 대신 명확한 SHEET_NAME 키를 사용
         worksheet_name = st.secrets["SHEET_NAME"] 
         
         spreadsheet = client.open_by_key(sheet_id)
@@ -460,13 +457,13 @@ def load_data() -> pd.DataFrame:
     if "주차시작일" in df.columns:
         df["주차시작일"] = pd.to_datetime(
             df["주차시작일"].astype(str).str.strip(),
-            format="%Y. %m. %d", # gspread는 이 형식을 사용
+            format="%Y. %m. %d", 
             errors="coerce"
         )
     if "방영시작일" in df.columns:
         df["방영시작일"] = pd.to_datetime(
             df["방영시작일"].astype(str).str.strip(),
-            format="%Y. %m. %d", # gspread는 이 형식을 사용
+            format="%Y. %m. %d", 
             errors="coerce"
         )
 
@@ -476,7 +473,7 @@ def load_data() -> pd.DataFrame:
 
     for c in ["IP", "편성", "지표구분", "매체", "데모", "metric", "회차", "주차"]:
         if c in df.columns:
-            df[c] = df[c].astype(str).str.strip() # gspread는 .fillna('') 불필요
+            df[c] = df[c].astype(str).str.strip() 
 
     if "회차" in df.columns:
         df["회차_numeric"] = df["회차"].str.extract(r"(\d+)", expand=False).astype(float)
@@ -631,7 +628,6 @@ with st.sidebar:
 
 #region [ 5. 공통 집계 유틸: KPI 계산 ]
 # =====================================================
-# [수정] 기존 Region 6
 
 def _episode_col(df: pd.DataFrame) -> str:
     """데이터프레임에 존재하는 회차 숫자 컬럼명을 반환합니다."""
@@ -673,9 +669,8 @@ def mean_of_ip_episode_mean(df: pd.DataFrame, metric_name: str, media=None) -> f
 
 def mean_of_ip_sums(df: pd.DataFrame, metric_name: str, media=None) -> float | None:
     
-    # [수정] PGC/UGC 필터 로직을 _get_view_data 함수로 분리 (피드백 3번)
     if metric_name == "조회수":
-        sub = _get_view_data(df) # [3. 공통 함수]
+        sub = _get_view_data(df) 
     else:
         sub = df[df["metric"] == metric_name].copy()
 
@@ -697,7 +692,6 @@ def mean_of_ip_sums(df: pd.DataFrame, metric_name: str, media=None) -> float | N
 
 #region [ 6. 공통 집계 유틸: 데모  ]
 # =====================================================
-# [수정] 기존 Region 7
 
 # ===== 6.1. 데모 문자열 파싱 유틸 =====
 def _gender_from_demo(s: str):
@@ -889,9 +883,8 @@ def get_avg_demo_pop_by_episode(df_src: pd.DataFrame, medias: List[str]) -> pd.D
 
 #region [ 7. 페이지 1: Overview ]
 # =====================================================
-# [수정] KPI/차트/테이블: 티빙 VOD를 '당일'과 '주간'으로 분리 (2025-11-12)
 def render_overview():
-    df = load_data() # [3. 공통 함수]
+    df = load_data() 
   
     # --- 페이지 전용 필터 ---   
     filter_cols = st.columns(4)
@@ -965,11 +958,9 @@ def render_overview():
     def avg_of_ip_tving_epSum_mean(media_name: str):
         return mean_of_ip_episode_sum(f, "시청인구", [media_name]) # [5. 공통 함수]
 
-    # [수정] VOD 분리: 당일 VOD(Quick)
     def avg_of_ip_tving_quick():
         return mean_of_ip_episode_sum(f, "시청인구", ["TVING QUICK"])
 
-    # [수정] VOD 분리: 주간 VOD (순수 VOD)
     def avg_of_ip_tving_vod_weekly():
         return mean_of_ip_episode_sum(f, "시청인구", ["TVING VOD"])
 
@@ -991,7 +982,6 @@ def render_overview():
     # --- 요약 카드 ---
     st.caption('▶ IP별 평균')
 
-    # [수정] KPI 카드 4열 -> 5열로 확장 (Quick, VOD 분리)
     c1, c2, c3, c4, c5 = st.columns(5)
     st.markdown("<div style='margin-top:20px'></div>", unsafe_allow_html=True)
     c6, c7, c8, c9, c10 = st.columns(5)
@@ -999,8 +989,8 @@ def render_overview():
     t_rating   = avg_of_ip_means("T시청률")
     h_rating   = avg_of_ip_means("H시청률")
     tving_live = avg_of_ip_tving_epSum_mean("TVING LIVE")
-    tving_quick= avg_of_ip_tving_quick()        # [추가]
-    tving_vod  = avg_of_ip_tving_vod_weekly()   # [수정]
+    tving_quick= avg_of_ip_tving_quick()        
+    tving_vod  = avg_of_ip_tving_vod_weekly()   
 
     digital_view = avg_of_ip_sums("조회수")
     digital_buzz = avg_of_ip_sums("언급량")
@@ -1011,8 +1001,8 @@ def render_overview():
     kpi(c1, "🎯 타깃 시청률", fmt(t_rating, digits=3))
     kpi(c2, "🏠 가구 시청률", fmt(h_rating, digits=3))
     kpi(c3, "📺 티빙 LIVE", fmt(tving_live, intlike=True))
-    kpi(c4, "⚡ 티빙 당일 VOD", fmt(tving_quick, intlike=True)) # [추가]
-    kpi(c5, "▶️ 티빙 주간 VOD", fmt(tving_vod, intlike=True))   # [수정]
+    kpi(c4, "⚡ 티빙 당일 VOD", fmt(tving_quick, intlike=True)) 
+    kpi(c5, "▶️ 티빙 주간 VOD", fmt(tving_vod, intlike=True))   
     
     kpi(c6, "👀 디지털 조회", fmt(digital_view, intlike=True))
     kpi(c7, "💬 디지털 언급량", fmt(digital_buzz, intlike=True))
@@ -1023,14 +1013,13 @@ def render_overview():
     st.divider()
 
     # --- 주차별 시청자수 트렌드 (Stacked Bar) ---
-    # [수정] 차트도 KPI와 동일하게 Quick/VOD 분리
     df_trend = f[f["metric"]=="시청인구"].copy()
     if not df_trend.empty:
         tv_weekly = df_trend[df_trend["매체"]=="TV"].groupby("주차시작일")["value"].sum()
         
         tving_live_weekly = df_trend[df_trend["매체"]=="TVING LIVE"].groupby("주차시작일")["value"].sum()
-        tving_quick_weekly = df_trend[df_trend["매체"]=="TVING QUICK"].groupby("주차시작일")["value"].sum() # [추가]
-        tving_vod_weekly = df_trend[df_trend["매체"]=="TVING VOD"].groupby("주차시작일")["value"].sum()     # [수정]
+        tving_quick_weekly = df_trend[df_trend["매체"]=="TVING QUICK"].groupby("주차시작일")["value"].sum() 
+        tving_vod_weekly = df_trend[df_trend["매체"]=="TVING VOD"].groupby("주차시작일")["value"].sum()     
 
         all_dates = sorted(list(
             set(tv_weekly.index) | set(tving_live_weekly.index) | 
@@ -1041,8 +1030,8 @@ def render_overview():
             df_bar = pd.DataFrame({"주차시작일": all_dates})
             df_bar["TV 본방"] = df_bar["주차시작일"].map(tv_weekly).fillna(0)
             df_bar["티빙 본방"] = df_bar["주차시작일"].map(tving_live_weekly).fillna(0)
-            df_bar["티빙 당일"] = df_bar["주차시작일"].map(tving_quick_weekly).fillna(0) # [추가]
-            df_bar["티빙 주간"] = df_bar["주차시작일"].map(tving_vod_weekly).fillna(0)   # [수정]
+            df_bar["티빙 당일"] = df_bar["주차시작일"].map(tving_quick_weekly).fillna(0) 
+            df_bar["티빙 주간"] = df_bar["주차시작일"].map(tving_vod_weekly).fillna(0)   
 
             df_long = df_bar.melt(id_vars="주차시작일",
                                   value_vars=["TV 본방","티빙 본방","티빙 당일","티빙 주간"],
@@ -1060,13 +1049,12 @@ def render_overview():
 
             fig = px.bar(
                 df_long, x="주차시작일", y="시청자수", color="구분",
-                # text="시청자수",  <-- [삭제 확인] 이 부분이 없어도 아래 update_traces로 확실히 제어합니다.
                 title="📊 주차별 시청자수",
                 color_discrete_map={
-                    "TV 본방": "#2c3e50",     # [TV] 묵직한 다크 네이비
-                    "티빙 본방": "#d32f2f",   # [LIVE] 티빙 브랜드 레드
-                    "티빙 당일": "#ff5252",   # [QUICK] 화사한 코랄 레드
-                    "티빙 주간": "#ffcdd2"    # [VOD] 은은한 페일 핑크
+                    "TV 본방": "#2c3e50",     
+                    "티빙 본방": "#d32f2f",   
+                    "티빙 당일": "#ff5252",   
+                    "티빙 주간": "#ffcdd2"    
                 },
                 custom_data=["hover_txt"]
             )
@@ -1079,7 +1067,6 @@ def render_overview():
                 margin=dict(t=60) 
             )
             
-            # [핵심] textposition='none'을 설정하여 숫자를 강제로 숨깁니다.
             fig.update_traces(
                 textposition='none', 
                 hovertemplate="<b>%{x}</b><br>%{data.name}: %{customdata[0]}<extra></extra>"
@@ -1134,11 +1121,8 @@ def render_overview():
         aggs["타깃시청률"] = _get_mean_of_ep_means(df, "T시청률")
         aggs["가구시청률"] = _get_mean_of_ep_means(df, "H시청률")
         aggs["티빙LIVE"] = _get_mean_of_ep_sums(df, "시청인구", ["TVING LIVE"])
-        
-        # [수정] 테이블 컬럼도 분리
         aggs["티빙당일"] = _get_mean_of_ep_sums(df, "시청인구", ["TVING QUICK"])
         aggs["티빙주간"] = _get_mean_of_ep_sums(df, "시청인구", ["TVING VOD"]) 
-        
         aggs["디지털언급량"] = df[df["metric"] == "언급량"].groupby("IP")["value"].sum().reindex(all_ips).fillna(0)
         aggs["디지털조회수"] = _get_view_data(df).groupby("IP")["value"].sum().reindex(all_ips).fillna(0)
         aggs["화제성순위"] = df[df["metric"] == "F_Total"].groupby("IP")["value"].min().reindex(all_ips).fillna(0)
@@ -1178,10 +1162,8 @@ def render_overview():
     gb.configure_column('타깃시청률', valueFormatter=fmt_fixed3, sort='desc')
     gb.configure_column('가구시청률', valueFormatter=fmt_fixed3)
     gb.configure_column('티빙LIVE', valueFormatter=fmt_thousands)
-    # [수정] 컬럼 분리 반영
     gb.configure_column('티빙당일', header_name="티빙 당일 VOD", valueFormatter=fmt_thousands)
     gb.configure_column('티빙주간', header_name="티빙 주간 VOD", valueFormatter=fmt_thousands)
-    
     gb.configure_column('디지털조회수', valueFormatter=fmt_thousands)
     gb.configure_column('디지털언급량', valueFormatter=fmt_thousands)
     gb.configure_column('화제성순위', valueFormatter=fmt_rank)
@@ -1203,7 +1185,6 @@ def render_overview():
 
 #region [ 8. 페이지 2: IP 성과 자세히보기 ]
 # =====================================================
-# [수정] KPI 2열 더미카드 추가, TVING 차트 레이블/제목 정리, AgGrid 높이 자동화 (2025-11-12)
 def render_ip_detail():
 
     df_full = load_data() # [3. 공통 함수]
@@ -1503,7 +1484,6 @@ def render_ip_detail():
     kpi_with_rank(c5, "▶️ TVING 주간 VOD", val_vod, base_vod, rk_vod, prog_label, intlike=True)
 
     # === KPI 배치 (Row 2) ===
-    # [수정] 5열로 확장하고 마지막에 더미 카드 추가
     c6, c7, c8, c9, c10 = st.columns(5)
     kpi_with_rank(c6, "👀 디지털 조회수", val_view, base_view, rk_view, prog_label, intlike=True)
     kpi_with_rank(c7, "💬 디지털 언급량", val_buzz, base_buzz, rk_buzz, prog_label, intlike=True)
@@ -1560,7 +1540,6 @@ def render_ip_detail():
             st.info("표시할 시청률 데이터가 없습니다.")
 
     with cB:
-        # [수정] 제목 누적 텍스트 제거
         st.markdown("<div class='sec-title'>📱 TVING 시청자수</div>", unsafe_allow_html=True)
         t_keep = ["TVING LIVE", "TVING QUICK", "TVING VOD"]
         tsub = f[(f["metric"] == "시청인구") & (f["매체"].isin(t_keep))].dropna(subset=["회차", "회차_num"]).copy()
@@ -1840,16 +1819,27 @@ def render_ip_detail():
       const colId = params.column.getColId();
       const rowIndex = params.node.rowIndex;
       const val = Number(params.value || 0);
+      
       if (colId === "회차") return params.value;
+      
       let arrow = "";
       if (rowIndex > 0) {
         const prev = api.getDisplayedRowAtIndex(rowIndex - 1);
         if (prev && prev.data && prev.data[colId] != null) {
           const pv = Number(prev.data[colId] || 0);
-          if (val > pv) arrow = "🔺"; else if (val < pv) arrow = "▾";
+          
+          // 상승: 빨간색 화살표만 span으로 감쌈
+          if (val > pv) { 
+            arrow = '<span style="margin-left:4px;">(<span style="color:#d93636;">▲</span>)</span>'; 
+          } 
+          // 하락: 파란색 화살표만 span으로 감쌈
+          else if (val < pv) { 
+            arrow = '<span style="margin-left:4px;">(<span style="color:#2a61cc;">▼</span>)</span>'; 
+          }
         }
       }
-      return arrow + Math.round(val).toLocaleString();
+      
+      return Math.round(val).toLocaleString() + arrow;
     }""")
 
     _js_demo_cols = "[" + ",".join([f'"{c}"' for c in DEMO_COLS_ORDER]) + "]"
@@ -1876,18 +1866,15 @@ def render_ip_detail():
       return {{'background-color': bg, 'text-align': 'right', 'padding': '2px 4px', 'font-weight': '500'}};
     }}""")
 
-    # [수정] 높이 자동(autoHeight) 및 height=None 적용하여 잘림 해결
     def _render_aggrid_table(df_numeric, title):
         st.markdown(f"###### {title}")
         if df_numeric.empty: st.info("데이터 없음"); return
         gb = GridOptionsBuilder.from_dataframe(df_numeric)
-        # [수정] domLayout='autoHeight' 적용
         gb.configure_grid_options(rowHeight=34, suppressMenuHide=True, domLayout='autoHeight')
         gb.configure_default_column(sortable=False, resizable=True, filter=False, cellStyle={'textAlign': 'right'}, headerClass='centered-header bold-header')
         gb.configure_column("회차", header_name="회차", cellStyle={'textAlign': 'left'})
         for c in [col for col in df_numeric.columns if col != "회차"]:
             gb.configure_column(c, header_name=c, cellRenderer=diff_renderer, cellStyle=cell_style_renderer)
-        # [수정] height=None으로 설정하여 자동 높이 사용
         AgGrid(df_numeric, gridOptions=gb.build(), theme="streamlit", height=None, update_mode=GridUpdateMode.NO_UPDATE, allow_unsafe_jscode=True)
 
     tv_numeric = _build_demo_table_numeric(f, ["TV"])
