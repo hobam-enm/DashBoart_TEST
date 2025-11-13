@@ -164,7 +164,7 @@ html, body, [class*="css"] {
 section[data-testid="stSidebar"] {
     background-color: #ffffff !important; 
     border-right: 1px solid #e0e0e0;
-    box-shadow: 4px 0 15px rgba(0, 0, 0, 0.04); /* 오른쪽(4px)으로 퍼지는 연한 그림자 */
+    box-shadow: 4px 0 15px rgba(0, 0, 0, 0.1); /* 오른쪽(10px)으로 퍼지는 연한 그림자 */
     min-width: 280px !important;
     max-width: 280px !important;
     padding-top: 1rem;
