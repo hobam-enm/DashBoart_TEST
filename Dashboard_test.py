@@ -1835,10 +1835,10 @@ def render_ip_detail():
             const pv = Number(prev.data[colId] || 0);
             
             if (val > pv) {
-               // 상승: (▲) 빨간색
+               // 상승: (▴) 빨간색
                arrow = '<span style="margin-left:4px;">(<span style="color:#d93636;">▲</span>)</span>';
             } else if (val < pv) {
-               // 하락: (▼) 파란색
+               // 하락: (▾) 파란색
                arrow = '<span style="margin-left:4px;">(<span style="color:#2a61cc;">▼</span>)</span>';
             }
           }
@@ -1881,21 +1881,41 @@ def render_ip_detail():
     def _render_aggrid_table(df_numeric, title):
         st.markdown(f"###### {title}")
         if df_numeric.empty: st.info("데이터 없음"); return
+        
         gb = GridOptionsBuilder.from_dataframe(df_numeric)
+        # 높이 자동 조절
         gb.configure_grid_options(rowHeight=34, suppressMenuHide=True, domLayout='autoHeight')
-        gb.configure_default_column(sortable=False, resizable=True, filter=False, cellStyle={'textAlign': 'right'}, headerClass='centered-header bold-header')
+        
+        # 기본 컬럼 설정
+        gb.configure_default_column(
+            sortable=False, 
+            resizable=True, 
+            filter=False, 
+            cellStyle={'textAlign': 'right'}, 
+            headerClass='centered-header bold-header'
+        )
+        
+        # '회차' 컬럼 설정
         gb.configure_column("회차", header_name="회차", cellStyle={'textAlign': 'left'})
         
+        # 나머지 데모 컬럼 설정 (Class 방식 렌더러 사용)
         for c in [col for col in df_numeric.columns if col != "회차"]:
-            gb.configure_column(c, header_name=c, cellRenderer=diff_renderer, cellStyle=cell_style_renderer)
+            gb.configure_column(
+                c, 
+                header_name=c, 
+                cellRenderer=diff_renderer, 
+                cellStyle=cell_style_renderer
+            )
             
-        AgGrid(df_numeric, gridOptions=gb.build(), theme="streamlit", height=None, update_mode=GridUpdateMode.NO_UPDATE, allow_unsafe_jscode=True)
-
-    tv_numeric = _build_demo_table_numeric(f, ["TV"])
-    _render_aggrid_table(tv_numeric, "📺 TV (시청자수)")
-
-    tving_numeric = _build_demo_table_numeric(f, ["TVING LIVE", "TVING QUICK", "TVING VOD"])
-    _render_aggrid_table(tving_numeric, "▶︎ TVING 합산 시청자수")
+        AgGrid(
+            df_numeric, 
+            gridOptions=gb.build(), 
+            theme="streamlit", 
+            height=None, 
+            update_mode=GridUpdateMode.NO_UPDATE, 
+            allow_unsafe_jscode=True,
+            fit_columns_on_grid_load=True  # [핵심] 이 옵션이 있어야 가로폭에 딱 맞게 줄어듭니다!
+        )
 
 
 #region [ 9. 페이지 3: IP간 데모분석 ]
