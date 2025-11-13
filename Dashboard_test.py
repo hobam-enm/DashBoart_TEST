@@ -3137,7 +3137,7 @@ def render_episode():
 
 #region [ 12. 페이지 6: 성장스코어-방영성과 ]
 # =====================================================
-# [수정] 기존 Region 13
+# [수정] 2025-11-13: 회차별 등급 추이 계산 로직 최적화 (Pre-fetch + Numpy Slicing)
 def render_growth_score():
     """
     [페이지 6] 성장스코어-방영지표 렌더링 함수
@@ -3167,7 +3167,6 @@ def render_growth_score():
 
     st.markdown("""
     <style>
-      /* 페이지 6, 7 전용 kpi-card 스타일 오버라이드 (더 컴팩트하게) */
       div[data-testid="stVerticalBlockBorderWrapper"]:has(.growth-kpi) .kpi-card {
           border-radius:16px;border:1px solid #e7ebf3;background:#fff;padding:12px 14px;
           box-shadow:0 1px 2px rgba(0,0,0,0.04);
@@ -3212,57 +3211,85 @@ def render_growth_score():
             unsafe_allow_html=True
         )
 
-    # ---------- 공통 유틸 (페이지 6 전용) ----------
-    def _filter_to_ep(df, n):
-        if "회차_numeric" not in df.columns:
-             df["회차_numeric"] = df["회차"].astype(str).str.extract(r"(\d+)", expand=False).astype(float)
-        return df[pd.to_numeric(df["회차_numeric"], errors="coerce") <= float(n)]
+    # ---------- [최적화] 데이터 전처리 및 계산 로직 분리 ----------
+    
+    # 1. 전체 IP에 대해 회차별 숫자형 컬럼 생성 (Loop 밖에서 처리)
+    if "회차_numeric" not in df_all.columns:
+        df_all["회차_numeric"] = df_all["회차"].astype(str).str.extract(r"(\d+)", expand=False).astype(float)
+    
+    # 2. IP별 데이터프레임 딕셔너리 생성 (필터링 비용 절감)
+    ip_dfs = {ip: df_all[df_all["IP"] == ip].copy() for ip in ips}
 
-    def _series_for_reg(ip_df, metric, media, n_cutoff): # [수정] n_cutoff 인자 추가
+    # 3. [Helper] 전체 데이터를 Numpy Array로 추출하는 함수
+    def _get_full_series(ip_df, metric, media):
+        """특정 IP, Metric의 전체 회차 데이터를 (x, y) Numpy Array로 반환"""
         sub = ip_df[ip_df["metric"] == metric].copy()
+        
         if media == "LIVE":
             sub = sub[sub["매체"] == "TVING LIVE"]
         elif media == "VOD":
             sub = sub[sub["매체"] == "TVING VOD"]
-        sub = _filter_to_ep(sub, n_cutoff) # [수정] ep_cutoff -> n_cutoff
+            # 넷플릭스 보정
+            if "넷플릭스편성작" in sub.columns:
+                # 전체에 대해 보정 적용 (어차피 해당되지 않으면 0이거나 원본 유지)
+                is_netflix = (sub["넷플릭스편성작"] == 1)
+                if is_netflix.any():
+                    sub.loc[is_netflix, "value"] = pd.to_numeric(sub.loc[is_netflix, "value"], errors="coerce") * NETFLIX_VOD_FACTOR
+
         sub["value"] = pd.to_numeric(sub["value"], errors="coerce").replace(0, np.nan)
         sub = sub.dropna(subset=["value", "회차_numeric"])
+        
         if sub.empty: return None
+        
         if metric in ["H시청률", "T시청률"]:
             s = sub.groupby("회차_numeric")["value"].mean().reset_index()
         else:
             s = sub.groupby("회차_numeric")["value"].sum().reset_index()
+            
         s = s.sort_values("회차_numeric")
-        x = s["회차_numeric"].astype(float).values
-        y = s["value"].astype(float).values
-        return (x, y) if len(x) >= 2 else None
+        return s["회차_numeric"].values.astype(float), s["value"].values.astype(float)
 
-    def _slope(ip_df, metric, media, n_cutoff): # [수정] n_cutoff 인자 추가
-        xy = _series_for_reg(ip_df, metric, media, n_cutoff)
-        if xy is None: return np.nan
-        try: return float(np.polyfit(xy[0], xy[1], 1)[0])
-        except Exception: return np.nan
+    # 4. [Pre-Calculation] 모든 IP의 Metric별 전체 (x, y) 데이터를 미리 추출
+    # 구조: cache[ip][disp_key] = (x_array, y_array)
+    ip_metric_cache = {}
+    for ip in ips:
+        ip_metric_cache[ip] = {}
+        curr_df = ip_dfs[ip]
+        for disp, metric, media in METRICS:
+            ip_metric_cache[ip][disp] = _get_full_series(curr_df, metric, media)
 
-    def _abs_value(ip_df, metric, media, n_cutoff): # [수정] n_cutoff 인자 추가
-        ip_df = _filter_to_ep(ip_df, n_cutoff) # [수정] ep_cutoff -> n_cutoff
-        if metric in ["H시청률", "T시청률"]:
-            return mean_of_ip_episode_mean(ip_df, metric) # [5. 공통 함수]
-        if metric == "시청인구" and media == "LIVE":
-            return mean_of_ip_episode_sum(ip_df, "시청인구", ["TVING LIVE"]) # [5. 공통 함수]
-        if metric == "시청인구" and media == "VOD":
-            adj = ip_df.copy()
-            if "넷플릭스편성작" in adj.columns:
-                msk = (adj.get("넷플릭스편성작", 0) == 1) & (adj["매체"] == "TVING VOD") & (adj["metric"] == "시청인구")
-                if msk.any():
-                    adj.loc[msk, "value"] = pd.to_numeric(adj.loc[msk, "value"], errors="coerce") * NETFLIX_VOD_FACTOR
-            return mean_of_ip_episode_sum(adj, "시청인구", ["TVING VOD"]) # [5. 공통 함수]
-        return None
+    # 5. [Calculation] Numpy Slicing을 이용한 통계 계산
+    def _calc_stats_from_cache(xy_tuple, n_cutoff, metric_type):
+        """미리 추출된 (x,y)에서 n_cutoff 이하만 잘라서 Slope/Abs 계산"""
+        if xy_tuple is None: return np.nan, np.nan
+        
+        x, y = xy_tuple
+        mask = x <= float(n_cutoff)
+        x_sub, y_sub = x[mask], y[mask]
+        
+        if len(x_sub) == 0: return np.nan, np.nan
+        
+        # Abs Value
+        if metric_type in ["가구시청률", "타깃시청률"]:
+            abs_val = np.mean(y_sub)
+        else: # TVING 합산 로직 (VOD, LIVE는 원본 함수에서 sum 기반 mean이었음. 여기선 회차별 sum된 데이터의 mean)
+            abs_val = np.mean(y_sub)
+            
+        # Slope
+        if len(x_sub) < 2:
+            slope = np.nan
+        else:
+            try:
+                slope = np.polyfit(x_sub, y_sub, 1)[0]
+            except:
+                slope = np.nan
+                
+        return abs_val, slope
 
     def _quintile_grade(series, labels):
         s = pd.Series(series).astype(float)
         valid = s.dropna()
-        if valid.empty:
-            return pd.Series(index=s.index, data=np.nan)
+        if valid.empty: return pd.Series(index=s.index, data=np.nan)
         ranks = valid.rank(method="average", ascending=False, pct=True)
         bins = [0, .2, .4, .6, .8, 1.0000001]
         idx = np.digitize(ranks.values, bins, right=True) - 1
@@ -3274,33 +3301,79 @@ def render_growth_score():
         s = pd.Series(s).astype(float)
         return s.rank(pct=True) * 100
 
-    # ---------- IP별 절대/기울기 (ep_cutoff 기준) ----------
-    rows = []
-    for ip in ips:
-        ip_df = df_all[df_all["IP"] == ip]
-        row = {"IP": ip}
-        for disp, metric, media in METRICS:
-            row[f"{disp}_절대"] = _abs_value(ip_df, metric, media, ep_cutoff)
-            row[f"{disp}_기울기"] = _slope(ip_df, metric, media, ep_cutoff)
-        rows.append(row)
-    base = pd.DataFrame(rows)
+    # ---------- [메인 로직] 회차별 등급 산출 (Loop Optimized) ----------
+    
+    # 사용할 Cutoff 목록 설정 (선택된 IP의 데이터 길이에 맞춰 최적화)
+    # 선택된 IP의 최대 회차를 구해 불필요한 Loop 방지
+    sel_ip_df = ip_dfs[selected_ip]
+    if "회차_numeric" in sel_ip_df.columns:
+        _max_ep_val = pd.to_numeric(sel_ip_df["회차_numeric"], errors="coerce").max()
+    else:
+        _max_ep_val = 0
+    
+    if pd.isna(_max_ep_val) or _max_ep_val == 0:
+        _Ns = [min(EP_CHOICES)]
+    else:
+        _Ns = [n for n in EP_CHOICES if n <= _max_ep_val]
+    
+    # 만약 선택된 cutoff가 _Ns에 없다면(미래 회차 등), 단일 계산을 위해 추가
+    needed_cutoffs = set(_Ns)
+    needed_cutoffs.add(ep_cutoff)
+    sorted_cutoffs = sorted(list(needed_cutoffs))
 
-    # ---------- 등급 산정 ----------
-    for disp, _, _ in METRICS:
-        base[f"{disp}_절대등급"] = _quintile_grade(base[f"{disp}_절대"], ["S","A","B","C","D"])
-        base[f"{disp}_상승등급"] = _quintile_grade(base[f"{disp}_기울기"], SLOPE_LABELS)
-        base[f"{disp}_종합"]   = base[f"{disp}_절대등급"].astype(str) + base[f"{disp}_상승등급"].astype(str).replace("nan", "") # [수정] nan 제거
+    evo_rows = []
+    base_for_current_cutoff = None # 현재 선택된 cutoff의 데이터프레임 저장용
 
-    base["_ABS_PCT_MEAN"]   = pd.concat([_to_percentile(base[f"{d}_절대"])   for d,_,_ in METRICS], axis=1).mean(axis=1)
-    base["_SLOPE_PCT_MEAN"] = pd.concat([_to_percentile(base[f"{d}_기울기"]) for d,_,_ in METRICS], axis=1).mean(axis=1)
-    base["종합_절대등급"] = _quintile_grade(base["_ABS_PCT_MEAN"],   ["S","A","B","C","D"])
-    base["종합_상승등급"] = _quintile_grade(base["_SLOPE_PCT_MEAN"], SLOPE_LABELS)
-    base["종합등급"] = base["종합_절대등급"].astype(str) + base["종합_상승등급"].astype(str).replace("nan", "") # [수정] nan 제거
+    # 통합 Loop: 필요한 모든 Cutoff에 대해 한 번씩만 순회
+    for n in sorted_cutoffs:
+        tmp_rows = []
+        for ip in ips:
+            row = {"IP": ip}
+            for disp, _, _ in METRICS:
+                xy = ip_metric_cache[ip][disp]
+                abs_v, slope_v = _calc_stats_from_cache(xy, n, disp)
+                row[f"{disp}_절대"] = abs_v
+                row[f"{disp}_기울기"] = slope_v
+            tmp_rows.append(row)
+        
+        tmp_df = pd.DataFrame(tmp_rows)
+        
+        # 등급 산정
+        for disp, _, _ in METRICS:
+            tmp_df[f"{disp}_절대등급"] = _quintile_grade(tmp_df[f"{disp}_절대"], ["S","A","B","C","D"])
+            tmp_df[f"{disp}_상승등급"] = _quintile_grade(tmp_df[f"{disp}_기울기"], SLOPE_LABELS)
+        
+        tmp_df["_ABS_PCT_MEAN"] = pd.concat([_to_percentile(tmp_df[f"{d}_절대"]) for d,_,_ in METRICS], axis=1).mean(axis=1)
+        tmp_df["_SLOPE_PCT_MEAN"] = pd.concat([_to_percentile(tmp_df[f"{d}_기울기"]) for d,_,_ in METRICS], axis=1).mean(axis=1)
+        tmp_df["종합_절대등급"] = _quintile_grade(tmp_df["_ABS_PCT_MEAN"], ["S","A","B","C","D"])
+        tmp_df["종합_상승등급"] = _quintile_grade(tmp_df["_SLOPE_PCT_MEAN"], SLOPE_LABELS)
+        tmp_df["종합등급"] = tmp_df["종합_절대등급"].astype(str) + tmp_df["종합_상승등급"].astype(str).replace("nan", "")
+
+        # 현재 Cutoff(상단 카드용) 데이터 저장
+        if n == ep_cutoff:
+            base = tmp_df.copy() # Snapshot for cards
+
+        # 그래프용 데이터 수집 (현재 IP)
+        if n in _Ns:
+            row = tmp_df[tmp_df["IP"] == selected_ip]
+            if not row.empty and pd.notna(row.iloc[0]["종합_절대등급"]):
+                ag = str(row.iloc[0]["종합_절대등급"])
+                sg = str(row.iloc[0]["종합_상승등급"]) if pd.notna(row.iloc[0]["종합_상승등급"]) else ""
+                evo_rows.append({
+                    "N": n,
+                    "회차라벨": f"{n}회차",
+                    "ABS_GRADE": ag,
+                    "SLOPE_GRADE": sg,
+                    "ABS_NUM": ABS_NUM.get(ag, np.nan)
+                })
+
+    # base가 할당되지 않았을 경우(데이터 부족 등) 예외처리
+    if 'base' not in locals(): base = tmp_df.copy()
 
     # ---------- [선택작품 요약카드] ----------
     focus = base[base["IP"] == selected_ip].iloc[0]
 
-    st.markdown("<div class='growth-kpi'>", unsafe_allow_html=True) # [수정] kpi-card 래퍼
+    st.markdown("<div class='growth-kpi'>", unsafe_allow_html=True)
     card_cols = st.columns([2, 1, 1, 1, 1])
     with card_cols[0]:
         st.markdown(
@@ -3332,53 +3405,6 @@ def render_growth_score():
     st.markdown("<div style='height:16px'></div>", unsafe_allow_html=True)
     
     # ===== [회차별 등급 추이: 선택 IP] =====
-    _ip_all = df_all[df_all["IP"] == selected_ip].copy()
-    if "회차_numeric" in _ip_all.columns:
-        _ip_all["ep"] = pd.to_numeric(_ip_all["회차_numeric"], errors="coerce")
-    else:
-        _ip_all["ep"] = pd.to_numeric(_ip_all["회차"].astype(str).str.extract(r"(\d+)", expand=False), errors="coerce")
-
-    _ip_all["value_num"] = pd.to_numeric(_ip_all["value"], errors="coerce").replace(0, np.nan)
-    _valid_eps = _ip_all.loc[_ip_all["value_num"].notna(), "ep"]
-
-    if _valid_eps.notna().any():
-        _max_ep = int(np.nanmax(_valid_eps))
-        _Ns = [n for n in EP_CHOICES if n <= _max_ep]
-    else:
-        _Ns = [min(EP_CHOICES)]
-
-    evo_rows = []
-    for n in _Ns:
-        tmp = []
-        for ip in ips:
-            ip_df = df_all[df_all["IP"] == ip]
-            row = {"IP": ip}
-            for disp, metric, media in METRICS:
-                row[f"{disp}_절대"]   = _abs_value(ip_df, metric, media, n)
-                row[f"{disp}_기울기"] = _slope(ip_df, metric, media, n)
-            tmp.append(row)
-        tmp_df = pd.DataFrame(tmp) # [수정] 변수명 변경
-
-        for disp, _, _ in METRICS:
-            tmp_df[f"{disp}_절대등급"] = _quintile_grade(tmp_df[f"{disp}_절대"],   ["S","A","B","C","D"])
-            tmp_df[f"{disp}_상승등급"] = _quintile_grade(tmp_df[f"{disp}_기울기"], SLOPE_LABELS)
-        tmp_df["_ABS_PCT_MEAN"]   = pd.concat([_to_percentile(tmp_df[f"{d}_절대"])   for d,_,_ in METRICS], axis=1).mean(axis=1)
-        tmp_df["_SLOPE_PCT_MEAN"] = pd.concat([_to_percentile(tmp_df[f"{d}_기울기"]) for d,_,_ in METRICS], axis=1).mean(axis=1)
-        tmp_df["종합_절대등급"] = _quintile_grade(tmp_df["_ABS_PCT_MEAN"],   ["S","A","B","C","D"])
-        tmp_df["종합_상승등급"] = _quintile_grade(tmp_df["_SLOPE_PCT_MEAN"], SLOPE_LABELS)
-
-        row = tmp_df[tmp_df["IP"] == selected_ip]
-        if not row.empty and pd.notna(row.iloc[0]["종합_절대등급"]):
-            ag = str(row.iloc[0]["종합_절대등급"])
-            sg = str(row.iloc[0]["종합_상승등급"]) if pd.notna(row.iloc[0]["종합_상승등급"]) else ""
-            evo_rows.append({
-                "N": n,
-                "회차라벨": f"{n}회차",
-                "ABS_GRADE": ag,
-                "SLOPE_GRADE": sg,
-                "ABS_NUM": ABS_NUM.get(ag, np.nan)
-            })
-
     evo = pd.DataFrame(evo_rows)
     if evo.empty:
         st.info("회차별 등급 추이를 표시할 데이터가 부족합니다.")
@@ -3397,7 +3423,7 @@ def render_growth_score():
             hoverinfo="skip"
         ))
         for xi, yi, ag, sg in zip(evo["N"], evo["ABS_NUM"], evo["ABS_GRADE"], evo["SLOPE_GRADE"]):
-            label = f"{ag}{sg}" if isinstance(ag, str) and sg else ag # [수정] sg가 nan이 아닐때만 붙임
+            label = f"{ag}{sg}" if isinstance(ag, str) and sg else ag
             fig_e.add_annotation(
                 x=xi, y=yi, text=label, showarrow=False,
                 font=dict(size=12, color="#333", family="sans-serif"), yshift=14
@@ -3421,7 +3447,6 @@ def render_growth_score():
             showlegend=False
         )
         
-        # [수정] st.columns(1)로 감싸서 독립된 카드로 만듭니다.
         c_evo, = st.columns(1)
         with c_evo:
             st.plotly_chart(fig_e, use_container_width=True, config={"displayModeBar": False})
@@ -3492,7 +3517,6 @@ def render_growth_score():
                     yshift=6
                 )
     
-    # [수정] st.columns(1)로 감싸서 독립된 카드로 만듭니다.
     c_posmap, = st.columns(1)
     with c_posmap:
         st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
@@ -3529,7 +3553,7 @@ def render_growth_score():
         if (/^[SABCD]/.test(v)) {
           if (v.startsWith('S')) { bg='rgba(0,91,187,0.14)'; color='#003d80'; }
           else if (v.startsWith('A')) { bg='rgba(0,91,187,0.08)'; color='#004a99'; }
-          else if (v.startsWith('B')) { bg='rgba(0,0,0,0.03)'; color:'#333'; fw='600'; }
+          else if (v.startsWith('B')) { bg='rgba(0,0,0,0.03)'; color='#333'; fw='600'; }
           else if (v.startsWith('C')) { bg='rgba(42,97,204,0.08)'; color:'#2a61cc'; }
           else if (v.startsWith('D')) { bg='rgba(42,97,204,0.14)'; color:'#1a44a3'; }
           return {'background-color':bg,'color':color,'font-weight':fw,'text-align':'center'};
@@ -3540,7 +3564,7 @@ def render_growth_score():
       }
     }""")
 
-    gb = GridOptionsBuilder.from_dataframe(table_view.fillna("–")) # [수정] fillna
+    gb = GridOptionsBuilder.from_dataframe(table_view.fillna("–"))
     gb.configure_default_column(resizable=True, sortable=True, filter=False,
                                 headerClass='centered-header bold-header',
                                 cellStyle={'textAlign':'center'})
@@ -3551,7 +3575,7 @@ def render_growth_score():
 
     st.markdown("#### 📋 IP전체")
     AgGrid(
-        table_view.fillna("–"), # [수정] fillna
+        table_view.fillna("–"),
         gridOptions=grid_options,
         theme="streamlit",
         height=420,
@@ -3564,11 +3588,10 @@ def render_growth_score():
 
 #region [ 13. 페이지 7: 성장스코어-디지털 ]
 # =====================================================
-# [수정] 기존 Region 14
+# [수정] 2025-11-13: 회차별 등급 추이 계산 로직 최적화 (Pre-fetch + Numpy Slicing)
 def render_growth_score_digital():
     """
     [페이지 7] 성장스코어-디지털 렌더링 함수
-    [수정] 피드백 3, 6번 반영
     """
     df_all = load_data().copy() # [3. 공통 함수]
 
@@ -3583,14 +3606,12 @@ def render_growth_score_digital():
 
     METRICS = [
         ("조회수", "조회수", "sum", True),
-        ("화제성", "F_Score", "mean", True), # 로직(True)이 기준
+        ("화제성", "F_Score", "mean", True),
     ]
 
     ips = sorted(df_all["IP"].dropna().unique().tolist())
     if not ips:
         st.warning("IP 데이터가 없습니다."); return
-
-    # (페이지 6에서 이미 스타일이 주입되었으므로 여기서는 생략)
 
     # ---------- 헤더(타이틀/선택) ----------
     _ep_display = st.session_state.get("growth_d_ep_cutoff", 4)
@@ -3608,7 +3629,6 @@ def render_growth_score_digital():
                                  key="growth_d_ep_cutoff", label_visibility="collapsed")
 
     with st.expander("ℹ️ 지표 기준 안내", expanded=False):
-        # [수정] 피드백 6번 반영: "상승스코어 미사용" 문구 수정
         st.markdown("""
 **디지털 지표 정의(고정)**
 - **조회수, 화제성**: 회차별 합(에피소드 단위)을 사용 → 1~N회 집계 시계열의 평균/회귀
@@ -3628,69 +3648,75 @@ def render_growth_score_digital():
         unsafe_allow_html=True
     )
 
-    # ---------- 공통 유틸 (페이지 7 전용) ----------
-    def _filter_to_ep(df, n: int):
-        if "회차_numeric" not in df.columns:
-             df["회차_numeric"] = df["회차"].astype(str).str.extract(r"(\d+)", expand=False).astype(float)
-        
-        ep = pd.to_numeric(df["회차_numeric"], errors="coerce")
-        mask = (ep >= 1) & (ep <= float(n))
-        out = df.loc[mask].copy()
-        out["회차_numeric"] = ep.loc[mask]
-        if "value" in out.columns:
-            out["value"] = pd.to_numeric(out["value"], errors="coerce").replace(0, np.nan)
-        return out
+    # ---------- [최적화] 데이터 전처리 및 계산 로직 분리 ----------
 
-    def _subset_by_metric(df, metric_name:str):
-        return df[df["metric"].astype(str) == metric_name].copy()
-
-    def _series_for_reg(ip_df, metric_name:str, mtype:str, n:int):
-        # [수정] 피드백 3번 반영: 조회수 필터 로직 변경
+    # 1. 전체 IP에 대해 회차별 숫자형 컬럼 생성 (Loop 밖에서 처리)
+    if "회차_numeric" not in df_all.columns:
+        df_all["회차_numeric"] = df_all["회차"].astype(str).str.extract(r"(\d+)", expand=False).astype(float)
+    
+    # 2. IP별 데이터프레임 딕셔너리 생성 (필터링 비용 절감)
+    ip_dfs = {ip: df_all[df_all["IP"] == ip].copy() for ip in ips}
+    
+    # 3. [Helper] 전체 데이터를 Numpy Array로 추출하는 함수
+    def _get_full_series_digital(ip_df, metric_name, mtype):
+        """특정 IP, Metric의 전체 회차 데이터를 (x, y) Numpy Array로 반환"""
         if metric_name == "조회수":
-            sub = _get_view_data(ip_df) # [3. 공통 함수] (PGC/UGC 필터 포함)
+            sub = _get_view_data(ip_df) # [3. 공통 함수]
         else:
-            sub = _subset_by_metric(ip_df, metric_name)
-
-        sub = _filter_to_ep(sub, n)
+            sub = ip_df[ip_df["metric"] == metric_name].copy()
+            
+        sub["value"] = pd.to_numeric(sub["value"], errors="coerce").replace(0, np.nan)
         sub = sub.dropna(subset=["value", "회차_numeric"])
-        if sub.empty:
-            return None
+        
+        if sub.empty: return None
         
         if mtype == "sum":
             s = sub.groupby("회차_numeric", as_index=False)["value"].sum()
-        elif mtype == "rank_inv":
+        elif mtype == "rank_inv": # 참고용 (현재 미사용)
             s = sub.groupby("회차_numeric", as_index=False)["value"].mean()
             s["value"] = -1 * s["value"]
         else:
             s = sub.groupby("회차_numeric", as_index=False)["value"].mean()
-        
+            
         s = s.sort_values("회차_numeric")
-        x = s["회차_numeric"].astype(float).values
-        y = s["value"].astype(float).values
-        return (x, y) if len(x) >= 1 else None
+        return s["회차_numeric"].values.astype(float), s["value"].values.astype(float)
+    
+    # 4. [Pre-Calculation] 모든 IP의 Metric별 전체 (x, y) 데이터를 미리 추출
+    ip_metric_cache = {}
+    for ip in ips:
+        ip_metric_cache[ip] = {}
+        curr_df = ip_dfs[ip]
+        for disp, metric_name, mtype, _ in METRICS:
+            ip_metric_cache[ip][disp] = _get_full_series_digital(curr_df, metric_name, mtype)
 
-    def _abs_value(ip_df, metric_name:str, mtype:str, n:int):
-        xy = _series_for_reg(ip_df, metric_name, mtype, n)
-        if xy is None:
-            return None
-        return float(np.nanmean(xy[1])) if len(xy[1]) else None
-
-    def _slope(ip_df, metric_name:str, mtype:str, n:int, use_slope:bool):
-        if not use_slope:
-            return np.nan
-        xy = _series_for_reg(ip_df, metric_name, mtype, n)
-        if xy is None or len(xy[0]) < 2:
-            return np.nan
-        try:
-            return float(np.polyfit(xy[0], xy[1], 1)[0])
-        except Exception:
-            return np.nan
+    # 5. [Calculation] Numpy Slicing을 이용한 통계 계산
+    def _calc_stats_from_cache_digital(xy_tuple, n_cutoff, use_slope):
+        if xy_tuple is None: return np.nan, np.nan
+        
+        x, y = xy_tuple
+        mask = (x >= 1) & (x <= float(n_cutoff))
+        x_sub, y_sub = x[mask], y[mask]
+        
+        if len(x_sub) == 0: return np.nan, np.nan
+        
+        # Abs Value (Mean of the time series)
+        abs_val = float(np.nanmean(y_sub))
+        
+        # Slope
+        if not use_slope or len(x_sub) < 2:
+            slope = np.nan
+        else:
+            try:
+                slope = float(np.polyfit(x_sub, y_sub, 1)[0])
+            except:
+                slope = np.nan
+                
+        return abs_val, slope
 
     def _quintile_grade(series, labels):
         s = pd.Series(series).astype(float)
         valid = s.dropna()
-        if valid.empty:
-            return pd.Series(index=s.index, data=np.nan)
+        if valid.empty: return pd.Series(index=s.index, data=np.nan)
         ranks = valid.rank(method="average", ascending=False, pct=True)
         bins = [0, .2, .4, .6, .8, 1.0000001]
         idx = np.digitize(ranks.values, bins, right=True) - 1
@@ -3702,28 +3728,66 @@ def render_growth_score_digital():
         s = pd.Series(s).astype(float)
         return s.rank(pct=True) * 100
 
-    # ---------- IP별 절대/기울기 (ep_cutoff 기준) ----------
-    rows = []
-    for ip in ips:
-        ip_df = df_all[df_all["IP"] == ip]
-        row = {"IP": ip}
-        for disp, metric_name, mtype, use_slope in METRICS:
-            row[f"{disp}_절대"]   = _abs_value(ip_df, metric_name, mtype, ep_cutoff)
-            row[f"{disp}_기울기"] = _slope(ip_df, metric_name, mtype, ep_cutoff, use_slope)
-        rows.append(row)
-    base = pd.DataFrame(rows)
+    # ---------- [메인 로직] 회차별 등급 산출 (Loop Optimized) ----------
+    
+    sel_ip_df = ip_dfs[selected_ip]
+    if "회차_numeric" in sel_ip_df.columns:
+        _max_ep_val = pd.to_numeric(sel_ip_df["회차_numeric"], errors="coerce").max()
+    else:
+        _max_ep_val = 0
 
-    # ---------- 등급 산정 ----------
-    for disp, _, _, _ in METRICS:
-        base[f"{disp}_절대등급"] = _quintile_grade(base[f"{disp}_절대"],   ["S","A","B","C","D"])
-        base[f"{disp}_상승등급"] = _quintile_grade(base[f"{disp}_기울기"], SLOPE_LABELS)
-        base[f"{disp}_종합"]     = base[f"{disp}_절대등급"].astype(str) + base[f"{disp}_상승등급"].astype(str).replace("nan", "")
+    if pd.isna(_max_ep_val) or _max_ep_val == 0:
+        _Ns = [min(EP_CHOICES)]
+    else:
+        _Ns = [n for n in EP_CHOICES if n <= _max_ep_val]
+    
+    needed_cutoffs = set(_Ns)
+    needed_cutoffs.add(ep_cutoff)
+    sorted_cutoffs = sorted(list(needed_cutoffs))
 
-    base["_ABS_PCT_MEAN"]   = pd.concat([_to_percentile(base[f"{d}_절대"])   for d,_,_,_ in METRICS], axis=1).mean(axis=1)
-    base["_SLOPE_PCT_MEAN"] = pd.concat([_to_percentile(base[f"{d}_기울기"]) for d,_,_,_ in METRICS], axis=1).mean(axis=1)
-    base["종합_절대등급"] = _quintile_grade(base["_ABS_PCT_MEAN"],   ["S","A","B","C","D"])
-    base["종합_상승등급"] = _quintile_grade(base["_SLOPE_PCT_MEAN"], SLOPE_LABELS)
-    base["종합등급"] = base["종합_절대등급"].astype(str) + base["종합_상승등급"].astype(str).replace("nan", "")
+    evo_rows = []
+    base_for_current_cutoff = None
+
+    for n in sorted_cutoffs:
+        tmp_rows = []
+        for ip in ips:
+            row = {"IP": ip}
+            for disp, _, _, use_slope in METRICS:
+                xy = ip_metric_cache[ip][disp]
+                abs_v, slope_v = _calc_stats_from_cache_digital(xy, n, use_slope)
+                row[f"{disp}_절대"] = abs_v
+                row[f"{disp}_기울기"] = slope_v
+            tmp_rows.append(row)
+        
+        tmp_df = pd.DataFrame(tmp_rows)
+        
+        for disp, _, _, _ in METRICS:
+            tmp_df[f"{disp}_절대등급"] = _quintile_grade(tmp_df[f"{disp}_절대"], ["S","A","B","C","D"])
+            tmp_df[f"{disp}_상승등급"] = _quintile_grade(tmp_df[f"{disp}_기울기"], SLOPE_LABELS)
+            tmp_df[f"{disp}_종합"] = tmp_df[f"{disp}_절대등급"].astype(str) + tmp_df[f"{disp}_상승등급"].astype(str).replace("nan", "")
+
+        tmp_df["_ABS_PCT_MEAN"] = pd.concat([_to_percentile(tmp_df[f"{d}_절대"]) for d,_,_,_ in METRICS], axis=1).mean(axis=1)
+        tmp_df["_SLOPE_PCT_MEAN"] = pd.concat([_to_percentile(tmp_df[f"{d}_기울기"]) for d,_,_,_ in METRICS], axis=1).mean(axis=1)
+        tmp_df["종합_절대등급"] = _quintile_grade(tmp_df["_ABS_PCT_MEAN"], ["S","A","B","C","D"])
+        tmp_df["종합_상승등급"] = _quintile_grade(tmp_df["_SLOPE_PCT_MEAN"], SLOPE_LABELS)
+        tmp_df["종합등급"] = tmp_df["종합_절대등급"].astype(str) + tmp_df["종합_상승등급"].astype(str).replace("nan", "")
+
+        if n == ep_cutoff:
+            base = tmp_df.copy()
+
+        if n in _Ns:
+            row = tmp_df[tmp_df["IP"] == selected_ip]
+            if not row.empty and pd.notna(row.iloc[0]["종합_절대등급"]):
+                ag = str(row.iloc[0]["종합_절대등급"])
+                sg = str(row.iloc[0]["종합_상승등급"]) if pd.notna(row.iloc[0]["종합_상승등급"]) else ""
+                evo_rows.append({
+                    "N": n,
+                    "ABS_GRADE": ag,
+                    "SLOPE_GRADE": sg,
+                    "ABS_NUM": ABS_NUM.get(ag, np.nan)
+                })
+                
+    if 'base' not in locals(): base = tmp_df.copy()
 
     # ---------- [선택작품 요약카드] ----------
     focus = base[base["IP"] == selected_ip].iloc[0]
@@ -3759,13 +3823,7 @@ def render_growth_score_digital():
     st.markdown("<div style='height:16px'></div>", unsafe_allow_html=True)
 
     # ===== [회차별 등급 추이: 선택 IP] =====
-    _ip_all = df_all[df_all["IP"] == selected_ip].copy()
-    if "회차_numeric" in _ip_all.columns:
-        _ip_all["ep"] = pd.to_numeric(_ip_all["회차_numeric"], errors="coerce")
-    else:
-        _ip_all["ep"] = pd.to_numeric(_ip_all["회차"].astype(str).str.extract(r"(\d+)", expand=False), errors="coerce")
-    _ip_all["value_num"] = pd.to_numeric(_ip_all["value"], errors="coerce").replace(0, np.nan)
-
+    # 선택된 IP의 유효 회차 확인 (그래프 끊김 방지 등)
     _v_view = _get_view_data(df_all[df_all["IP"] == selected_ip]) # [3. 공통 함수]
     _v_view["ep"] = pd.to_numeric(
         _v_view["회차_numeric"] if "회차_numeric" in _v_view.columns
@@ -3775,44 +3833,6 @@ def render_growth_score_digital():
     _v_view["val"] = pd.to_numeric(_v_view["value"], errors="coerce").replace(0, np.nan)
     has_ep1 = bool(_v_view.loc[_v_view["ep"] == 1, "val"].notna().any())
     has_ep2 = bool(_v_view.loc[_v_view["ep"] == 2, "val"].notna().any())
-
-    _valid_eps = _ip_all.loc[(_ip_all["value_num"].notna()) & (_ip_all["ep"] >= 1), "ep"]
-    if _valid_eps.notna().any():
-        _max_ep = int(np.nanmax(_valid_eps))
-        _Ns = [n for n in EP_CHOICES if n <= _max_ep]
-    else:
-        _Ns = [min(EP_CHOICES)]
-
-    evo_rows = []
-    for n in _Ns:
-        tmp = []
-        for ip in ips:
-            ip_df = df_all[df_all["IP"] == ip]
-            row = {"IP": ip}
-            for disp, metric_name, mtype, use_slope in METRICS:
-                row[f"{disp}_절대"]   = _abs_value(ip_df, metric_name, mtype, n)
-                row[f"{disp}_기울기"] = _slope(ip_df, metric_name, mtype, n, use_slope)
-            tmp.append(row)
-        tmp_df = pd.DataFrame(tmp)
-
-        for disp, _, _, _ in METRICS:
-            tmp_df[f"{disp}_절대등급"] = _quintile_grade(tmp_df[f"{disp}_절대"],   ["S","A","B","C","D"])
-            tmp_df[f"{disp}_상승등급"] = _quintile_grade(tmp_df[f"{disp}_기울기"], SLOPE_LABELS)
-        tmp_df["_ABS_PCT_MEAN"]   = pd.concat([_to_percentile(tmp_df[f"{d}_절대"])   for d,_,_,_ in METRICS], axis=1).mean(axis=1)
-        tmp_df["_SLOPE_PCT_MEAN"] = pd.concat([_to_percentile(tmp_df[f"{d}_기울기"]) for d,_,_,_ in METRICS], axis=1).mean(axis=1)
-        tmp_df["종합_절대등급"] = _quintile_grade(tmp_df["_ABS_PCT_MEAN"],   ["S","A","B","C","D"])
-        tmp_df["종합_상승등급"] = _quintile_grade(tmp_df["_SLOPE_PCT_MEAN"], SLOPE_LABELS)
-
-        row = tmp_df[tmp_df["IP"] == selected_ip]
-        if not row.empty and pd.notna(row.iloc[0]["종합_절대등급"]):
-            ag = str(row.iloc[0]["종합_절대등급"])
-            sg = str(row.iloc[0]["종합_상승등급"]) if pd.notna(row.iloc[0]["종합_상승등급"]) else ""
-            evo_rows.append({
-                "N": n,
-                "ABS_GRADE": ag,
-                "SLOPE_GRADE": sg,
-                "ABS_NUM": ABS_NUM.get(ag, np.nan)
-            })
 
     evo = pd.DataFrame(evo_rows)
     if evo.empty:
@@ -3854,7 +3874,6 @@ def render_growth_score_digital():
         )
         fig_e.update_layout(height=200, margin=dict(l=8, r=8, t=8, b=8), showlegend=False)
         
-        # [수정] st.columns(1)로 감싸서 독립된 카드로 만듭니다.
         c_evo_d, = st.columns(1)
         with c_evo_d:
             st.plotly_chart(fig_e, use_container_width=True, config={"displayModeBar": False})
@@ -3914,7 +3933,6 @@ def render_growth_score_digital():
                     yshift=6
                 )
 
-    # [수정] st.columns(1)로 감싸서 독립된 카드로 만듭니다.
     c_posmap_d, = st.columns(1)
     with c_posmap_d:
         st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
@@ -3949,7 +3967,7 @@ def render_growth_score_digital():
         if (/^[SABCD]/.test(v)) {
           if (v.startsWith('S')) { bg='rgba(0,91,187,0.14)'; color='#003d80'; }
           else if (v.startsWith('A')) { bg='rgba(0,91,187,0.08)'; color='#004a99'; }
-          else if (v.startsWith('B')) { bg='rgba(0,0,0,0.03)'; color:'#333'; fw='600'; }
+          else if (v.startsWith('B')) { bg='rgba(0,0,0,0.03)'; color='#333'; fw='600'; }
           else if (v.startsWith('C')) { bg='rgba(42,97,204,0.08)'; color:'#2a61cc'; }
           else if (v.startsWith('D')) { bg='rgba(42,97,204,0.14)'; color:'#1a44a3'; }
           return {'background-color':bg,'color':color,'font-weight':fw,'text-align':'center'};
@@ -3960,7 +3978,7 @@ def render_growth_score_digital():
       }
     }""")
 
-    gb = GridOptionsBuilder.from_dataframe(table_view.fillna("–")) # [수정] fillna
+    gb = GridOptionsBuilder.from_dataframe(table_view.fillna("–"))
     gb.configure_default_column(resizable=True, sortable=True, filter=False,
                                 headerClass='centered-header bold-header',
                                 cellStyle={'textAlign':'center'})
@@ -3971,7 +3989,7 @@ def render_growth_score_digital():
 
     st.markdown("#### 📋 IP전체-디지털")
     AgGrid(
-        table_view.fillna("–"), # [수정] fillna
+        table_view.fillna("–"),
         gridOptions=grid_options,
         theme="streamlit",
         height=420,
