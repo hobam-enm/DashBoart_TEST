@@ -120,21 +120,10 @@ if not check_password_with_token():
 
 #region [ 2. 공통 스타일 통합 ]
 # =====================================================
-# [수정] 2025-11-13: 사이드바/메인 스타일 유지 + 상단 스트림릿 기본 헤더 제거
+# [수정] 2025-11-13: 최종 (버튼 간격 최소화 + 사이드바 제목 확대 + 플로팅 최적화 유지)
 
 st.markdown("""
 <style>
-/* -------------------------------------------------------------------
-   0. [추가] 스트림릿 기본 헤더(Toolbar) 숨기기
-   ------------------------------------------------------------------- */
-header[data-testid="stHeader"] {
-    display: none !important; /* 상단 헤더 영역 전체 숨김 */
-}
-div[data-testid="stDecoration"] {
-    display: none !important; /* 상단 컬러 데코레이션 바 숨김 */
-}
-
-
 /* -------------------------------------------------------------------
    1. 앱 전체 기본 설정
    ------------------------------------------------------------------- */
@@ -150,16 +139,16 @@ html, body, [class*="css"] {
     background-image: none !important;
 }
 
-/* 상단 여백 (헤더가 사라졌으므로 여백을 살짝 조정) */
+/* 상단 여백 */
 .block-container {
-    padding-top: 1rem !important; /* 2rem -> 1rem으로 축소 (더 시원하게) */
+    padding-top: 2rem;
     padding-bottom: 5rem;
     max-width: 1600px !important;
 }
 
 
 /* -------------------------------------------------------------------
-   2. 사이드바 스타일 (연한 회색 배경 + 리스트형 버튼)
+   2. 사이드바 스타일 (연한 회색 + 다닥다닥 버튼 + 큰 제목)
    ------------------------------------------------------------------- */
 section[data-testid="stSidebar"] {
     background-color: #f9fafb !important; 
@@ -188,19 +177,24 @@ section[data-testid="stSidebar"] div[data-testid="stVerticalBlockBorderWrapper"]
     transform: none !important;
 }
 
-/* 버튼 스타일 (리스트형) */
+/* [핵심 1] 버튼 컨테이너 틈 제거 */
+section[data-testid="stSidebar"] div[data-testid="stVerticalBlock"] {
+    gap: 0rem !important;
+}
+
 section[data-testid="stSidebar"] .stButton {
     margin: 0 !important;
     padding: 0 !important;
     width: 100% !important;
 }
 
+/* [핵심 2] 버튼 스타일: 패딩을 8px로 확 줄여서 '다닥다닥' 구현 */
 section[data-testid="stSidebar"] .stButton > button {
     width: 100%;
     box-sizing: border-box;
     text-align: left;
     
-    padding: 12px 20px !important; 
+    padding: 8px 20px !important;  /* [수정] 높이 축소 */
     margin: 0 !important;
     
     border-radius: 0px !important;
@@ -217,15 +211,15 @@ section[data-testid="stSidebar"] .stButton > button {
 
 /* 버튼 호버 */
 section[data-testid="stSidebar"] .stButton > button:hover {
-    background: #e5e7eb !important; 
+    background: #e5e7eb !important;
     color: #000000 !important;
 }
 
-/* 선택된 버튼 (Active) */
+/* 선택된 버튼 (Active): 파란 배경 + 흰색 글씨 */
 section[data-testid="stSidebar"] [data-testid="baseButton-primary"] > button,
 section[data-testid="stSidebar"] .stButton > button[kind="primary"] {
-    background: #0b61ff !important;    /* 진한 파랑 */
-    color: #ffffff !important;         /* 흰색 글씨 */
+    background: #0b61ff !important;    
+    color: #ffffff !important;         
     border-bottom: 1px solid #0b61ff !important;
     font-weight: 700;
 }
@@ -234,16 +228,38 @@ section[data-testid="stSidebar"] button svg { display: none !important; }
 
 /* 사이드바 텍스트 여백 */
 section[data-testid="stSidebar"] h1, section[data-testid="stSidebar"] h2, 
-section[data-testid="stSidebar"] h3, section[data-testid="stSidebar"] .page-title-wrap,
-section[data-testid="stSidebar"] .stMarkdown, section[data-testid="stSidebar"] .stSelectbox,
-section[data-testid="stSidebar"] .stMultiSelect {
+section[data-testid="stSidebar"] h3, section[data-testid="stSidebar"] .stMarkdown, 
+section[data-testid="stSidebar"] .stSelectbox, section[data-testid="stSidebar"] .stMultiSelect {
     padding-left: 14px !important;
     padding-right: 14px !important;
 }
 
+/* [핵심 3] 사이드바 제목: 꽉 차고 크게 */
+.page-title-wrap { 
+    display: flex; 
+    align-items: center; 
+    justify-content: center; 
+    gap: 8px; 
+    margin: 10px 0 20px 0; 
+    padding: 0 10px;
+    width: 100%;
+}
+.page-title-emoji { font-size: 26px; line-height: 1; }
+.page-title-main {
+    font-size: 24px; /* [수정] 폰트 크기 확대 */
+    font-weight: 800; 
+    letter-spacing: -0.5px;
+    line-height: 1.2;
+    background: linear-gradient(90deg, #6A5ACD, #FF7A8A);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    text-align: center;
+    width: 100%;
+    white-space: nowrap; /* 줄바꿈 방지 */
+}
+
 
 /* -------------------------------------------------------------------
-   3. 메인 컨텐츠 카드 (전역 플로팅 & 들썩임 방지)
+   3. 메인 컨텐츠 카드 (들썩임 없는 플로팅 유지)
    ------------------------------------------------------------------- */
 div[data-testid="stVerticalBlockBorderWrapper"] {
     background-color: #ffffff;
@@ -254,13 +270,13 @@ div[data-testid="stVerticalBlockBorderWrapper"] {
     padding: 1.5rem;
     margin-bottom: 1.5rem;
     
-    /* 들썩임 방지: transform만 사용 */
+    /* 들썩임 방지 */
     transition: transform 0.25s ease, box-shadow 0.25s ease;
     will-change: transform, box-shadow;
     backface-visibility: hidden; 
 }
 
-/* 마우스 올렸을 때: 무조건 떠오름 */
+/* 마우스 올렸을 때 플로팅 */
 div[data-testid="stVerticalBlockBorderWrapper"]:hover {
     transform: translateY(-4px);
     box-shadow: 0 12px 24px rgba(0,0,0,0.08);
@@ -268,7 +284,7 @@ div[data-testid="stVerticalBlockBorderWrapper"]:hover {
     z-index: 5;
 }
 
-/* 투명 예외 처리 (제목, 필터 등) */
+/* 투명 예외 처리 */
 div[data-testid="stVerticalBlockBorderWrapper"]:has(.kpi-card),
 div[data-testid="stVerticalBlockBorderWrapper"]:has(.page-title),
 div[data-testid="stVerticalBlockBorderWrapper"]:has(h1),
@@ -290,7 +306,7 @@ div[data-testid="stVerticalBlockBorderWrapper"]:has(.mode-switch) {
 
 
 /* -------------------------------------------------------------------
-   4. KPI 카드 & 기타 컴포넌트
+   4. 기타 컴포넌트
    ------------------------------------------------------------------- */
 h1, h2, h3 { color: #111827; font-weight: 800; letter-spacing: -0.02em; }
 
@@ -328,13 +344,6 @@ h1, h2, h3 { color: #111827; font-weight: 800; letter-spacing: -0.02em; }
 .ag-theme-streamlit .ag-header { 
     background-color: #f9fafb; font-weight: 700; color: #374151; 
     border-bottom: 1px solid #e5e7eb;
-}
-
-.page-title-main {
-    font-size: 22px; font-weight: 800; 
-    background: linear-gradient(90deg, #6A5ACD, #FF7A8A);
-    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-    text-align: center;
 }
 
 </style>
