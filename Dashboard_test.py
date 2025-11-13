@@ -124,6 +124,17 @@ if not check_password_with_token():
 
 st.markdown("""
 <style>
+            
+ /* -------------------------------------------------------------------
+   0. [추가] 스트림릿 기본 헤더(Toolbar) 숨기기
+   ------------------------------------------------------------------- */
+header[data-testid="stHeader"] {
+    display: none !important; /* 상단 헤더 영역 전체 숨김 */
+}
+div[data-testid="stDecoration"] {
+    display: none !important; /* 상단 컬러 데코레이션 바 숨김 */
+}
+                       
 /* -------------------------------------------------------------------
    1. 앱 전체 기본 설정
    ------------------------------------------------------------------- */
@@ -135,7 +146,7 @@ html, body, [class*="css"] {
 
 /* 페이지 배경: 흰색 */
 [data-testid="stAppViewContainer"] {
-    background-color: #ffffff !important;
+    background-color: #f9fafb !important;
     background-image: none !important;
 }
 
@@ -151,10 +162,10 @@ html, body, [class*="css"] {
    2. 사이드바 스타일 (연한 회색 + 다닥다닥 버튼 + 큰 제목)
    ------------------------------------------------------------------- */
 section[data-testid="stSidebar"] {
-    background-color: #f9fafb !important; 
+    background-color: #ffffff !important; 
     border-right: 1px solid #e0e0e0;
-    min-width: 320px !important;
-    max-width: 320px !important;
+    min-width: 300px !important;
+    max-width: 300px !important;
     padding-top: 1rem;
     padding-left: 0 !important;
     padding-right: 0 !important;
@@ -194,7 +205,7 @@ section[data-testid="stSidebar"] .stButton > button {
     box-sizing: border-box;
     text-align: left;
     
-    padding: 8px 20px !important;  /* [수정] 높이 축소 */
+    padding: 16px 20px !important;  /* [수정] 높이 축소 */
     margin: 0 !important;
     
     border-radius: 0px !important;
