@@ -2819,7 +2819,7 @@ def render_comparison():
 
 #region [ 11. 페이지 5: 회차별 비교 ]
 # =====================================================
-# [수정] 2025-11-18: 연도 필터 로직 변경 (행 삭제 -> IP 선별 방식)
+# [수정] 2025-11-18: 연도 필터 로직 유지 & 이중 박스 제거 (Row 단위 컬럼 생성)
 
 # ===== 11.1. [페이지 5] 특정 회차 데이터 처리 =====
 def filter_data_for_episode_comparison(
@@ -2866,7 +2866,6 @@ def filter_data_for_episode_comparison(
             if not df_vod.empty:
                 result_df = df_vod.groupby("IP")["value"].sum().reset_index()
         
-        # [수정] 피드백 3번 반영: _get_view_data 함수 사용
         elif selected_metric == "조회수":
             filtered = _get_view_data(base_filtered) # [3. 공통 함수]
             if not filtered.empty:
@@ -2889,7 +2888,7 @@ def filter_data_for_episode_comparison(
         result_df = result_df.set_index("IP").reindex(all_ips_in_filter, fill_value=0).reset_index()
     result_df['value'] = pd.to_numeric(result_df['value'], errors='coerce').fillna(0)
     
-    # [추가] 순위 계산: 높은 값이 1위
+    # 순위 계산: 높은 값이 1위
     result_df['rank'] = result_df['value'].rank(method='min', ascending=False).astype(int)
 
     return result_df.sort_values("value", ascending=False)
@@ -2904,18 +2903,12 @@ def plot_episode_comparison(
 ):
     """
     특정 회차 비교 결과 시각화 (Bar Chart with Highlight)
-    [수정] 선택 IP 순위 표기 추가
     """
-    
     metric_label = selected_metric.replace("T시청률", "타깃").replace("H시청률", "가구")
     
-    # Text 컬럼 생성: 선택된 IP에만 순위를 추가하여 최종 텍스트 라벨 생성
     def _create_rank_text(row):
         val = row['value']
-        
-        # [수정] 모든 IP에 순위/값 표기
         rank_str = f"{row['rank']}위 / "
-            
         if selected_metric in ["T시청률", "H시청률"]:
             return f"{rank_str}{val:.2f}%"
         else:
@@ -2923,13 +2916,11 @@ def plot_episode_comparison(
 
     df_result['text_label'] = df_result.apply(_create_rank_text, axis=1)
     
-    # 툴팁 템플릿 정의
     if selected_metric in ["T시청률", "H시청률"]:
         hover_template = "<b>%{x}</b><br>" + metric_label + ": %{y:.2f}%<br>순위: %{customdata[0]}위<extra></extra>"
     else:
         hover_template = "<b>%{x}</b><br>" + metric_label + ": %{y:,}<br>순위: %{customdata[0]}위<extra></extra>"
 
-    # 차트 생성
     fig = px.bar(
         df_result,
         x="IP",
@@ -2944,11 +2935,10 @@ def plot_episode_comparison(
     fig.update_traces(
         marker_color=colors,
         textposition='outside',
-        hovertemplate=hover_template
+        hovertemplate=hover_template,
+        texttemplate='%{text}', 
+        textfont=dict(size=12, color='#333')
     )
-
-    # 텍스트 포맷 및 축 설정
-    fig.update_traces(texttemplate='%{text}', textfont=dict(size=12, color='#333'))
 
     if selected_metric in ["T시청률", "H시청률"]:
         fig.update_layout(yaxis_title=metric_label + " (%)")
@@ -3024,8 +3014,6 @@ def render_episode():
             placeholder="연도 선택",
             label_visibility="collapsed"
         )
-    # --- 비교 그룹 필터 끝 ---
-
 
     st.divider()
 
@@ -3051,13 +3039,10 @@ def render_episode():
             if selected_years:
                 # [수정] 24년 작품의 23년 12월 회차가 잘리는 문제 해결
                 # 행 단위 필터링이 아니라, '해당 연도에 걸쳐있는 IP'를 추출하여 전체 데이터를 유지
-                
-                # 1. 선택된 연도에 해당하는 데이터가 있는 IP 리스트 추출
                 valid_ips_in_year = df_filtered_main.loc[
                     df_filtered_main[date_col].dt.year.isin(selected_years), "IP"
                 ].unique()
                 
-                # 2. 해당 IP들의 '모든 회차' 데이터를 유지 (1화가 작년에 있어도 포함됨)
                 df_filtered_main = df_filtered_main[df_filtered_main["IP"].isin(valid_ips_in_year)]
 
                 if len(selected_years) <= 3:
@@ -3083,26 +3068,44 @@ def render_episode():
     st.caption("선택된 IP 그룹의 성과를 보여줍니다. 기준 IP는 붉은색으로 표시됩니다.")
     st.markdown("---")
 
-    chart_cols = st.columns(2)
-    for i, metric in enumerate(key_metrics):
-        with chart_cols[i % 2]:
-            # [재수정] 각 차트가 개별적인 카드로 렌더링되도록 st.columns(1) 래퍼를 복원합니다.
-            inner_col, = st.columns(1)
-            with inner_col:
+    # [수정] 이중 박스 제거 로직
+    # 기존에는 전체 st.columns(2)를 만들고 거기에 계속 넣어서, 열 전체가 하나의 큰 박스로 묶이는 문제가 있었음.
+    # 해결: 루프를 돌 때마다 새로운 st.columns(2)를 생성하여, 각 지표가 '개별 박스(Row)'를 갖도록 함.
+    
+    for i in range(0, len(key_metrics), 2):
+        row_cols = st.columns(2) # 매 Row마다 새로운 컬럼(박스) 생성
+        
+        # 왼쪽 컬럼 (i)
+        with row_cols[0]:
+            metric = key_metrics[i]
+            try:
+                df_result = filter_data_for_episode_comparison(df_filtered_main, selected_episode, metric) # [11.1. 함수]
+                if df_result.empty or df_result['value'].isnull().all() or (df_result['value'] == 0).all():
+                    metric_label = metric.replace("T시청률", "타깃").replace("H시청률", "가구")
+                    st.markdown(f"###### {selected_episode} - '{metric_label}'")
+                    st.info("데이터 없음")
+                else:
+                    plot_episode_comparison(df_result, metric, selected_episode, selected_base_ip) # [11.2. 함수]
+            except Exception as e:
+                st.error(f"차트 렌더링 오류({metric}): {e}")
+        
+        # 오른쪽 컬럼 (i+1) - 데이터가 있을 경우에만
+        if i + 1 < len(key_metrics):
+            with row_cols[1]:
+                metric = key_metrics[i+1]
                 try:
                     df_result = filter_data_for_episode_comparison(df_filtered_main, selected_episode, metric) # [11.1. 함수]
                     if df_result.empty or df_result['value'].isnull().all() or (df_result['value'] == 0).all():
                         metric_label = metric.replace("T시청률", "타깃").replace("H시청률", "가구")
-                        # 데이터 없을 때는 제목만 표시하고 정보 창 띄움 (박스 스타일 유지)
                         st.markdown(f"###### {selected_episode} - '{metric_label}'")
                         st.info("데이터 없음")
-                        st.markdown("---")
                     else:
-                        # 데이터가 있을 경우, 차트 렌더링
                         plot_episode_comparison(df_result, metric, selected_episode, selected_base_ip) # [11.2. 함수]
-                        st.markdown("---")
                 except Exception as e:
                     st.error(f"차트 렌더링 오류({metric}): {e}")
+        
+        # 각 Row 사이 구분 (선택사항, 필요없으면 제거 가능)
+        st.markdown("<div style='margin-bottom: 10px;'></div>", unsafe_allow_html=True)
 
 #endregion
 
