@@ -2819,7 +2819,7 @@ def render_comparison():
 
 #region [ 11. 페이지 5: 회차별 비교 ]
 # =====================================================
-# [수정] 기존 Region 12
+# [수정] 2025-11-18: 연도 필터 로직 변경 (행 삭제 -> IP 선별 방식)
 
 # ===== 11.1. [페이지 5] 특정 회차 데이터 처리 =====
 def filter_data_for_episode_comparison(
@@ -3049,7 +3049,17 @@ def render_episode():
                     st.warning(f"기준 IP '{selected_base_ip}'의 편성 정보 없음 (동일 편성 제외)", icon="⚠️")
             
             if selected_years:
-                df_filtered_main = df_filtered_main[df_filtered_main[date_col].dt.year.isin(selected_years)]
+                # [수정] 24년 작품의 23년 12월 회차가 잘리는 문제 해결
+                # 행 단위 필터링이 아니라, '해당 연도에 걸쳐있는 IP'를 추출하여 전체 데이터를 유지
+                
+                # 1. 선택된 연도에 해당하는 데이터가 있는 IP 리스트 추출
+                valid_ips_in_year = df_filtered_main.loc[
+                    df_filtered_main[date_col].dt.year.isin(selected_years), "IP"
+                ].unique()
+                
+                # 2. 해당 IP들의 '모든 회차' 데이터를 유지 (1화가 작년에 있어도 포함됨)
+                df_filtered_main = df_filtered_main[df_filtered_main["IP"].isin(valid_ips_in_year)]
+
                 if len(selected_years) <= 3:
                     years_str = ",".join(map(str, sorted(selected_years)))
                     group_filter_applied.append(f"연도={years_str}")
