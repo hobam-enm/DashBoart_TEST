@@ -2689,12 +2689,14 @@ def render_comparison():
         st.error(f"KPI 백분위 계산 중 오류: {e}")
         kpi_percentiles = pd.DataFrame() 
 
-    filter_cols = st.columns([3, 2, 3, 3])
     ip_options = sorted(df_all["IP"].dropna().unique().tolist())
     selected_ip1 = None
     selected_ip2 = None
-    selected_group_criteria = None
+    # selected_group_criteria는 이제 사용하지 않음 (분리됨)
 
+    # [수정] 필터 컬럼 재정렬 및 비율 조정 (IP vs 그룹 시 편성/연도 필터 추가)
+    filter_cols = st.columns([3, 2, 2, 2, 2, 2])
+    
     with filter_cols[0]:
         st.markdown("## ⚖️ IP간 비교분석")
     with st.expander("ℹ️ 지표 기준 안내", expanded=False):
@@ -2722,9 +2724,10 @@ def render_comparison():
             ip_options, index=0 if ip_options else None, 
             label_visibility="collapsed"
         )
-
-    with filter_cols[3]:
-        if comparison_mode == "IP vs IP":
+    
+    # --- 비교 대상 필터 영역 수정 ---
+    if comparison_mode == "IP vs IP":
+        with filter_cols[3]:
             ip_options_2 = [ip for ip in ip_options if ip != selected_ip1]
             selected_ip2 = st.selectbox(
                 "비교 IP", 
@@ -2732,12 +2735,45 @@ def render_comparison():
                 index=1 if len(ip_options_2) > 1 else (0 if len(ip_options_2) > 0 else None), 
                 label_visibility="collapsed"
             )
-        else:
-            selected_group_criteria = st.multiselect(
-                "비교 그룹 기준", 
-                ["동일 편성", "방영 연도"], 
-                default=["동일 편성"], label_visibility="collapsed"
+        with filter_cols[4]: st.empty() # 빈칸
+        with filter_cols[5]: st.empty() # 빈칸
+        
+        use_same_prog = False
+        selected_years = []
+
+    else: # IP vs 그룹 평균
+        # 기준 IP 정보 사전 추출
+        base_ip_info_rows = df_all[df_all["IP"] == selected_ip1];
+        all_years = []
+        date_col = "방영시작일" if "방영시작일" in df_all.columns and df_all["방영시작일"].notna().any() else "주차시작일"
+        if date_col in df_all.columns:
+            all_years = sorted(df_all[date_col].dropna().dt.year.unique().astype(int).tolist(), reverse=True)
+            
+        base_ip_year = base_ip_info_rows[date_col].dropna().dt.year.mode().iloc[0] if not base_ip_info_rows[date_col].dropna().empty else None
+        default_year_list = [int(base_ip_year)] if base_ip_year else []
+
+        with filter_cols[3]:
+            comp_type = st.selectbox(
+                "동일 편성 기준",
+                ["동일 편성", "전체"], 
+                index=0,
+                key="comp_prog_page4",
+                label_visibility="collapsed"
             )
+            use_same_prog = (comp_type == "동일 편성")
+
+        with filter_cols[4]:
+            selected_years = st.multiselect(
+                "방영 연도", 
+                all_years, 
+                default=default_year_list,
+                key="comp_year_page4",
+                placeholder="연도 선택",
+                label_visibility="collapsed"
+            )
+        with filter_cols[5]: st.empty() # 빈칸
+    # --- 비교 대상 필터 영역 수정 끝 ---
+
 
     st.divider()
 
@@ -2750,9 +2786,6 @@ def render_comparison():
     kpis_target = get_agg_kpis_for_ip_page4(df_target)
 
     if comparison_mode == "IP vs 그룹 평균":
-        if not selected_group_criteria:
-            st.warning("비교 그룹 기준을 선택해주세요.")
-            return
         
         # 그룹 데이터 필터링
         group_name_parts = []
@@ -2760,22 +2793,23 @@ def render_comparison():
         
         ip_prog = df_target["편성"].dropna().mode().iloc[0] if not df_target["편성"].dropna().empty else None
         date_col = "방영시작일" if "방영시작일" in df_target.columns else "주차시작일"
-        ip_year = df_target[date_col].dropna().dt.year.mode().iloc[0] if not df_target[date_col].dropna().empty else None
-
-        if "동일 편성" in selected_group_criteria:
+        
+        if use_same_prog: # 동일 편성 기준 적용
             if ip_prog:
                 df_comp = df_comp[df_comp["편성"] == ip_prog]
                 group_name_parts.append(f"'{ip_prog}'")
             else: st.warning("편성 정보 없음 (제외)")
         
-        if "방영 연도" in selected_group_criteria:
-            if ip_year:
-                df_comp = df_comp[df_comp[date_col].dt.year == ip_year]
-                group_name_parts.append(f"{int(ip_year)}년")
-            else: st.warning("연도 정보 없음 (제외)")
-            
+        if selected_years: # 방영 연도 필터 적용
+            df_comp = df_comp[df_comp[date_col].dt.year.isin(selected_years)]
+            if len(selected_years) <= 3:
+                years_str = ",".join(map(str, sorted(selected_years)))
+                group_name_parts.append(f"{years_str}년")
+            else:
+                group_name_parts.append(f"{min(selected_years)}~{max(selected_years)}년")
+        
         if not group_name_parts:
-            st.error("비교 그룹을 정의할 수 없습니다."); return
+            group_name_parts.append("전체")
             
         comp_name = " & ".join(group_name_parts) + " 평균"
         kpis_comp = get_agg_kpis_for_ip_page4(df_comp)
@@ -2927,9 +2961,11 @@ def plot_episode_comparison(
 def render_episode():
     df_all = load_data() # [3. 공통 함수]
 
-    filter_cols = st.columns([3, 3, 2, 3])
     ip_options_main = sorted(df_all["IP"].dropna().unique().tolist())
     episode_options_main = get_episode_options(df_all)  # [3. 공통 함수]
+
+    # [수정] 필터 컬럼 재정렬 및 비율 조정 (동일편성/연도 필터 추가)
+    filter_cols = st.columns([3, 2, 2, 2, 2])
 
     with filter_cols[0]:
         st.markdown("## 🎬 회차별 비교")
@@ -2951,15 +2987,40 @@ def render_episode():
             label_visibility="collapsed",
             key="ep_selected_episode_main"
         )
+    
+    # --- 비교 그룹 필터 수정: 동일편성/연도 분리 ---
+    # 기준 IP 정보 사전 추출
+    base_rows = df_all[df_all["IP"] == selected_base_ip] if selected_base_ip else pd.DataFrame()
+    
+    all_years = []
+    date_col = "방영시작일" if ("방영시작일" in df_all.columns and df_all["방영시작일"].notna().any()) else "주차시작일"
+    if date_col in df_all.columns:
+        all_years = sorted(df_all[date_col].dropna().dt.year.unique().astype(int).tolist(), reverse=True)
+            
+    base_year = base_rows[date_col].dropna().dt.year.mode().iloc[0] if not base_rows.empty and not base_rows[date_col].dropna().empty else None
+    default_year_list = [int(base_year)] if base_year else []
 
     with filter_cols[3]:
-        selected_group_criteria = st.multiselect(
-            "비교 그룹 기준",
-            ["동일 편성", "방영 연도"],
-            default=["동일 편성"],
-            label_visibility="collapsed",
-            key="ep_group_criteria"
+        comp_type = st.selectbox(
+            "동일 편성 기준",
+            ["동일 편성", "전체"], 
+            index=0,
+            key="ep_comp_prog_main",
+            label_visibility="collapsed"
         )
+        use_same_prog = (comp_type == "동일 편성")
+        
+    with filter_cols[4]:
+        selected_years = st.multiselect(
+            "방영 연도",
+            all_years,
+            default=default_year_list,
+            key="ep_comp_year_main",
+            placeholder="연도 선택",
+            label_visibility="collapsed"
+        )
+    # --- 비교 그룹 필터 수정 끝 ---
+
 
     st.divider()
 
@@ -2969,28 +3030,30 @@ def render_episode():
 
     df_filtered_main = df_all.copy()
     group_filter_applied = []
-
-    if selected_group_criteria:
-        base_rows = df_all[df_all["IP"] == selected_base_ip]
+    
+    # --- 필터링 로직: 수정된 필터 변수 사용 ---
+    if use_same_prog or selected_years:
         if not base_rows.empty:
             base_prog = base_rows["편성"].dropna().mode().iloc[0] if not base_rows["편성"].dropna().empty else None
-            date_col = "방영시작일" if ("방영시작일" in df_all.columns and df_all["방영시작일"].notna().any()) else "주차시작일"
-            base_year = base_rows[date_col].dropna().dt.year.mode().iloc[0] if not base_rows[date_col].dropna().empty else None
 
-            if "동일 편성" in selected_group_criteria and base_prog:
-                df_filtered_main = df_filtered_main[df_filtered_main["편성"] == base_prog]
-                group_filter_applied.append(f"편성='{base_prog}'")
-            elif "동일 편성" in selected_group_criteria and not base_prog:
-                st.warning(f"기준 IP '{selected_base_ip}'의 편성 정보 없음")
-
-            if "방영 연도" in selected_group_criteria and base_year:
-                df_filtered_main = df_filtered_main[df_filtered_main[date_col].dt.year == int(base_year)]
-                group_filter_applied.append(f"연도={int(base_year)}")
-            elif "방영 연도" in selected_group_criteria and not base_year:
-                st.warning(f"기준 IP '{selected_base_ip}'의 연도 정보 없음")
+            if use_same_prog:
+                if base_prog:
+                    df_filtered_main = df_filtered_main[df_filtered_main["편성"] == base_prog]
+                    group_filter_applied.append(f"편성='{base_prog}'")
+                else:
+                    st.warning(f"기준 IP '{selected_base_ip}'의 편성 정보 없음 (동일 편성 제외)", icon="⚠️")
+            
+            if selected_years:
+                df_filtered_main = df_filtered_main[df_filtered_main[date_col].dt.year.isin(selected_years)]
+                if len(selected_years) <= 3:
+                    years_str = ",".join(map(str, sorted(selected_years)))
+                    group_filter_applied.append(f"연도={years_str}")
+                else:
+                    group_filter_applied.append(f"연도={min(selected_years)}~{max(selected_years)}")
         else:
             st.warning(f"기준 IP '{selected_base_ip}' 정보를 찾을 수 없습니다.")
             df_filtered_main = pd.DataFrame()
+    # --- 필터링 로직 끝 ---
 
     if df_filtered_main.empty:
         st.warning("선택하신 필터에 해당하는 데이터가 없습니다.")
