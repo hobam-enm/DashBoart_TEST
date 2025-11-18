@@ -2403,7 +2403,6 @@ def _render_unified_charts(
     with col_radar:
         st.markdown("###### 성과 백분위 (Positioning)")
         
-        # [수정] 레이더 차트 축 라벨 사용자 관점으로 변경
         # 내부 Metric Key -> Label Mapping
         radar_map = {
             "T시청률": "타깃시청률", 
@@ -2660,11 +2659,19 @@ def render_comparison():
     ip_options = sorted(df_all["IP"].dropna().unique().tolist())
     selected_ip1 = None
     selected_ip2 = None
-    # selected_group_criteria는 이제 사용하지 않음 (분리됨)
 
-    # [수정] 필터 컬럼 재정렬 및 비율 조정 (IP vs 그룹 시 편성/연도 필터 추가)
-    filter_cols = st.columns([3, 2, 2, 2, 2, 2])
+    # [수정] 레이아웃 동적 할당 로직 추가
+    current_mode = st.session_state.get("comp_mode_page4", "IP vs 그룹 평균")
     
+    if current_mode == "IP vs IP":
+        # 5개 컬럼: Title(3), Mode(2), IP1(2), IP2(3), (여백을 IP2가 차지)
+        # 빵꾸 두 개를 없애기 위해 IP 선택 영역을 넓게 할당
+        filter_cols = st.columns([3, 2, 2, 3, 3]) 
+    else:
+        # 6개 컬럼: Title(3), Mode(2), IP1(2), Prog(2), Year(2), (마지막 빵꾸 하나 제거)
+        filter_cols = st.columns([3, 2, 2, 2, 2, 2])
+    
+    # --- 헤더 및 모드 선택 ---
     with filter_cols[0]:
         st.markdown("## ⚖️ IP간 비교분석")
     with st.expander("ℹ️ 지표 기준 안내", expanded=False):
@@ -2683,7 +2690,8 @@ def render_comparison():
         comparison_mode = st.radio(
             "비교 모드", 
             ["IP vs IP", "IP vs 그룹 평균"], 
-            index=1, horizontal=True, label_visibility="collapsed"
+            index=1, horizontal=True, label_visibility="collapsed",
+            key="comp_mode_page4" # 이 키가 변경되면 레이아웃 재조정
         ) 
     
     with filter_cols[2]:
@@ -2693,7 +2701,7 @@ def render_comparison():
             label_visibility="collapsed"
         )
     
-    # --- 비교 대상 필터 영역 수정 ---
+    # --- 비교 대상 필터 영역 ---
     if comparison_mode == "IP vs IP":
         with filter_cols[3]:
             ip_options_2 = [ip for ip in ip_options if ip != selected_ip1]
@@ -2703,8 +2711,8 @@ def render_comparison():
                 index=1 if len(ip_options_2) > 1 else (0 if len(ip_options_2) > 0 else None), 
                 label_visibility="collapsed"
             )
-        with filter_cols[4]: st.empty() # 빈칸
-        with filter_cols[5]: st.empty() # 빈칸
+        # filter_cols[4]는 IP2가 차지하므로 여기서 처리 끝.
+        # 기존 filter_cols[5]의 빵꾸는 dynamic layout으로 제거됨.
         
         use_same_prog = False
         selected_years = []
@@ -2739,8 +2747,8 @@ def render_comparison():
                 placeholder="연도 선택",
                 label_visibility="collapsed"
             )
-        with filter_cols[5]: st.empty() # 빈칸
-    # --- 비교 대상 필터 영역 수정 끝 ---
+        # filter_cols[5]는 동적 레이아웃 설정으로 인해 존재하지 않음 (빵꾸 제거)
+    # --- 비교 대상 필터 영역 끝 ---
 
 
     st.divider()
