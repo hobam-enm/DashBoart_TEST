@@ -1936,7 +1936,6 @@ def render_ip_detail():
 #region [ 9. 페이지 3: IP간 데모분석 ]
 # =====================================================
 # ===== 9.1. [페이지 3] AgGrid 렌더러 (0-based % Diff) =====
-# (이 JS 코드는 변경 없이 그대로 사용됩니다)
 index_value_formatter = JsCode("""
 function(params) {
     const indexValue = params.value;
@@ -1967,36 +1966,6 @@ function(params) {
     return { 'color': color, 'font-weight': fontWeight };
 }""")
 
-
-# ===== 9.2. [페이지 3] AgGrid 테이블 렌더링 함수 (Legacy) =====
-# [참고] 현재 render_heatmap 함수를 사용하므로 이 함수는 호출되지 않음 (미사용)
-def render_index_table(df_index: pd.DataFrame, title: str, height: int = 400):
-    st.markdown(f"###### {title}")
-
-    if df_index.empty: st.info("비교할 데이터가 없습니다."); return
-
-    gb = GridOptionsBuilder.from_dataframe(df_index)
-    gb.configure_grid_options(rowHeight=34, suppressMenuHide=True, domLayout='normal')
-    gb.configure_default_column(sortable=False, resizable=True, filter=False,
-                                cellStyle={'textAlign': 'center'}, headerClass='centered-header bold-header')
-    gb.configure_column("회차", header_name="회차", cellStyle={'textAlign': 'left'}, pinned='left', width=70)
-
-    for c in [col for col in df_index.columns if col != "회차" and not col.endswith(('_base', '_comp'))]:
-        gb.configure_column(
-            c, 
-            header_name=c.replace("남성","M").replace("여성","F"), 
-            valueFormatter=index_value_formatter, 
-            cellStyle=index_cell_style,         
-            width=80
-        )
-    for c in [col for col in df_index.columns if col.endswith(('_base', '_comp'))]:
-        gb.configure_column(c, hide=True)
-
-    grid_options = gb.build()
-    AgGrid(df_index, gridOptions=grid_options, theme="streamlit", height=height,
-           update_mode=GridUpdateMode.NO_UPDATE, allow_unsafe_jscode=True,
-           enable_enterprise_modules=False
-    )
 
 # ===== 9.3. [페이지 3] 히트맵 렌더링 함수 =====
 def render_heatmap(df_plot: pd.DataFrame, title: str):
@@ -2041,7 +2010,7 @@ def render_heatmap(df_plot: pd.DataFrame, title: str):
     fig.update_traces(
         text=text_template_df.values,
         texttemplate="%{text}",
-        hovertemplate="회차: %{y}<br>데모: %{x}<br>증감: %{text}<extra></extra>", # [수정] extra 추가
+        hovertemplate="회차: %{y}<br>데모: %{x}<br>증감: %{text}<extra></extra>",
         textfont=dict(size=10, color="black")
     )
 
@@ -2052,7 +2021,6 @@ def render_heatmap(df_plot: pd.DataFrame, title: str):
         xaxis=dict(side="top"),
     )
     
-    # [수정] st.columns(1)로 감싸서 독립된 카드로 만듭니다.
     c_heatmap, = st.columns(1)
     with c_heatmap:
         st.plotly_chart(fig, use_container_width=True)
@@ -2065,8 +2033,16 @@ def render_demographic():
     ip_options = sorted(df_all["IP"].dropna().unique().tolist())
     selected_ip1 = None; selected_ip2 = None; 
     
-    # [수정] 필터 컬럼 재정렬 및 비율 조정
-    filter_cols = st.columns([3, 2, 2, 2, 2, 2]) 
+    # [수정] 레이아웃 동적 할당 로직 추가
+    # Session State에서 현재 모드를 미리 읽어와 컬럼 비율을 결정합니다.
+    # IP vs IP: 5개 컬럼 (우측 빈칸 제거를 위해 IP 선택박스들을 넓게 배치 [3,2,2,3,3])
+    # IP vs 그룹: 6개 컬럼 (기존 유지 [3,2,2,2,2,2])
+    current_mode = st.session_state.get("demo_compare_mode", "IP vs IP")
+    
+    if current_mode == "IP vs IP":
+        filter_cols = st.columns([3, 2, 2, 3, 3]) # 총 5칸 (IP 선택영역 확대)
+    else:
+        filter_cols = st.columns([3, 2, 2, 2, 2, 2]) # 총 6칸
 
     with filter_cols[0]:
         st.markdown("### 👥 IP 오디언스 히트맵")
@@ -2088,7 +2064,7 @@ def render_demographic():
             "비교 모드", 
             ["IP vs IP", "IP vs 그룹"], 
             index=0,
-            key="demo_compare_mode",
+            key="demo_compare_mode", # 이 키가 변경되면 위에서 current_mode가 바뀌며 레이아웃 재조정
             label_visibility="collapsed"
         )
         
@@ -2109,8 +2085,9 @@ def render_demographic():
             key="demo_ip1_unified"
         )
 
-    # --- 비교 대상 필터 영역 수정 ---
+    # --- 비교 대상 필터 영역 ---
     if comparison_mode == "IP vs IP":
+        # [수정] 5번째 컬럼(인덱스 4)에 비교 IP 배치하고 끝냄 (빈 컬럼 생성 안 함)
         with filter_cols[4]:
             ip_options_2 = [ip for ip in ip_options if ip != selected_ip1]
             selected_ip2 = st.selectbox(
@@ -2119,16 +2096,13 @@ def render_demographic():
                 label_visibility="collapsed", 
                 key="demo_ip2"
             )
-        with filter_cols[5]:
-            st.empty() # IP vs IP 모드에서는 빈칸
-            
+        
         use_same_prog = False
         selected_years = []
     
     else: # "IP vs 그룹 평균"
-        # 기준 IP 정보 사전 추출
+        # [수정] 기존 로직 유지 (컬럼 4, 5 사용)
         base_ip_info_rows = df_all[df_all["IP"] == selected_ip1];
-        default_prog = base_ip_info_rows["편성"].dropna().mode().iloc[0] if not base_ip_info_rows["편성"].dropna().empty else None
         date_col = "방영시작일" if "방영시작일" in df_all.columns and df_all["방영시작일"].notna().any() else "주차시작일"
         all_years = []
         if date_col in df_all.columns:
@@ -2136,7 +2110,6 @@ def render_demographic():
             
         base_ip_year = base_ip_info_rows[date_col].dropna().dt.year.mode().iloc[0] if not base_ip_info_rows[date_col].dropna().empty else None
         default_year_list = [int(base_ip_year)] if base_ip_year else []
-
 
         with filter_cols[4]:
             comp_type = st.selectbox(
@@ -2157,7 +2130,7 @@ def render_demographic():
                 placeholder="연도 선택",
                 label_visibility="collapsed"
             )
-    # --- 비교 대상 필터 영역 수정 끝 ---
+    # --- 비교 대상 필터 영역 끝 ---
             
     media_list_label = "TV" if selected_media_type == "TV" else "TVING (L+Q+V 합산)"
 
@@ -2187,19 +2160,17 @@ def render_demographic():
         base_ip_info_rows = df_all[df_all["IP"] == selected_ip1];
         if not base_ip_info_rows.empty:
             
-            # --- 수정된 필터 로직 적용 ---
             base_ip_prog = base_ip_info_rows["편성"].dropna().mode().iloc[0] if not base_ip_info_rows["편성"].dropna().empty else None
             date_col = "방영시작일" if "방영시작일" in df_all.columns and df_all["방영시작일"].notna().any() else "주차시작일"
             
-            
-            if use_same_prog: # 동일 편성 기준
+            if use_same_prog: 
                 if base_ip_prog: 
                     df_group_filtered = df_group_filtered[df_group_filtered["편성"] == base_ip_prog]
                     group_name_parts.append(f"'{base_ip_prog}'")
                 else: 
                     st.warning(f"'{selected_ip1}'의 편성 정보가 없어 '동일 편성' 기준은 제외됩니다.", icon="⚠️")
             
-            if selected_years: # 방영 연도 필터
+            if selected_years: 
                 df_group_filtered = df_group_filtered[df_group_filtered[date_col].dt.year.isin(selected_years)]
                 if len(selected_years) <= 3:
                     years_str = ",".join(map(str, sorted(selected_years)))
@@ -2207,11 +2178,8 @@ def render_demographic():
                 else:
                     group_name_parts.append(f"{min(selected_years)}~{max(selected_years)}년")
             
-            
             if not group_name_parts:
                 group_name_parts.append("전체")
-            # --- 수정된 필터 로직 적용 끝 ---
-
 
             if not df_group_filtered.empty:
                 df_comp = get_avg_demo_pop_by_episode(df_group_filtered, media_list) # [6. 공통 함수]
