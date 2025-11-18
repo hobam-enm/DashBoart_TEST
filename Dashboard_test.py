@@ -2907,20 +2907,14 @@ def plot_episode_comparison(
     [수정] 선택 IP 순위 표기 추가
     """
     
-    # 선택 IP의 순위 및 값 추출 (표기용)
-    base_ip_rank = df_result[df_result['IP'] == base_ip]['rank'].iloc[0]
-    base_ip_val = df_result[df_result['IP'] == base_ip]['value'].iloc[0]
-    
     metric_label = selected_metric.replace("T시청률", "타깃").replace("H시청률", "가구")
     
     # Text 컬럼 생성: 선택된 IP에만 순위를 추가하여 최종 텍스트 라벨 생성
     def _create_rank_text(row):
         val = row['value']
         
-        if row['IP'] == base_ip:
-            rank_str = f"{row['rank']}위 / "
-        else:
-            rank_str = ""
+        # [수정] 모든 IP에 순위/값 표기
+        rank_str = f"{row['rank']}위 / "
             
         if selected_metric in ["T시청률", "H시청률"]:
             return f"{rank_str}{val:.2f}%"
@@ -3082,21 +3076,23 @@ def render_episode():
     chart_cols = st.columns(2)
     for i, metric in enumerate(key_metrics):
         with chart_cols[i % 2]:
-            # [수정] 이중 박스 처리를 위해 사용되던 inner_col을 제거하고 chart_cols[i % 2]에 직접 렌더링
-            try:
-                df_result = filter_data_for_episode_comparison(df_filtered_main, selected_episode, metric) # [11.1. 함수]
-                if df_result.empty or df_result['value'].isnull().all() or (df_result['value'] == 0).all():
-                    metric_label = metric.replace("T시청률", "타깃").replace("H시청률", "가구")
-                    # 데이터 없을 때는 제목만 표시하고 정보 창 띄움 (박스 스타일 유지)
-                    st.markdown(f"###### {selected_episode} - '{metric_label}'")
-                    st.info("데이터 없음")
-                    st.markdown("---")
-                else:
-                    # 데이터가 있을 경우, 차트 렌더링
-                    plot_episode_comparison(df_result, metric, selected_episode, selected_base_ip) # [11.2. 함수]
-                    st.markdown("---")
-            except Exception as e:
-                st.error(f"차트 렌더링 오류({metric}): {e}")
+            # [재수정] 각 차트가 개별적인 카드로 렌더링되도록 st.columns(1) 래퍼를 복원합니다.
+            inner_col, = st.columns(1)
+            with inner_col:
+                try:
+                    df_result = filter_data_for_episode_comparison(df_filtered_main, selected_episode, metric) # [11.1. 함수]
+                    if df_result.empty or df_result['value'].isnull().all() or (df_result['value'] == 0).all():
+                        metric_label = metric.replace("T시청률", "타깃").replace("H시청률", "가구")
+                        # 데이터 없을 때는 제목만 표시하고 정보 창 띄움 (박스 스타일 유지)
+                        st.markdown(f"###### {selected_episode} - '{metric_label}'")
+                        st.info("데이터 없음")
+                        st.markdown("---")
+                    else:
+                        # 데이터가 있을 경우, 차트 렌더링
+                        plot_episode_comparison(df_result, metric, selected_episode, selected_base_ip) # [11.2. 함수]
+                        st.markdown("---")
+                except Exception as e:
+                    st.error(f"차트 렌더링 오류({metric}): {e}")
 
 #endregion
 
