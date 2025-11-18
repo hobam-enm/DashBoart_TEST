@@ -1935,8 +1935,6 @@ def render_ip_detail():
 
 #region [ 9. 페이지 3: IP간 데모분석 ]
 # =====================================================
-# [수정] 기존 Region 10
-
 # ===== 9.1. [페이지 3] AgGrid 렌더러 (0-based % Diff) =====
 # (이 JS 코드는 변경 없이 그대로 사용됩니다)
 index_value_formatter = JsCode("""
@@ -2065,9 +2063,10 @@ def render_demographic():
     df_all = load_data() # [3. 공통 함수]
 
     ip_options = sorted(df_all["IP"].dropna().unique().tolist())
-    selected_ip1 = None; selected_ip2 = None; selected_group_criteria = None
-
-    filter_cols = st.columns([3, 2, 2, 3, 3]) 
+    selected_ip1 = None; selected_ip2 = None; 
+    
+    # [수정] 필터 컬럼 재정렬 및 비율 조정
+    filter_cols = st.columns([3, 2, 2, 2, 2, 2]) 
 
     with filter_cols[0]:
         st.markdown("### 👥 IP 오디언스 히트맵")
@@ -2110,23 +2109,55 @@ def render_demographic():
             key="demo_ip1_unified"
         )
 
-    with filter_cols[4]:
-        if comparison_mode == "IP vs IP":
-            ip_options_2 = [ip for ip in ip_options if ip != selected_ip1] # [수정] 옵션 필터링
+    # --- 비교 대상 필터 영역 수정 ---
+    if comparison_mode == "IP vs IP":
+        with filter_cols[4]:
+            ip_options_2 = [ip for ip in ip_options if ip != selected_ip1]
             selected_ip2 = st.selectbox(
-                "비교 IP", ip_options_2, # [수정] 필터된 옵션 사용
-                index=0 if ip_options_2 else None, # [수정] 인덱스 방어
+                "비교 IP", ip_options_2,
+                index=0 if ip_options_2 else None,
                 label_visibility="collapsed", 
                 key="demo_ip2"
             )
-        else: # "IP vs 그룹 평균"
-            selected_group_criteria = st.multiselect(
-                "비교 그룹 기준", 
-                ["동일 편성", "방영 연도"], 
-                default=["동일 편성"],
-                label_visibility="collapsed", 
-                key="demo_group_criteria"
+        with filter_cols[5]:
+            st.empty() # IP vs IP 모드에서는 빈칸
+            
+        use_same_prog = False
+        selected_years = []
+    
+    else: # "IP vs 그룹 평균"
+        # 기준 IP 정보 사전 추출
+        base_ip_info_rows = df_all[df_all["IP"] == selected_ip1];
+        default_prog = base_ip_info_rows["편성"].dropna().mode().iloc[0] if not base_ip_info_rows["편성"].dropna().empty else None
+        date_col = "방영시작일" if "방영시작일" in df_all.columns and df_all["방영시작일"].notna().any() else "주차시작일"
+        all_years = []
+        if date_col in df_all.columns:
+            all_years = sorted(df_all[date_col].dropna().dt.year.unique().astype(int).tolist(), reverse=True)
+            
+        base_ip_year = base_ip_info_rows[date_col].dropna().dt.year.mode().iloc[0] if not base_ip_info_rows[date_col].dropna().empty else None
+        default_year_list = [int(base_ip_year)] if base_ip_year else []
+
+
+        with filter_cols[4]:
+            comp_type = st.selectbox(
+                "동일 편성 기준",
+                ["동일 편성", "전체"], 
+                index=0,
+                key="demo_comp_prog_unified",
+                label_visibility="collapsed"
             )
+            use_same_prog = (comp_type == "동일 편성")
+            
+        with filter_cols[5]:
+            selected_years = st.multiselect(
+                "방영 연도", 
+                all_years, 
+                default=default_year_list,
+                key="demo_comp_year_unified",
+                placeholder="연도 선택",
+                label_visibility="collapsed"
+            )
+    # --- 비교 대상 필터 영역 수정 끝 ---
             
     media_list_label = "TV" if selected_media_type == "TV" else "TVING (L+Q+V 합산)"
 
@@ -2155,27 +2186,32 @@ def render_demographic():
         df_group_filtered = df_all.copy(); group_name_parts = []
         base_ip_info_rows = df_all[df_all["IP"] == selected_ip1];
         if not base_ip_info_rows.empty:
+            
+            # --- 수정된 필터 로직 적용 ---
             base_ip_prog = base_ip_info_rows["편성"].dropna().mode().iloc[0] if not base_ip_info_rows["편성"].dropna().empty else None
             date_col = "방영시작일" if "방영시작일" in df_all.columns and df_all["방영시작일"].notna().any() else "주차시작일"
-            base_ip_year = base_ip_info_rows[date_col].dropna().dt.year.mode().iloc[0] if not base_ip_info_rows[date_col].dropna().empty else None
             
-            if not selected_group_criteria:
-                st.info("비교 그룹 기준이 선택되지 않아 '전체'와 비교합니다.")
+            
+            if use_same_prog: # 동일 편성 기준
+                if base_ip_prog: 
+                    df_group_filtered = df_group_filtered[df_group_filtered["편성"] == base_ip_prog]
+                    group_name_parts.append(f"'{base_ip_prog}'")
+                else: 
+                    st.warning(f"'{selected_ip1}'의 편성 정보가 없어 '동일 편성' 기준은 제외됩니다.", icon="⚠️")
+            
+            if selected_years: # 방영 연도 필터
+                df_group_filtered = df_group_filtered[df_group_filtered[date_col].dt.year.isin(selected_years)]
+                if len(selected_years) <= 3:
+                    years_str = ",".join(map(str, sorted(selected_years)))
+                    group_name_parts.append(f"{years_str}년")
+                else:
+                    group_name_parts.append(f"{min(selected_years)}~{max(selected_years)}년")
+            
+            
+            if not group_name_parts:
                 group_name_parts.append("전체")
-            else:
-                if "동일 편성" in selected_group_criteria:
-                    if base_ip_prog: 
-                        df_group_filtered = df_group_filtered[df_group_filtered["편성"] == base_ip_prog]
-                        group_name_parts.append(f"'{base_ip_prog}'")
-                    else: st.warning("기준 IP 편성 정보 없음 (동일 편성 제외)", icon="⚠️")
-                if "방영 연도" in selected_group_criteria:
-                    if base_ip_year: 
-                        df_group_filtered = df_group_filtered[df_group_filtered[date_col].dt.year == int(base_ip_year)]
-                        group_name_parts.append(f"{int(base_ip_year)}년")
-                    else: st.warning("기준 IP 연도 정보 없음 (방영 연도 제외)", icon="⚠️")
-                
-                if not group_name_parts:
-                    st.error("비교 그룹을 정의할 수 없습니다. (기준 IP 정보 부족)"); return
+            # --- 수정된 필터 로직 적용 끝 ---
+
 
             if not df_group_filtered.empty:
                 df_comp = get_avg_demo_pop_by_episode(df_group_filtered, media_list) # [6. 공통 함수]
