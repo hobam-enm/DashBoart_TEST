@@ -2660,16 +2660,15 @@ def render_comparison():
     selected_ip1 = None
     selected_ip2 = None
 
-    # [수정] 레이아웃 동적 할당 로직 추가
+    # [수정] 레이아웃 동적 할당 로직: 합계 12로 맞춤
     current_mode = st.session_state.get("comp_mode_page4", "IP vs 그룹 평균")
     
     if current_mode == "IP vs IP":
-        # 5개 컬럼: Title(3), Mode(2), IP1(2), IP2(3), (여백을 IP2가 차지)
-        # 빵꾸 두 개를 없애기 위해 IP 선택 영역을 넓게 할당
-        filter_cols = st.columns([3, 2, 2, 3, 3]) 
+        # 5개 컬럼: Title(3), Mode(2), IP1(2), IP2(3). (합계 10 -> 12로 맞추기 위해 IP2를 5로)
+        filter_cols = st.columns([3, 2, 2, 5]) # IP1, IP2에 남은 공간 몰아주기
     else:
-        # 6개 컬럼: Title(3), Mode(2), IP1(2), Prog(2), Year(2), (마지막 빵꾸 하나 제거)
-        filter_cols = st.columns([3, 2, 2, 2, 2, 2])
+        # 6개 컬럼: Title(3), Mode(2), IP1(2), Prog(2), Year(2), (Year이 멀티셀렉트이므로 비율 2를 줍니다)
+        filter_cols = st.columns([3, 2, 2, 2, 2, 1]) # 합계 12
     
     # --- 헤더 및 모드 선택 ---
     with filter_cols[0]:
@@ -2694,15 +2693,14 @@ def render_comparison():
             key="comp_mode_page4" # 이 키가 변경되면 레이아웃 재조정
         ) 
     
-    with filter_cols[2]:
-        selected_ip1 = st.selectbox(
-            "기준 IP", 
-            ip_options, index=0 if ip_options else None, 
-            label_visibility="collapsed"
-        )
-    
-    # --- 비교 대상 필터 영역 ---
+    # --- IP vs IP 모드 (filter_cols[2]와 filter_cols[3] 사용) ---
     if comparison_mode == "IP vs IP":
+        with filter_cols[2]:
+            selected_ip1 = st.selectbox(
+                "기준 IP", 
+                ip_options, index=0 if ip_options else None, 
+                label_visibility="collapsed"
+            )
         with filter_cols[3]:
             ip_options_2 = [ip for ip in ip_options if ip != selected_ip1]
             selected_ip2 = st.selectbox(
@@ -2711,13 +2709,12 @@ def render_comparison():
                 index=1 if len(ip_options_2) > 1 else (0 if len(ip_options_2) > 0 else None), 
                 label_visibility="collapsed"
             )
-        # filter_cols[4]는 IP2가 차지하므로 여기서 처리 끝.
-        # 기존 filter_cols[5]의 빵꾸는 dynamic layout으로 제거됨.
         
         use_same_prog = False
         selected_years = []
 
-    else: # IP vs 그룹 평균
+    # --- IP vs 그룹 평균 모드 (filter_cols[2], [3], [4], [5] 사용) ---
+    else: 
         # 기준 IP 정보 사전 추출
         base_ip_info_rows = df_all[df_all["IP"] == selected_ip1];
         all_years = []
@@ -2727,6 +2724,13 @@ def render_comparison():
             
         base_ip_year = base_ip_info_rows[date_col].dropna().dt.year.mode().iloc[0] if not base_ip_info_rows[date_col].dropna().empty else None
         default_year_list = [int(base_ip_year)] if base_ip_year else []
+
+        with filter_cols[2]:
+            selected_ip1 = st.selectbox(
+                "기준 IP", 
+                ip_options, index=0 if ip_options else None, 
+                label_visibility="collapsed"
+            )
 
         with filter_cols[3]:
             comp_type = st.selectbox(
@@ -2747,7 +2751,7 @@ def render_comparison():
                 placeholder="연도 선택",
                 label_visibility="collapsed"
             )
-        # filter_cols[5]는 동적 레이아웃 설정으로 인해 존재하지 않음 (빵꾸 제거)
+        # filter_cols[5]는 현재 미사용 (합계 12에 맞춤)
     # --- 비교 대상 필터 영역 끝 ---
 
 
