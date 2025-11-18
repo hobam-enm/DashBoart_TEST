@@ -2665,7 +2665,7 @@ def render_comparison():
     
     if current_mode == "IP vs IP":
         # 5개 컬럼: Title(3), Mode(2), IP1(2), IP2(3). (합계 10 -> 12로 맞추기 위해 IP2를 5로)
-        filter_cols = st.columns([3, 2, 2, 2]) # IP1, IP2에 남은 공간 몰아주기
+        filter_cols = st.columns([3, 2, 3, 3]) # IP1, IP2에 남은 공간 몰아주기
     else:
         # 6개 컬럼: Title(3), Mode(2), IP1(2), Prog(2), Year(2), (Year이 멀티셀렉트이므로 비율 2를 줍니다)
         filter_cols = st.columns([3, 2, 2, 2, 2]) # 합계 12
