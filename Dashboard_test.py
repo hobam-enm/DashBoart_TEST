@@ -2888,6 +2888,10 @@ def filter_data_for_episode_comparison(
     else:
         result_df = result_df.set_index("IP").reindex(all_ips_in_filter, fill_value=0).reset_index()
     result_df['value'] = pd.to_numeric(result_df['value'], errors='coerce').fillna(0)
+    
+    # [추가] 순위 계산: 높은 값이 1위
+    result_df['rank'] = result_df['value'].rank(method='min', ascending=False).astype(int)
+
     return result_df.sort_values("value", ascending=False)
 
 
@@ -2898,22 +2902,50 @@ def plot_episode_comparison(
     selected_episode: str,
     base_ip: str
 ):
-    """특정 회차 비교 결과 시각화 (Bar Chart with Highlight)"""
-    colors = ['#d93636' if ip == base_ip else '#666666' for ip in df_result['IP']]
+    """
+    특정 회차 비교 결과 시각화 (Bar Chart with Highlight)
+    [수정] 선택 IP 순위 표기 추가
+    """
+    
+    # 선택 IP의 순위 및 값 추출 (표기용)
+    base_ip_rank = df_result[df_result['IP'] == base_ip]['rank'].iloc[0]
+    base_ip_val = df_result[df_result['IP'] == base_ip]['value'].iloc[0]
+    
     metric_label = selected_metric.replace("T시청률", "타깃").replace("H시청률", "가구")
+    
+    # Text 컬럼 생성: 선택된 IP에만 순위를 추가하여 최종 텍스트 라벨 생성
+    def _create_rank_text(row):
+        val = row['value']
+        
+        if row['IP'] == base_ip:
+            rank_str = f"{row['rank']}위 / "
+        else:
+            rank_str = ""
+            
+        if selected_metric in ["T시청률", "H시청률"]:
+            return f"{rank_str}{val:.2f}%"
+        else:
+            return f"{rank_str}{val:,.0f}"
 
+    df_result['text_label'] = df_result.apply(_create_rank_text, axis=1)
+    
+    # 툴팁 템플릿 정의
+    if selected_metric in ["T시청률", "H시청률"]:
+        hover_template = "<b>%{x}</b><br>" + metric_label + ": %{y:.2f}%<br>순위: %{customdata[0]}위<extra></extra>"
+    else:
+        hover_template = "<b>%{x}</b><br>" + metric_label + ": %{y:,}<br>순위: %{customdata[0]}위<extra></extra>"
+
+    # 차트 생성
     fig = px.bar(
         df_result,
         x="IP",
         y="value",
-        text="value",
-        title=f"{selected_episode} - '{metric_label}' (기준: {base_ip})"
+        text="text_label",
+        title=f"{selected_episode} - '{metric_label}' (기준: {base_ip})",
+        custom_data=["rank"]
     )
-
-    if selected_metric in ["T시청률", "H시청률"]:
-        hover_template = "<b>%{x}</b><br>" + metric_label + ": %{y:.2f}%<extra></extra>"
-    else:
-        hover_template = "<b>%{x}</b><br>" + metric_label + ": %{y:,}<extra></extra>"
+    
+    colors = ['#d93636' if ip == base_ip else '#666666' for ip in df_result['IP']]
 
     fig.update_traces(
         marker_color=colors,
@@ -2921,11 +2953,12 @@ def plot_episode_comparison(
         hovertemplate=hover_template
     )
 
+    # 텍스트 포맷 및 축 설정
+    fig.update_traces(texttemplate='%{text}', textfont=dict(size=12, color='#333'))
+
     if selected_metric in ["T시청률", "H시청률"]:
-        fig.update_traces(texttemplate='%{text:.2f}%')
         fig.update_layout(yaxis_title=metric_label + " (%)")
     else:
-        fig.update_traces(texttemplate='%{text:,.0f}')
         fig.update_layout(yaxis_title=metric_label)
 
     fig.update_layout(
@@ -2944,7 +2977,6 @@ def render_episode():
     ip_options_main = sorted(df_all["IP"].dropna().unique().tolist())
     episode_options_main = get_episode_options(df_all)  # [3. 공통 함수]
 
-    # [수정] 필터 컬럼 재정렬 및 비율 조정 (동일편성/연도 필터 추가)
     filter_cols = st.columns([3, 2, 2, 2, 2])
 
     with filter_cols[0]:
@@ -2968,8 +3000,7 @@ def render_episode():
             key="ep_selected_episode_main"
         )
     
-    # --- 비교 그룹 필터 수정: 동일편성/연도 분리 ---
-    # 기준 IP 정보 사전 추출
+    # --- 비교 그룹 필터 ---
     base_rows = df_all[df_all["IP"] == selected_base_ip] if selected_base_ip else pd.DataFrame()
     
     all_years = []
@@ -2999,7 +3030,7 @@ def render_episode():
             placeholder="연도 선택",
             label_visibility="collapsed"
         )
-    # --- 비교 그룹 필터 수정 끝 ---
+    # --- 비교 그룹 필터 끝 ---
 
 
     st.divider()
@@ -3011,7 +3042,7 @@ def render_episode():
     df_filtered_main = df_all.copy()
     group_filter_applied = []
     
-    # --- 필터링 로직: 수정된 필터 변수 사용 ---
+    # --- 필터링 로직 ---
     if use_same_prog or selected_years:
         if not base_rows.empty:
             base_prog = base_rows["편성"].dropna().mode().iloc[0] if not base_rows["편성"].dropna().empty else None
@@ -3020,7 +3051,7 @@ def render_episode():
                 if base_prog:
                     df_filtered_main = df_filtered_main[df_filtered_main["편성"] == base_prog]
                     group_filter_applied.append(f"편성='{base_prog}'")
-                else:
+                elif "동일 편성" in st.session_state.get("ep_comp_prog_main", "동일 편성"):
                     st.warning(f"기준 IP '{selected_base_ip}'의 편성 정보 없음 (동일 편성 제외)", icon="⚠️")
             
             if selected_years:
@@ -3033,7 +3064,6 @@ def render_episode():
         else:
             st.warning(f"기준 IP '{selected_base_ip}' 정보를 찾을 수 없습니다.")
             df_filtered_main = pd.DataFrame()
-    # --- 필터링 로직 끝 ---
 
     if df_filtered_main.empty:
         st.warning("선택하신 필터에 해당하는 데이터가 없습니다.")
@@ -3052,21 +3082,21 @@ def render_episode():
     chart_cols = st.columns(2)
     for i, metric in enumerate(key_metrics):
         with chart_cols[i % 2]:
-            # [수정] 각 차트 항목을 별도의 1-column 레이아웃으로 감싸 (stVerticalBlockBorderWrapper를 강제로 생성)
-            inner_col, = st.columns(1)
-            with inner_col:
-                try:
-                    df_result = filter_data_for_episode_comparison(df_filtered_main, selected_episode, metric) # [11.1. 함수]
-                    if df_result.empty or df_result['value'].isnull().all() or (df_result['value'] == 0).all():
-                        metric_label = metric.replace("T시청률", "타깃").replace("H시청률", "가구")
-                        st.markdown(f"###### {selected_episode} - '{metric_label}'")
-                        st.info("데이터 없음")
-                        st.markdown("---")
-                    else:
-                        plot_episode_comparison(df_result, metric, selected_episode, selected_base_ip) # [11.2. 함수]
-                        st.markdown("---")
-                except Exception as e:
-                    st.error(f"차트 렌더링 오류({metric}): {e}")
+            # [수정] 이중 박스 처리를 위해 사용되던 inner_col을 제거하고 chart_cols[i % 2]에 직접 렌더링
+            try:
+                df_result = filter_data_for_episode_comparison(df_filtered_main, selected_episode, metric) # [11.1. 함수]
+                if df_result.empty or df_result['value'].isnull().all() or (df_result['value'] == 0).all():
+                    metric_label = metric.replace("T시청률", "타깃").replace("H시청률", "가구")
+                    # 데이터 없을 때는 제목만 표시하고 정보 창 띄움 (박스 스타일 유지)
+                    st.markdown(f"###### {selected_episode} - '{metric_label}'")
+                    st.info("데이터 없음")
+                    st.markdown("---")
+                else:
+                    # 데이터가 있을 경우, 차트 렌더링
+                    plot_episode_comparison(df_result, metric, selected_episode, selected_base_ip) # [11.2. 함수]
+                    st.markdown("---")
+            except Exception as e:
+                st.error(f"차트 렌더링 오류({metric}): {e}")
 
 #endregion
 
