@@ -7,6 +7,8 @@ import re
 from typing import List, Dict, Any, Optional 
 import time, uuid
 import textwrap
+import hashlib
+import datetime
 import numpy as np
 import pandas as pd
 import plotly.express as px
@@ -16,6 +18,7 @@ import streamlit as st
 from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode, JsCode
 import gspread
 from google.oauth2.service_account import Credentials
+import extra_streamlit_components as stx  # [추가] 쿠키 매니저 라이브러리
 #endregion
 
 
@@ -29,92 +32,76 @@ st.set_page_config(
 #endregion
 
 
-#region [ 1-1. 입장게이트 - URL 토큰 지속 인증 ]
+#region [ 1-1. 입장게이트 - 쿠키 인증 ]
 # =====================================================
-AUTH_TTL = 12*3600
-AUTH_QUERY_KEY = "auth"
+# 쿠키 이름 및 유효기간 설정 (예: 1일)
+COOKIE_NAME = "dmb_auth_token"
+COOKIE_EXPIRY_DAYS = 1
 
-def _rerun():
-    if hasattr(st, "rerun"):
-        st.rerun()
-    else:
-        st.experimental_rerun()
+@st.cache_resource(experimental_allow_widgets=True)
+def get_cookie_manager():
+    """
+    쿠키 매니저를 로드합니다. 
+    키 충돌 방지를 위해 리소스 캐싱을 사용합니다.
+    """
+    return stx.CookieManager(key="dmb_cookie_manager")
 
-@st.cache_resource
-def _auth_store():
-    return {}
+def _hash_password(password: str) -> str:
+    """
+    비밀번호를 평문으로 저장하지 않고 해시값으로 변환하여 보안을 강화합니다.
+    """
+    return hashlib.sha256(str(password).encode()).hexdigest()
 
-def _now() -> int:
-    return int(time.time())
-
-def _issue_token() -> str:
-    return uuid.uuid4().hex
-
-def _set_auth_query(token: str):
-    try:
-        qp = st.query_params
-        qp[AUTH_QUERY_KEY] = token
-        st.query_params = qp
-    except Exception:
-        st.experimental_set_query_params(**{AUTH_QUERY_KEY: token})
-
-def _get_auth_query() -> Optional[str]:
-    qp = st.query_params
-    return qp.get(AUTH_QUERY_KEY)
-
-def _validate_token(token: str) -> bool:
-    store = _auth_store()
-    ent = store.get(token)
-    if not ent:
-        return False
-    if _now() - ent["ts"] > AUTH_TTL:
-        del store[token]
-        return False
-    return True
-
-def _persist_auth(token: str):
-    store = _auth_store()
-    store[token] = {"ts": _now()}
-
-def _logout():
-    token = _get_auth_query()
-    if token:
-        store = _auth_store()
-        store.pop(token, None)
-    try:
-        qp = st.query_params
-        if AUTH_QUERY_KEY in qp:
-            del qp[AUTH_QUERY_KEY]
-            st.query_params = qp
-    except Exception:
-        st.experimental_set_query_params()
-    st.session_state.clear()
-    _rerun()
-
-def check_password_with_token() -> bool:
-    token = _get_auth_query()
-    if token and _validate_token(token):
+def check_password_with_cookie() -> bool:
+    """
+    쿠키를 확인하여 인증 상태를 검사하고, 미인증 시 로그인 사이드바를 노출합니다.
+    """
+    cookie_manager = get_cookie_manager()
+    
+    # 1. Streamlit Secrets에서 비밀번호 가져오기
+    secret_pwd = st.secrets.get("DASHBOARD_PASSWORD")
+    if not secret_pwd:
+        st.error("설정 파일(.streamlit/secrets.toml)에 'DASHBOARD_PASSWORD'가 없습니다.")
+        st.stop()
+        
+    hashed_secret = _hash_password(str(secret_pwd))
+    
+    # 2. 쿠키 읽기 (현재 브라우저에 저장된 토큰)
+    # stx.CookieManager는 쿠키를 읽어오는 데 약간의 딜레이가 있을 수 있어 time.sleep이 필요할 수 있으나,
+    # 기본적인 구조에서는 get()으로 충분합니다.
+    cookies = cookie_manager.get_all()
+    current_token = cookies.get(COOKIE_NAME)
+    
+    # 3. 인증 검사: 쿠키의 해시값과 비밀번호 해시값이 일치하는지 확인
+    if current_token == hashed_secret:
         return True
 
+    # 4. 로그인 UI (사이드바)
     with st.sidebar:
         st.markdown("## 🔐 로그인")
-        pwd = st.text_input("비밀번호를 입력하세요", type="password", key="__pwd__")
-        login = st.button("로그인")
+        input_pwd = st.text_input("비밀번호를 입력하세요", type="password", key="__login_pwd__")
+        login_btn = st.button("로그인")
 
-    if login:
-        secret_pwd = st.secrets.get("DASHBOARD_PASSWORD")
-        if secret_pwd and isinstance(pwd, str) and pwd.strip() == str(secret_pwd).strip():
-            new_token = _issue_token()
-            _persist_auth(new_token)
-            _set_auth_query(new_token)
-            _rerun()
+    # 5. 로그인 처리
+    if login_btn:
+        if _hash_password(input_pwd) == hashed_secret:
+            # 쿠키 설정: 만료일 지정
+            expires = datetime.datetime.now() + datetime.timedelta(days=COOKIE_EXPIRY_DAYS)
+            
+            # 쿠키에 해시된 비밀번호 저장
+            cookie_manager.set(COOKIE_NAME, hashed_secret, expires_at=expires)
+            
+            st.success("로그인 성공! 잠시 후 새로고침됩니다.")
+            time.sleep(1) # 쿠키 설정 후 반영될 시간을 줌
+            st.rerun()
         else:
             st.sidebar.warning("비밀번호가 일치하지 않습니다.")
+            
     return False
 
-if not check_password_with_token():
+# 인증 실행
+if not check_password_with_cookie():
     st.stop()
-
 #endregion
 
 
