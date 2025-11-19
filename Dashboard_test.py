@@ -3101,7 +3101,7 @@ def render_episode():
 
 #region [ 12. 페이지 6: 성장스코어-방영성과 ]
 # =====================================================
-# [수정] 2025-11-13: 회차별 등급 추이 계산 로직 최적화 (누락된 종합등급 컬럼 생성 추가)
+# [수정] 2025-11-19: 비교 그룹(동일 편성) 필터 추가 및 레이아웃 조정
 def render_growth_score():
     """
     [페이지 6] 성장스코어-방영지표 렌더링 함수
@@ -3125,8 +3125,9 @@ def render_growth_score():
         ("TVING VOD",  "시청인구", "VOD"),
     ]
 
-    ips = sorted(df_all["IP"].dropna().unique().tolist())
-    if not ips:
+    # 전체 IP 리스트 (선택 박스용)
+    all_ip_list = sorted(df_all["IP"].dropna().unique().tolist())
+    if not all_ip_list:
         st.warning("IP 데이터가 없습니다."); return
 
     st.markdown("""
@@ -3140,21 +3141,35 @@ def render_growth_score():
     </style>
     """, unsafe_allow_html=True)
 
-    # ---------- 헤더(타이틀/선택) ----------
+    # ---------- 헤더(타이틀/선택/필터) ----------
     _ep_display = st.session_state.get("growth_ep_cutoff", 4)
 
-    head = st.columns([5, 3, 2])
+    # [수정] 필터 추가를 위해 컬럼 비율 조정 (3개 -> 4개)
+    head = st.columns([4, 2, 2, 2])
+    
     with head[0]:
         st.markdown(
             f"## 🚀 성장스코어-방영지표 <span style='font-size:20px;color:#6b7b93'>(~{_ep_display}회 기준)</span>",
             unsafe_allow_html=True
         )
+    
     with head[1]:
         selected_ip = st.selectbox(
-            "IP 선택", ips, index=0,
+            "IP 선택", all_ip_list, index=0,
             key="growth_ip_select", label_visibility="collapsed"
         )
+
+    # [수정] 비교 그룹 필터 추가
     with head[2]:
+        comp_group_mode = st.selectbox(
+            "비교 그룹", 
+            ["전체 비교", "동일 편성만"], 
+            index=0,
+            key="growth_comp_mode", 
+            label_visibility="collapsed"
+        )
+
+    with head[3]:
         ep_cutoff = st.selectbox(
             "회차 기준", EP_CHOICES, index=1,
             key="growth_ep_cutoff", label_visibility="collapsed"
@@ -3171,7 +3186,35 @@ def render_growth_score():
     - 넷플릭스 편성작품은 넷플릭스 비 편성작 대비 평균적으로 약 40%정도의 TVING VOD수치의 손실이 있으며, 그에 따라 등급산출시 40%보정
             """)
 
-    st.markdown(f"#### {selected_ip} <span style='font-size:16px;color:#6b7b93'>자세히보기</span>",
+    # ---------- [로직 추가] IP 필터링 (비교군 설정) ----------
+    ips = all_ip_list[:] # 기본은 전체
+    
+    if comp_group_mode == "동일 편성만":
+        # 선택된 IP의 편성 정보 조회
+        target_info = df_all[df_all["IP"] == selected_ip]
+        if not target_info.empty:
+            target_prog = target_info["편성"].dropna().mode()
+            if not target_prog.empty:
+                prog_val = target_prog.iloc[0]
+                # 동일 편성 IP만 필터링
+                ips = sorted(df_all[df_all["편성"] == prog_val]["IP"].unique().tolist())
+                
+                # 만약 데이터 오류로 본인이 빠졌다면 강제 추가
+                if selected_ip not in ips:
+                    ips.append(selected_ip)
+                    
+                st.markdown(
+                    f"#### {selected_ip} <span style='font-size:16px;color:#6b7b93'>자세히보기 (비교군: {prog_val} / 총 {len(ips)}작품)</span>",
+                    unsafe_allow_html=True
+                )
+            else:
+                st.warning(f"'{selected_ip}'의 편성 정보가 없어 전체 IP와 비교합니다.")
+                st.markdown(f"#### {selected_ip} <span style='font-size:16px;color:#6b7b93'>자세히보기 (전체 비교)</span>", unsafe_allow_html=True)
+        else:
+            st.markdown(f"#### {selected_ip} <span style='font-size:16px;color:#6b7b93'>자세히보기</span>", unsafe_allow_html=True)
+    else:
+        st.markdown(
+            f"#### {selected_ip} <span style='font-size:16px;color:#6b7b93'>자세히보기 (전체 비교 / 총 {len(ips)}작품)</span>",
             unsafe_allow_html=True
         )
 
@@ -3181,7 +3224,7 @@ def render_growth_score():
     if "회차_numeric" not in df_all.columns:
         df_all["회차_numeric"] = df_all["회차"].astype(str).str.extract(r"(\d+)", expand=False).astype(float)
     
-    # 2. IP별 데이터프레임 딕셔너리 생성 (필터링 비용 절감)
+    # 2. IP별 데이터프레임 딕셔너리 생성 (필터링 비용 절감) - 필터링된 ips만 사용
     ip_dfs = {ip: df_all[df_all["IP"] == ip].copy() for ip in ips}
 
     # 3. [Helper] 전체 데이터를 Numpy Array로 추출하는 함수
@@ -3212,7 +3255,7 @@ def render_growth_score():
         s = s.sort_values("회차_numeric")
         return s["회차_numeric"].values.astype(float), s["value"].values.astype(float)
 
-    # 4. [Pre-Calculation] 모든 IP의 Metric별 전체 (x, y) 데이터를 미리 추출
+    # 4. [Pre-Calculation] 필터링된 IP들의 Metric별 전체 (x, y) 데이터를 미리 추출
     ip_metric_cache = {}
     for ip in ips:
         ip_metric_cache[ip] = {}
@@ -3263,7 +3306,8 @@ def render_growth_score():
 
     # ---------- [메인 로직] 회차별 등급 산출 (Loop Optimized) ----------
     
-    sel_ip_df = ip_dfs[selected_ip]
+    # 선택된 IP의 최대 회차 확인
+    sel_ip_df = df_all[df_all["IP"] == selected_ip]
     if "회차_numeric" in sel_ip_df.columns:
         _max_ep_val = pd.to_numeric(sel_ip_df["회차_numeric"], errors="coerce").max()
     else:
@@ -3284,7 +3328,7 @@ def render_growth_score():
     # 통합 Loop
     for n in sorted_cutoffs:
         tmp_rows = []
-        for ip in ips:
+        for ip in ips: # 필터링된 IP들만 순회
             row = {"IP": ip}
             for disp, _, _ in METRICS:
                 xy = ip_metric_cache[ip][disp]
@@ -3295,11 +3339,10 @@ def render_growth_score():
         
         tmp_df = pd.DataFrame(tmp_rows)
         
-        # 등급 산정 (여기에 [disp]_종합 생성 로직 추가됨)
+        # 등급 산정 (필터링된 그룹 내에서의 상대평가)
         for disp, _, _ in METRICS:
             tmp_df[f"{disp}_절대등급"] = _quintile_grade(tmp_df[f"{disp}_절대"], ["S","A","B","C","D"])
             tmp_df[f"{disp}_상승등급"] = _quintile_grade(tmp_df[f"{disp}_기울기"], SLOPE_LABELS)
-            # [중요] 누락되었던 종합 등급 컬럼 생성 코드 복구
             tmp_df[f"{disp}_종합"] = tmp_df[f"{disp}_절대등급"].astype(str) + tmp_df[f"{disp}_상승등급"].astype(str).replace("nan", "")
         
         tmp_df["_ABS_PCT_MEAN"] = pd.concat([_to_percentile(tmp_df[f"{d}_절대"]) for d,_,_ in METRICS], axis=1).mean(axis=1)
@@ -3329,7 +3372,11 @@ def render_growth_score():
     if 'base' not in locals(): base = tmp_df.copy()
 
     # ---------- [선택작품 요약카드] ----------
-    focus = base[base["IP"] == selected_ip].iloc[0]
+    try:
+        focus = base[base["IP"] == selected_ip].iloc[0]
+    except IndexError:
+        st.error(f"선택된 IP({selected_ip})의 데이터를 계산할 수 없습니다.")
+        return
 
     st.markdown("<div class='growth-kpi'>", unsafe_allow_html=True)
     card_cols = st.columns([2, 1, 1, 1, 1])
