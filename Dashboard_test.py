@@ -34,6 +34,13 @@ st.set_page_config(
 
 #region [ 1-1. 입장게이트 - 쿠키 인증 ]
 # =====================================================
+# [수정] _rerun 함수 복구 (사이드바 등 다른 리전에서 사용 중)
+def _rerun():
+    if hasattr(st, "rerun"):
+        st.rerun()
+    else:
+        st.experimental_rerun()
+
 # 쿠키 이름 및 유효기간 설정 (예: 1일)
 COOKIE_NAME = "dmb_auth_token"
 COOKIE_EXPIRY_DAYS = 1
@@ -67,8 +74,6 @@ def check_password_with_cookie() -> bool:
     hashed_secret = _hash_password(str(secret_pwd))
     
     # 2. 쿠키 읽기 (현재 브라우저에 저장된 토큰)
-    # stx.CookieManager는 쿠키를 읽어오는 데 약간의 딜레이가 있을 수 있어 time.sleep이 필요할 수 있으나,
-    # 기본적인 구조에서는 get()으로 충분합니다.
     cookies = cookie_manager.get_all()
     current_token = cookies.get(COOKIE_NAME)
     
@@ -93,13 +98,12 @@ def check_password_with_cookie() -> bool:
             
             st.success("로그인 성공! 잠시 후 새로고침됩니다.")
             time.sleep(1) # 쿠키 설정 후 반영될 시간을 줌
-            st.rerun()
+            _rerun()
         else:
             st.sidebar.warning("비밀번호가 일치하지 않습니다.")
             
     return False
 
-# 인증 실행
 if not check_password_with_cookie():
     st.stop()
 #endregion
