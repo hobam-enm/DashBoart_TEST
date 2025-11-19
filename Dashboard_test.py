@@ -45,12 +45,9 @@ def _rerun():
 COOKIE_NAME = "dmb_auth_token"
 COOKIE_EXPIRY_DAYS = 1
 
-@st.cache_resource(experimental_allow_widgets=True)
+# [수정] 캐시 데코레이터 제거! 
+# CookieManager는 위젯이므로 캐싱하면 'CachedWidgetWarning' 오류가 발생하며 작동이 멈춥니다.
 def get_cookie_manager():
-    """
-    쿠키 매니저를 로드합니다. 
-    키 충돌 방지를 위해 리소스 캐싱을 사용합니다.
-    """
     return stx.CookieManager(key="dmb_cookie_manager")
 
 def _hash_password(password: str) -> str:
@@ -63,6 +60,7 @@ def check_password_with_cookie() -> bool:
     """
     쿠키를 확인하여 인증 상태를 검사하고, 미인증 시 로그인 사이드바를 노출합니다.
     """
+    # 여기서 매번 매니저를 호출해도 괜찮습니다. 라이브러리 내부에서 상태를 관리합니다.
     cookie_manager = get_cookie_manager()
     
     # 1. Streamlit Secrets에서 비밀번호 가져오기
