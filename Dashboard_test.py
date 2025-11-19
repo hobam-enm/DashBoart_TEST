@@ -32,38 +32,30 @@ st.set_page_config(
 #endregion
 
 
-#region [ 1-1. 입장게이트 - 쿠키 인증 ]
+#region [ 1-1. 입장게이트 - 쿠키 인증 ]#region [ 1-1. 입장게이트 - 쿠키 인증 (세션 보완) ]
 # =====================================================
-# [수정] _rerun 함수 복구 (사이드바 등 다른 리전에서 사용 중)
+# [수정] _rerun 함수 복구
 def _rerun():
     if hasattr(st, "rerun"):
         st.rerun()
     else:
         st.experimental_rerun()
 
-# 쿠키 이름 및 유효기간 설정 (예: 1일)
+# 쿠키 이름 및 유효기간 설정
 COOKIE_NAME = "dmb_auth_token"
 COOKIE_EXPIRY_DAYS = 1
 
-# [수정] 캐시 데코레이터 제거! 
-# CookieManager는 위젯이므로 캐싱하면 'CachedWidgetWarning' 오류가 발생하며 작동이 멈춥니다.
+# [수정] 캐시 제거 (위젯 오류 방지)
 def get_cookie_manager():
     return stx.CookieManager(key="dmb_cookie_manager")
 
 def _hash_password(password: str) -> str:
-    """
-    비밀번호를 평문으로 저장하지 않고 해시값으로 변환하여 보안을 강화합니다.
-    """
     return hashlib.sha256(str(password).encode()).hexdigest()
 
 def check_password_with_cookie() -> bool:
-    """
-    쿠키를 확인하여 인증 상태를 검사하고, 미인증 시 로그인 사이드바를 노출합니다.
-    """
-    # 여기서 매번 매니저를 호출해도 괜찮습니다. 라이브러리 내부에서 상태를 관리합니다.
     cookie_manager = get_cookie_manager()
     
-    # 1. Streamlit Secrets에서 비밀번호 가져오기
+    # 1. Streamlit Secrets 확인
     secret_pwd = st.secrets.get("DASHBOARD_PASSWORD")
     if not secret_pwd:
         st.error("설정 파일(.streamlit/secrets.toml)에 'DASHBOARD_PASSWORD'가 없습니다.")
@@ -71,15 +63,22 @@ def check_password_with_cookie() -> bool:
         
     hashed_secret = _hash_password(str(secret_pwd))
     
-    # 2. 쿠키 읽기 (현재 브라우저에 저장된 토큰)
+    # 2. 쿠키 읽기
     cookies = cookie_manager.get_all()
     current_token = cookies.get(COOKIE_NAME)
     
-    # 3. 인증 검사: 쿠키의 해시값과 비밀번호 해시값이 일치하는지 확인
-    if current_token == hashed_secret:
+    # 3. [핵심 수정] 인증 검사 (쿠키 OR 세션스테이트 둘 중 하나라도 통과면 OK)
+    # 쿠키가 있거나, 방금 로그인을 성공해서 세션에 기록이 남아있다면 통과
+    is_cookie_valid = (current_token == hashed_secret)
+    is_session_valid = st.session_state.get("auth_success", False)
+    
+    if is_cookie_valid or is_session_valid:
+        # 쿠키가 유효하면 세션도 True로 갱신 (새로고침 대비)
+        if is_cookie_valid:
+            st.session_state["auth_success"] = True
         return True
 
-    # 4. 로그인 UI (사이드바)
+    # 4. 로그인 UI
     with st.sidebar:
         st.markdown("## 🔐 로그인")
         input_pwd = st.text_input("비밀번호를 입력하세요", type="password", key="__login_pwd__")
@@ -88,14 +87,15 @@ def check_password_with_cookie() -> bool:
     # 5. 로그인 처리
     if login_btn:
         if _hash_password(input_pwd) == hashed_secret:
-            # 쿠키 설정: 만료일 지정
+            # A. 쿠키 굽기 (브라우저 저장용)
             expires = datetime.datetime.now() + datetime.timedelta(days=COOKIE_EXPIRY_DAYS)
-            
-            # 쿠키에 해시된 비밀번호 저장
             cookie_manager.set(COOKIE_NAME, hashed_secret, expires_at=expires)
             
-            st.success("로그인 성공! 잠시 후 새로고침됩니다.")
-            time.sleep(1) # 쿠키 설정 후 반영될 시간을 줌
+            # B. [핵심] 세션에 '로그인 성공' 도장 찍기 (쿠키 딜레이 방어용)
+            st.session_state["auth_success"] = True
+            
+            st.success("로그인 성공! 잠시 후 이동합니다.")
+            time.sleep(1.5) # 딜레이를 약간 늘림 (안정성 확보)
             _rerun()
         else:
             st.sidebar.warning("비밀번호가 일치하지 않습니다.")
