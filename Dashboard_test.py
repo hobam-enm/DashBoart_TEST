@@ -2139,7 +2139,7 @@ def _render_kpi_row_ip_vs_group(kpis_ip, kpis_group, ranks, group_name):
 
     st.markdown(f"#### 1. 주요 성과 ({group_name} 대비)")
     
-    keys = ["T시청률", "H시청률", "TVING LIVE UV", "TVING VOD UV", "디지털 조회수", "디지털 언급량", "화제성 점수"]
+    keys = ["T시청률", "H시청률", "TVING LIVE", "TVING VOD", "디지털 조회수", "디지털 언급량", "화제성 점수"]
     titles = ["🎯 타깃시청률", "🏠 가구시청률", "⚡ 티빙 LIVE UV", "▶️ 티빙 VOD UV", "👀 디지털 조회", "💬 디지털 언급", "🔥 화제성 점수"]
     
     cols = st.columns(7)
