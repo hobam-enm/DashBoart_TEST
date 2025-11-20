@@ -952,9 +952,9 @@ def render_overview():
         st.markdown(textwrap.dedent("""
             **지표 기준**
         - **시청률** `회차평균`: 전국 기준 가구 & 타깃(2049) 시청률
-        - **티빙 LIVE** `회차평균`: 실시간 시청 UV
-        - **티빙 당일 VOD** `회차평균`: 본방송 당일 VOD UV
-        - **티빙 주간 VOD** `회차평균`: [회차 방영일부터 +6일까지의 7일간 VOD UV] - [티빙 당일 VOD]
+        - **티빙 LIVE UV** `회차평균`: 실시간 시청 UV
+        - **티빙 당일 VOD UV** `회차평균`: 본방송 당일 VOD UV
+        - **티빙 주간 VOD UV** `회차평균`: [회차 방영일부터 +6일까지의 7일간 VOD UV] - [티빙 당일 VOD]
         - **디지털 조회** `회차총합`: 방영주간 월~일 발생 총합 / 유튜브,인스타그램,틱톡,네이버TV,페이스북
         - **디지털 언급량** `회차총합`: 방영주차(월~일) 내 총합 / 커뮤니티,트위터,블로그                            
         - **화제성 점수** `회차평균`: 방영기간 주차별 화제성 점수의 평균 (펀덱스)
@@ -1057,9 +1057,9 @@ def render_overview():
 
     kpi(c1, "🎯 타깃 시청률", fmt(t_rating, digits=3))
     kpi(c2, "🏠 가구 시청률", fmt(h_rating, digits=3))
-    kpi(c3, "📺 티빙 LIVE", fmt(tving_live, intlike=True))
-    kpi(c4, "⚡ 티빙 당일 VOD", fmt(tving_quick, intlike=True)) 
-    kpi(c5, "▶️ 티빙 주간 VOD", fmt(tving_vod, intlike=True))   
+    kpi(c3, "📺 티빙 LIVE UV", fmt(tving_live, intlike=True))
+    kpi(c4, "⚡ 티빙 당일 VOD UV", fmt(tving_quick, intlike=True)) 
+    kpi(c5, "▶️ 티빙 주간 VOD UV", fmt(tving_vod, intlike=True))   
     
     kpi(c6, "👀 디지털 조회", fmt(digital_view, intlike=True))
     kpi(c7, "💬 디지털 언급량", fmt(digital_buzz, intlike=True))
@@ -1257,9 +1257,9 @@ def render_ip_detail():
         st.markdown(textwrap.dedent("""
             **지표 기준**
         - **시청률** `누적 회차평균`: 전국 기준 가구 & 타깃(2049) 시청률
-        - **티빙 LIVE** `누적 회차평균`: 실시간 시청 UV
-        - **티빙 당일 VOD** `누적 회차평균`: 본방송 당일 VOD UV
-        - **티빙 주간 VOD** `누적 회차평균`: [회차 방영일부터 +6일까지의 7일간 VOD UV] - [티빙 당일 VOD]
+        - **티빙 LIVE UV** `누적 회차평균`: 실시간 시청 UV
+        - **티빙 당일 VOD UV** `누적 회차평균`: 본방송 당일 VOD UV
+        - **티빙 주간 VOD UV** `누적 회차평균`: [회차 방영일부터 +6일까지의 7일간 VOD UV] - [티빙 당일 VOD]
         - **디지털 조회** `누적 회차총합`: 방영주간 월~일 발생 총합 / 유튜브,인스타그램,틱톡,네이버TV,페이스북
         - **디지털 언급량** `누적 회차총합`: 방영주차(월~일) 내 총합 / 커뮤니티,트위터,블로그                            
         - **화제성 점수** `누적 회차평균`: 방영기간 주차별 화제성 점수의 평균 (펀덱스)
@@ -1567,9 +1567,9 @@ def render_ip_detail():
     c1, c2, c3, c4, c5 = st.columns(5)
     kpi_with_rank(c1, "🎯 타깃시청률",    val_T, base_T, rk_T, prog_label, digits=3)
     kpi_with_rank(c2, "🏠 가구시청률",    val_H, base_H, rk_H, prog_label, digits=3)
-    kpi_with_rank(c3, "📺 TVING LIVE",     val_live, base_live, rk_live, prog_label, intlike=True)
-    kpi_with_rank(c4, "⚡ TVING 당일 VOD",  val_quick, base_quick, rk_quick, prog_label, intlike=True)
-    kpi_with_rank(c5, "▶️ TVING 주간 VOD", val_vod, base_vod, rk_vod, prog_label, intlike=True)
+    kpi_with_rank(c3, "📺 티빙 LIVE UV",     val_live, base_live, rk_live, prog_label, intlike=True)
+    kpi_with_rank(c4, "⚡ 티빙 당일 VOD UV",  val_quick, base_quick, rk_quick, prog_label, intlike=True)
+    kpi_with_rank(c5, "▶️ 티빙 주간 VOD UV", val_vod, base_vod, rk_vod, prog_label, intlike=True)
 
     # === KPI 배치 (Row 2) ===
     c6, c7, c8, c9, c10 = st.columns(5)
@@ -1991,7 +1991,7 @@ def render_ip_detail():
 #endregion
 
 
-#region [ 10. 페이지 4: IP간 비교분석 (통합) ]
+#region [ 9. 페이지 3: IP간 비교분석 (통합) ]
 # =====================================================
 # [수정] 성과 포지셔닝(레이더차트)에 회차 필터 연동 (백분위 재계산 로직 추가)
 
@@ -2139,8 +2139,8 @@ def _render_kpi_row_ip_vs_group(kpis_ip, kpis_group, ranks, group_name):
 
     st.markdown(f"#### 1. 주요 성과 ({group_name} 대비)")
     
-    keys = ["T시청률", "H시청률", "TVING LIVE", "TVING VOD", "디지털 조회수", "디지털 언급량", "화제성 점수"]
-    titles = ["🎯 타깃시청률", "🏠 가구시청률", "⚡ 티빙 LIVE", "▶️ 티빙 VOD", "👀 디지털 조회", "💬 디지털 언급", "🔥 화제성 점수"]
+    keys = ["T시청률", "H시청률", "TVING LIVE UV", "TVING VOD UV", "디지털 조회수", "디지털 언급량", "화제성 점수"]
+    titles = ["🎯 타깃시청률", "🏠 가구시청률", "⚡ 티빙 LIVE UV", "▶️ 티빙 VOD UV", "👀 디지털 조회", "💬 디지털 언급", "🔥 화제성 점수"]
     
     cols = st.columns(7)
     for i, key in enumerate(keys):
@@ -2186,8 +2186,8 @@ def _render_kpi_row_ip_vs_ip(kpis1, kpis2, ip1, ip2):
     c1, c2, c3, c4, c5, c6, c7 = st.columns(7)
     with c1: _card("🎯 타깃시청률", kpis1.get("T시청률"), kpis2.get("T시청률"), "{:.2f}%")
     with c2: _card("🏠 가구시청률", kpis1.get("H시청률"), kpis2.get("H시청률"), "{:.2f}%")
-    with c3: _card("⚡ 티빙 LIVE", kpis1.get("TVING LIVE"), kpis2.get("TVING LIVE"), "{:,.0f}")
-    with c4: _card("▶️ 티빙 VOD", kpis1.get("TVING VOD"), kpis2.get("TVING VOD"), "{:,.0f}")
+    with c3: _card("⚡ 티빙 LIVE UV", kpis1.get("TVING LIVE"), kpis2.get("TVING LIVE"), "{:,.0f}")
+    with c4: _card("▶️ 티빙 VOD UV", kpis1.get("TVING VOD"), kpis2.get("TVING VOD"), "{:,.0f}")
     with c5: _card("👀 디지털 조회", kpis1.get("디지털 조회수"), kpis2.get("디지털 조회수"), "{:,.0f}")
     with c6: _card("💬 디지털 언급", kpis1.get("디지털 언급량"), kpis2.get("디지털 언급량"), "{:,.0f}")
     with c7: _card("🔥 화제성 점수", kpis1.get("화제성 점수"), kpis2.get("화제성 점수"), "{:,.0f}")
@@ -2512,7 +2512,7 @@ def render_comparison():
     
     # --- 헤더 및 모드 선택 ---
     with filter_cols[0]:
-        st.markdown("## ⚖️ IP간 비교분석")
+        st.markdown("## ⚖️ 성과 비교분석")
     with st.expander("ℹ️ 지표 기준 안내", expanded=False):
         st.markdown("<div class='gd-guideline'>", unsafe_allow_html=True)
         st.markdown(textwrap.dedent("""
@@ -2735,7 +2735,7 @@ def render_comparison():
 #endregion
 
 
-#region [ 12. 페이지 6: 성장스코어-방영성과 ]
+#region [ 10. 페이지 4: 성장스코어-방영성과 ]
 # =====================================================
 # [수정] 2025-11-19: 비교 그룹(동일 편성) 필터 추가 및 레이아웃 조정
 def render_growth_score():
@@ -3227,7 +3227,7 @@ def render_growth_score():
 #endregion
 
 
-#region [ 13. 페이지 7: 성장스코어-디지털 ]
+#region [ 11. 페이지 5: 성장스코어-디지털 ]
 # =====================================================
 # [수정] 2025-11-13: 회차별 등급 추이 계산 로직 최적화 (Pre-fetch + Numpy Slicing)
 def render_growth_score_digital():
@@ -3635,7 +3635,7 @@ def render_growth_score_digital():
 #endregion
 
 
-#region [ 14. 메인 라우터 ]
+#region [ 12. 메인 라우터 ]
 # =====================================================
 # [수정] 삭제된 페이지(데모그래픽, 회차별) 라우팅 제거
 if st.session_state["page"] == "Overview":
