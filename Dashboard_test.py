@@ -2446,7 +2446,7 @@ def _render_unified_charts(
     
     heatmap_media = st.radio("분석 매체", ["TV", "TVING"], index=0, horizontal=True, label_visibility="collapsed", key="heatmap_media_page4")
     media_list = ["TV"] if heatmap_media == "TV" else ["TVING LIVE", "TVING QUICK", "TVING VOD"]
-    media_label = "TV" if heatmap_media == "TV" else "TVING (L+Q+V)"
+    media_label = "TV" if heatmap_media == "TV" else "TVING"
 
     if "회차_numeric" not in df_target.columns: 
          df_target["회차_numeric"] = df_target["회차"].str.extract(r"(\d+)", expand=False).astype(float)
@@ -2814,8 +2814,8 @@ def render_growth_score():
     with st.expander("ℹ️ 지표 기준 안내", expanded=False):
         st.markdown("""
     **등급 체계**
-    - **절대값 등급**: 각 지표의 절대 수준을 IP 간 백분위 20% 단위로 구분 → `S / A / B / C / D`
-    - **상승률 등급**: 동일 기간(선택 회차 범위) 내 회차-값 선형회귀 기울기(slope)를 IP 간 백분위 20% 단위로 구분 → `+2 / +1 / 0 / -1 / -2`
+    - **절대값 등급**: 각 항목별(시청률,티빙UV) 수치를 비교군 내 순위화→ `S / A / B / C / D`
+    - **상승률 등급**: 각 항목별(시청률,티빙UV)의 회차별 증감정도를 비교군 내 순위화 → `+2 / +1 / 0 / -1 / -2`
     - **종합등급**: 절대값과 상승률 등급을 결합해 표기 (예: `A+2`).
 
     **보정기준**
@@ -3273,8 +3273,8 @@ def render_growth_score_digital():
         st.markdown("""
 
 **등급 체계**
-- **절대값 등급**: 각 지표의 절대 수준을 IP 간 백분위 20% 단위로 구분 → S / A / B / C / D
-- **상승률 등급**: 동일 기간(선택 회차 범위) 내 회차-값 선형회귀 기울기(slope)를 IP 간 백분위 20% 단위로 구분 → +2 / +1 / 0 / -1 / -2
+- **절대값 등급**: 각 항목별(디지털조회, 화제성점수) 수치를 비교군 내 순위화→ `S / A / B / C / D`
+- **상승률 등급**: 각 항목별(디지털조회, 화제성점수)의 주차별 증감정도를 비교군 내 순위화 → `+2 / +1 / 0 / -1 / -2`
 - **종합등급**: 절대값과 상승률 등급을 결합해 표기 (예: A+2).  
         """)
 
