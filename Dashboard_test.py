@@ -359,7 +359,7 @@ h1, h2, h3 { color: #111827; font-weight: 800; letter-spacing: -0.02em; }
 NAV_ITEMS = {
     "Overview": "Overview",
     "IP 성과": "IP 성과 자세히보기",
-    "비교분석": "비교분석 (통합)", # [수정] 이름 변경 (기능 통합)
+    "비교분석": "성과 비교분석", 
     "성장스코어-방영지표": "성장스코어-방영지표",
     "성장스코어-디지털": "성장스코어-디지털",
 }
@@ -1993,7 +1993,7 @@ def render_ip_detail():
 
 #region [ 10. 페이지 4: IP간 비교분석 (통합) ]
 # =====================================================
-# [수정] 회차 필터 적용, 히트맵 통합, 회차비교 기능 흡수
+# [수정] IP vs 그룹 모드: 수치 폰트 축소(22px), 순위(N위/M작품) 표시 추가
 
 # ===== 10.0. 포맷팅 헬퍼 (페이지 4 전용) =====
 def _fmt_kor_large(v):
@@ -2083,32 +2083,68 @@ def get_agg_kpis_for_ip_page4(df_ip: pd.DataFrame) -> Dict[str, float | None]:
 
 
 # ===== 10.3. [페이지 4] KPI 카드 렌더링 (상단) =====
-def _render_kpi_row_ip_vs_group(kpis_ip, kpis_group, group_name):
-    def calc_delta(ip_val, group_val): 
+# [수정] st.metric 대신 HTML 카드 사용하여 폰트 크기 조절 및 순위 표시
+def _render_kpi_row_ip_vs_group(kpis_ip, kpis_group, ranks, group_name):
+    
+    def _calc_delta(ip_val, group_val): 
         ip_val = ip_val or 0
         group_val = group_val or 0
         if group_val is None or group_val == 0: return None
         return (ip_val - group_val) / group_val
-        
-    delta_t = calc_delta(kpis_ip.get('T시청률'), kpis_group.get('T시청률'))
-    delta_h = calc_delta(kpis_ip.get('H시청률'), kpis_group.get('H시청률'))
-    delta_live = calc_delta(kpis_ip.get('TVING LIVE'), kpis_group.get('TVING LIVE'))
-    delta_vod = calc_delta(kpis_ip.get('TVING VOD'), kpis_group.get('TVING VOD'))
-    delta_view = calc_delta(kpis_ip.get('디지털 조회수'), kpis_group.get('디지털 조회수'))
-    delta_buzz = calc_delta(kpis_ip.get('디지털 언급량'), kpis_group.get('디지털 언급량'))
-    delta_fscore = calc_delta(kpis_ip.get('화제성 점수'), kpis_group.get('화제성 점수'))
 
-    view_val_str = _fmt_kor_large(kpis_ip.get('디지털 조회수'))
+    def _kpi_card_html(title, val_str, delta, rank_tuple):
+        # 1. 등락률 처리
+        if delta is None:
+            delta_html = "<span style='color:#9ca3af; font-size:13px;'>-</span>"
+        else:
+            pct = delta * 100
+            color = "#d93636" if pct > 0 else ("#2a61cc" if pct < 0 else "#9ca3af")
+            symbol = "▲" if pct > 0 else ("▼" if pct < 0 else "-")
+            delta_html = f"<span style='color:{color}; font-size:13px; font-weight:600;'>{symbol} {abs(pct):.1f}%</span>"
+
+        # 2. 순위 처리 (N위/M작품)
+        if rank_tuple and rank_tuple[1] > 0:
+            rnk, total = rank_tuple
+            rank_html = f"<span style='color:#6b7280; font-size:12px; margin-left:6px;'>({rnk}위/{total}작품)</span>"
+        else:
+            rank_html = ""
+        
+        # 3. HTML 조립 (폰트 사이즈 22px로 조정)
+        return f"""
+        <div class="kpi-card" style="padding: 14px 10px;">
+            <div class="kpi-title">{title}</div>
+            <div class="kpi-value" style="font-size: 22px; margin-bottom: 4px;">{val_str}</div>
+            <div style="line-height: 1.2;">
+                {delta_html}{rank_html}
+            </div>
+        </div>
+        """
 
     st.markdown(f"#### 1. 주요 성과 ({group_name} 대비)")
-    kpi_cols = st.columns(7) 
-    with kpi_cols[0]: st.metric("🎯 타깃시청률", f"{kpis_ip.get('T시청률', 0):.2f}%", f"{delta_t * 100:.1f}%" if delta_t is not None else "N/A")
-    with kpi_cols[1]: st.metric("🏠 가구시청률", f"{kpis_ip.get('H시청률', 0):.2f}%", f"{delta_h * 100:.1f}%" if delta_h is not None else "N/A")
-    with kpi_cols[2]: st.metric("⚡ 티빙 LIVE", f"{kpis_ip.get('TVING LIVE', 0):,.0f}", f"{delta_live * 100:.1f}%" if delta_live is not None else "N/A")
-    with kpi_cols[3]: st.metric("▶️ 티빙 VOD", f"{kpis_ip.get('TVING VOD', 0):,.0f}", f"{delta_vod * 100:.1f}%" if delta_vod is not None else "N/A")
-    with kpi_cols[4]: st.metric("👀 디지털 조회", view_val_str, f"{delta_view * 100:.1f}%" if delta_view is not None else "N/A")
-    with kpi_cols[5]: st.metric("💬 디지털 언급", f"{kpis_ip.get('디지털 언급량', 0):,.0f}", f"{delta_buzz * 100:.1f}%" if delta_buzz is not None else "N/A")
-    with kpi_cols[6]: st.metric("🔥 화제성 점수", f"{kpis_ip.get('화제성 점수', 0):,.0f}", f"{delta_fscore * 100:.1f}%" if delta_fscore is not None else "N/A")
+    
+    # 데이터 준비
+    keys = ["T시청률", "H시청률", "TVING LIVE", "TVING VOD", "디지털 조회수", "디지털 언급량", "화제성 점수"]
+    titles = ["🎯 타깃시청률", "🏠 가구시청률", "⚡ 티빙 LIVE", "▶️ 티빙 VOD", "👀 디지털 조회", "💬 디지털 언급", "🔥 화제성 점수"]
+    
+    cols = st.columns(7)
+    
+    for i, key in enumerate(keys):
+        val = kpis_ip.get(key)
+        base_val = kpis_group.get(key)
+        delta = _calc_delta(val, base_val)
+        rank_info = ranks.get(key, (None, 0))
+        
+        # 값 포맷팅
+        if key in ["T시청률", "H시청률"]:
+            val_str = f"{val:.2f}%" if val is not None else "–"
+        elif key == "디지털 조회수":
+            val_str = _fmt_kor_large(val)
+        else:
+            val_str = f"{val:,.0f}" if val is not None else "–"
+            
+        with cols[i]:
+            st.markdown(_kpi_card_html(titles[i], val_str, delta, rank_info), unsafe_allow_html=True)
+
 
 def _render_kpi_row_ip_vs_ip(kpis1, kpis2, ip1, ip2):
     def _card(title, v1, v2, fmt, higher_good=True):
@@ -2399,19 +2435,15 @@ def _render_unified_charts(
     st.markdown("#### 5. 👥 IP 오디언스 히트맵")
     st.caption(f"선택하신 **'{target_name}'**과 **'{comp_name}'**의 회차별/데모별 시청자수 격차를 보여줍니다.")
     
-    # 히트맵용 매체 선택 (TV or TVING)
     heatmap_media = st.radio("분석 매체", ["TV", "TVING"], index=0, horizontal=True, label_visibility="collapsed", key="heatmap_media_page4")
     media_list = ["TV"] if heatmap_media == "TV" else ["TVING LIVE", "TVING QUICK", "TVING VOD"]
     media_label = "TV" if heatmap_media == "TV" else "TVING (L+Q+V)"
 
-    # [중요] 이미 필터링된 df_target, df_comp 사용 (회차 필터 적용됨)
-    # 회차 Numeric 없으면 생성
     if "회차_numeric" not in df_target.columns: 
          df_target["회차_numeric"] = df_target["회차"].str.extract(r"(\d+)", expand=False).astype(float)
     if "회차_numeric" not in df_comp.columns:
          df_comp["회차_numeric"] = df_comp["회차"].str.extract(r"(\d+)", expand=False).astype(float)
 
-    # 히트맵 데이터 생성 (이미 df가 필터링되어 있으므로 max_ep 인자는 불필요하지만 명시적으로 None처리)
     df_base_heat = get_avg_demo_pop_by_episode(df_target, media_list, max_ep=None) 
     df_comp_heat = get_avg_demo_pop_by_episode(df_comp, media_list, max_ep=None)
 
@@ -2451,7 +2483,6 @@ def _render_unified_charts(
 def render_comparison():
     df_all = load_data() # [3. 공통 함수]
     
-    # 전처리: 회차_numeric 생성
     if "회차_numeric" not in df_all.columns:
         df_all["회차_numeric"] = df_all["회차"].str.extract(r"(\d+)", expand=False).astype(float)
 
@@ -2467,13 +2498,9 @@ def render_comparison():
 
     current_mode = st.session_state.get("comp_mode_page4", "IP vs 그룹 평균")
     
-    # [수정] 회차 필터 추가를 위한 컬럼 조정
     if current_mode == "IP vs IP":
-        # 5개 컬럼: Title(3), Mode(2), IP1(2), IP2(2), Ep(3)
         filter_cols = st.columns([3, 2, 2, 2, 3])
     else:
-        # 6개 컬럼: Title(3), Mode(2), IP1(2), Prog(2), Year(2), Ep(1) -> Ep 공간 확보 필요
-        # [3, 2, 2, 2, 2, 1] -> 총 12
         filter_cols = st.columns([3, 2, 2, 2, 2, 1]) 
     
     # --- 헤더 및 모드 선택 ---
@@ -2501,7 +2528,7 @@ def render_comparison():
             key="comp_mode_page4" 
         ) 
     
-    selected_max_ep = "전체" # Default
+    selected_max_ep = "전체"
 
     # --- IP vs IP 모드 ---
     if comparison_mode == "IP vs IP":
@@ -2518,7 +2545,6 @@ def render_comparison():
                 label_visibility="collapsed"
             )
         
-        # [수정] 회차 선택 (기준 IP 기준)
         target_rows = df_all[df_all["IP"] == selected_ip1] if selected_ip1 else pd.DataFrame()
         ep_opts = ["전체"] + get_episode_options(target_rows)
         
@@ -2561,7 +2587,6 @@ def render_comparison():
                 key="comp_year_page4", placeholder="연도 선택", label_visibility="collapsed"
             )
         
-        # [수정] 회차 선택
         target_rows = df_all[df_all["IP"] == selected_ip1] if selected_ip1 else pd.DataFrame()
         ep_opts = ["전체"] + get_episode_options(target_rows)
 
@@ -2580,17 +2605,15 @@ def render_comparison():
 
     df_target = df_all[df_all["IP"] == selected_ip1].copy()
 
-    # [핵심 수정] 선택된 회차까지만 데이터 Slice (누적 필터)
-    # 사용자가 "8화" 선택 시, 1~8화 데이터만 남김 -> 이후 모든 KPI/차트 로직은 이 잘린 DF를 사용하므로 자동 반영됨
+    # 회차 누적 필터
     if selected_max_ep != "전체":
-        # "8화" -> 8.0
         try:
             ep_limit = float(re.findall(r'\d+', str(selected_max_ep))[0])
             df_target = df_target[df_target["회차_numeric"] <= ep_limit]
         except:
-            pass # 파싱 실패시 전체 사용
+            pass
     
-    kpis_target = get_agg_kpis_for_ip_page4(df_target) # 필터된 DF로 KPI 계산
+    kpis_target = get_agg_kpis_for_ip_page4(df_target)
 
     # 비교 그룹 데이터 준비
     if comparison_mode == "IP vs 그룹 평균":
@@ -2617,7 +2640,7 @@ def render_comparison():
         if not group_name_parts: group_name_parts.append("전체")
         comp_name = " & ".join(group_name_parts) + " 평균"
 
-        # [핵심 수정] 비교 그룹도 동일하게 회차 필터 적용
+        # 비교 그룹도 회차 필터 적용
         if selected_max_ep != "전체":
              try:
                 ep_limit = float(re.findall(r'\d+', str(selected_max_ep))[0])
@@ -2626,8 +2649,80 @@ def render_comparison():
 
         kpis_comp = get_agg_kpis_for_ip_page4(df_comp)
         
-        # 렌더링
-        _render_kpi_row_ip_vs_group(kpis_target, kpis_comp, comp_name)
+        # [추가] 그룹 내 순위 계산 로직
+        ranks = {}
+        ip_list_in_group = df_comp["IP"].unique()
+        
+        # 비교 대상 그룹에 기준 IP가 없을 경우, 계산을 위해 임시 추가 여부 판단
+        # 하지만 '그룹 평균'과의 비교이므로, 그룹 내에서의 위치를 보려면 
+        # 그룹 내 IP들의 지표 분포를 구해야 함.
+        
+        def _calc_rank_in_group(df_g, target_val, metric_key, higher_good=True):
+            # 1. 그룹 내 모든 IP별 KPI 계산
+            if df_g.empty: return (None, 0)
+            
+            # metric_key에 따라 집계 방식 분기
+            if metric_key in ["T시청률", "H시청률", "화제성 점수"]:
+                # 평균
+                agg = df_g[df_g["metric"] == (metric_key if metric_key != "화제성 점수" else "F_Score")]
+                if agg.empty: return (None, 0)
+                # 회차별 평균 후 IP별 평균
+                ep_agg = agg.groupby(["IP", "회차_numeric"])["value"].mean().reset_index()
+                ip_series = ep_agg.groupby("IP")["value"].mean()
+                
+            elif metric_key in ["TVING VOD", "TVING LIVE"]:
+                media_target = ["TVING LIVE"] if metric_key == "TVING LIVE" else ["TVING VOD", "TVING QUICK"]
+                agg = df_g[(df_g["metric"] == "시청인구") & (df_g["매체"].isin(media_target))]
+                if agg.empty: return (None, 0)
+                # 회차별 합계 후 IP별 평균
+                ep_agg = agg.groupby(["IP", "회차_numeric"])["value"].sum().reset_index()
+                ip_series = ep_agg.groupby("IP")["value"].mean()
+                
+            elif metric_key in ["디지털 조회수", "디지털 언급량"]:
+                if metric_key == "디지털 조회수":
+                    agg = _get_view_data(df_g)
+                else:
+                    agg = df_g[df_g["metric"] == "언급량"]
+                if agg.empty: return (None, 0)
+                # 단순 총합
+                ip_series = agg.groupby("IP")["value"].sum()
+            else:
+                return (None, 0)
+
+            # 2. 기준 IP 값이 시리즈에 있는지 확인 및 순위 산출
+            # (필터링된 그룹 데이터(df_g)에 이미 기준 IP가 포함되어 있다면 그대로 사용,
+            #  없다면 target_val을 별도로 끼워넣어 순위 비교)
+            
+            # Series에 기준 IP 값 강제 삽입 (자신과의 경쟁 포함)
+            if target_val is not None:
+                ip_series[selected_ip1] = target_val
+            
+            if ip_series.empty: return (None, 0)
+            
+            # 순위 계산 (Min 방식: 동점자 처리 고려)
+            ranked = ip_series.rank(method='min', ascending=not higher_good)
+            
+            try:
+                my_rank = int(ranked[selected_ip1])
+                total_cnt = len(ip_series)
+                return (my_rank, total_cnt)
+            except:
+                return (None, len(ip_series))
+
+        # 각 지표별 순위 산출
+        keys_map = {
+            "T시청률": "T시청률", "H시청률": "H시청률", 
+            "TVING LIVE": "TVING LIVE", "TVING VOD": "TVING VOD",
+            "디지털 조회수": "디지털 조회수", "디지털 언급량": "디지털 언급량",
+            "화제성 점수": "화제성 점수"
+        }
+        
+        for k in keys_map:
+            val = kpis_target.get(k)
+            ranks[k] = _calc_rank_in_group(df_comp, val, k)
+
+        # 렌더링 (ranks 전달)
+        _render_kpi_row_ip_vs_group(kpis_target, kpis_comp, ranks, comp_name)
         _render_unified_charts(df_target, df_comp, selected_ip1, comp_name, kpi_percentiles, comp_color="#aaaaaa")
 
     else: # IP vs IP
@@ -2637,7 +2732,6 @@ def render_comparison():
             
         df_comp = df_all[df_all["IP"] == selected_ip2].copy()
 
-        # [핵심 수정] 비교 IP도 회차 필터 적용
         if selected_max_ep != "전체":
              try:
                 ep_limit = float(re.findall(r'\d+', str(selected_max_ep))[0])
