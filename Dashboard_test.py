@@ -1892,7 +1892,6 @@ def render_ip_detail():
         sub = sub[sub["성별"].isin(["남", "여"]) & sub["연령대_대"].notna()].copy()
 
         # 3. [핵심] 상위에서 넘어온 회차_num이 있어도 무시하고(del), 강제로 다시 계산
-        #    이유: 상위 로직에서 "종영"을 NaN으로 만들어버렸을 수 있음
         if "회차_num" in sub.columns:
             del sub["회차_num"]
 
@@ -1902,16 +1901,8 @@ def render_ip_detail():
         # (1) 숫자 추출
         sub["회차_num"] = sub["회차_str"].str.extract(r"(\d+)", expand=False).astype(float)
         
-        # (2) "종영" 또는 "최종" 텍스트가 있는데 숫자가 안 뽑힌 경우 -> 가상의 큰 숫자(999) 부여해서 살림
-        #     예: "종영" -> 999, "16화(종영)" -> 16 (이미 뽑힘)
-        mask_final = (sub["회차_num"].isna()) & (sub["회차_str"].str.contains("종영|최종|마지막", regex=True))
-        if mask_final.any():
-            # 기존 회차 중 가장 큰 값 + 1을 부여하거나, 없으면 999 부여
-            max_ep = sub["회차_num"].max()
-            fill_val = 999 if pd.isna(max_ep) else max_ep + 1
-            sub.loc[mask_final, "회차_num"] = fill_val
-
-        # (3) 그래도 NaN인 행(순수 텍스트 등)은 제거
+        # [수정] "종영" 텍스트만 있고 숫자가 없는 행은 데이터가 아니므로 제거 (기존의 999 변환 로직 삭제)
+        # "16화(종영)" 처럼 숫자가 있는 경우는 위에서 16이 추출되므로 유지됩니다.
         sub = sub.dropna(subset=["회차_num"])
         
         if sub.empty:
@@ -1928,13 +1919,11 @@ def render_ip_detail():
             
         pvt = pvt[DEMO_COLS_ORDER].sort_index()
 
-        # 5. [핵심] 회차 표시명 복구 (999 등 가상 숫자를 '종영' 등으로 표기)
-        def _fmt_ep_custom(n):
-            if n >= 900: # 위에서 999로 처리한 경우
-                return "최종화(종영)"
+        # 5. 회차 표시명 포맷팅
+        def _fmt_ep_simple(n):
             return f"{int(n):02d}화"
 
-        pvt.insert(0, "회차", pvt.index.map(_fmt_ep_custom))
+        pvt.insert(0, "회차", pvt.index.map(_fmt_ep_simple))
         
         return pvt.reset_index(drop=True)
 
