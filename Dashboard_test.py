@@ -1875,111 +1875,81 @@ def render_ip_detail():
 
     st.divider()
 
-# === [Row5] 데모분석 상세 표 (AgGrid) ===
+    # === [Row5] 데모분석 상세 표 (AgGrid) ===
     st.markdown("#### 👥 회차별 시청자수 분포")
 
     def _build_demo_table_numeric(df_src, medias):
         sub = df_src[(df_src["metric"]=="시청인구") & (df_src["데모"].notna()) & (df_src["매체"].isin(medias))].copy()
-        if sub.empty: return pd.DataFrame(columns=["회차"] + DEMO_COLS_ORDER)
+        if sub.empty: 
+            return pd.DataFrame(columns=["회차"] + DEMO_COLS_ORDER)
+        
         sub["성별"] = sub["데모"].apply(_gender_from_demo)
         sub["연령대_대"] = sub["데모"].apply(_decade_label_clamped)
         sub = sub[sub["성별"].isin(["남", "여"]) & sub["연령대_대"].notna()].copy()
+        
         if "회차_num" not in sub.columns:
             sub["회차_num"] = sub["회차"].str.extract(r"(\d+)", expand=False).astype(float)
         sub = sub.dropna(subset=["회차_num"])
         sub["회차_num"] = sub["회차_num"].astype(int)
-        sub["라벨"] = sub.apply(lambda r: f"{r['연령대_대']}{'남성' if r['성별']=='남' else '여성'}", axis=1)
-        pvt = sub.pivot_table(index="회차_num", columns="라벨", values="value", aggfunc="sum").fillna(0)
+        
+        sub["라벨"] = sub.apply(
+            lambda r: f"{r['연령대_대']}{'남성' if r['성별']=='남' else '여성'}",
+            axis=1
+        )
+        
+        pvt = sub.pivot_table(
+            index="회차_num", 
+            columns="라벨", 
+            values="value", 
+            aggfunc="sum"
+        ).fillna(0)
+        
         for c in DEMO_COLS_ORDER:
-            if c not in pvt.columns: pvt[c] = 0
+            if c not in pvt.columns:
+                pvt[c] = 0
+        
         pvt = pvt[DEMO_COLS_ORDER].sort_index()
         pvt.insert(0, "회차", pvt.index.map(_fmt_ep))
+        
         return pvt.reset_index(drop=True)
-
-    # [수정] 작은 삼각형(▴, ▾) 적용 & 클래스 방식 렌더러
-    diff_renderer = JsCode("""
-    class DiffRenderer {
-      init(params) {
-        this.eGui = document.createElement('span');
-        
-        const api = params.api;
-        const colId = params.column.getColId();
-        const rowIndex = params.node.rowIndex;
-        const val = Number(params.value || 0);
-        
-        // 1. 숫자 포맷팅
-        let displayVal = colId === "회차" ? params.value : Math.round(val).toLocaleString();
-        
-        // 2. 화살표 로직
-        let arrow = "";
-        if (colId !== "회차" && rowIndex > 0) {
-          const prev = api.getDisplayedRowAtIndex(rowIndex - 1);
-          if (prev && prev.data && prev.data[colId] != null) {
-            const pv = Number(prev.data[colId] || 0);
-            
-            if (val > pv) {
-               // 상승: (▴) 작은 삼각형, 빨간색
-               arrow = '<span style="margin-left:4px;">(<span style="color:#d93636;">▴</span>)</span>';
-            } else if (val < pv) {
-               // 하락: (▾) 작은 삼각형, 파란색
-               arrow = '<span style="margin-left:4px;">(<span style="color:#2a61cc;">▾</span>)</span>';
-            }
-          }
-        }
-        
-        // 3. HTML 주입
-        this.eGui.innerHTML = displayVal + arrow;
-      }
-
-      getGui() {
-        return this.eGui;
-      }
-    }
-    """)
-
-    _js_demo_cols = "[" + ",".join([f'"{c}"' for c in DEMO_COLS_ORDER]) + "]"
-    cell_style_renderer = JsCode(f"""
-    function(params){{
-      const field = params.colDef.field;
-      if (field === "회차") return {{'text-align':'left','font-weight':'600','background-color':'#fff'}};
-      const COLS = {_js_demo_cols};
-      let rowVals = [];
-      for (let k of COLS) {{
-        const v = Number((params.data && params.data[k] != null) ? params.data[k] : NaN);
-        if (!isNaN(v)) rowVals.push(v);
-      }}
-      let bg = '#ffffff';
-      if (rowVals.length > 0) {{
-        const v = Number(params.value || 0);
-        const mn = Math.min.apply(null, rowVals);
-        const mx = Math.max.apply(null, rowVals);
-        let norm = 0.5;
-        if (mx > mn) norm = (v - mn) / (mx - mn);
-        const alpha = 0.12 + 0.45 * Math.max(0, Math.min(1, norm));
-        bg = 'rgba(30,90,255,' + alpha.toFixed(3) + ')';
-      }}
-      return {{'background-color': bg, 'text-align': 'right', 'padding': '2px 4px', 'font-weight': '500'}};
-    }}""")
 
     def _render_aggrid_table(df_numeric, title):
         st.markdown(f"###### {title}")
-        if df_numeric.empty: st.info("데이터 없음"); return
+        if df_numeric.empty:
+            st.info("데이터 없음")
+            return
+
+        # 기본 GridOptions 설정
         gb = GridOptionsBuilder.from_dataframe(df_numeric)
-        gb.configure_grid_options(rowHeight=34, suppressMenuHide=True, domLayout='autoHeight')
-        gb.configure_default_column(sortable=False, resizable=True, filter=False, cellStyle={'textAlign': 'right'}, headerClass='centered-header bold-header')
-        gb.configure_column("회차", header_name="회차", cellStyle={'textAlign': 'left'})
-        
+        gb.configure_grid_options(
+            rowHeight=34, 
+            suppressMenuHide=True, 
+            domLayout='autoHeight'
+        )
+        gb.configure_default_column(
+            sortable=False,
+            resizable=True,
+            filter=False,
+            cellStyle={'textAlign': 'right'},
+            headerClass='centered-header bold-header'
+        )
+        gb.configure_column(
+            "회차", 
+            header_name="회차", 
+            cellStyle={'textAlign': 'left'}
+        )
+
+        # 나머지 컬럼은 기본 숫자 표시만 (JS 렌더러 제거)
         for c in [col for col in df_numeric.columns if col != "회차"]:
-            gb.configure_column(c, header_name=c, cellRenderer=diff_renderer, cellStyle=cell_style_renderer)
-            
-        # [수정] fit_columns_on_grid_load=True 추가 (가로 폭 맞춤)
+            gb.configure_column(c, header_name=c)
+
         AgGrid(
-            df_numeric, 
-            gridOptions=gb.build(), 
-            theme="streamlit", 
-            height=None, 
-            update_mode=GridUpdateMode.NO_UPDATE, 
-            allow_unsafe_jscode=True,
+            df_numeric,
+            gridOptions=gb.build(),
+            theme="streamlit",
+            height=None,
+            update_mode=GridUpdateMode.NO_UPDATE,
+            allow_unsafe_jscode=False,  # JS 안 쓰므로 비활성화
             fit_columns_on_grid_load=True
         )
 
@@ -1988,6 +1958,7 @@ def render_ip_detail():
 
     tving_numeric = _build_demo_table_numeric(f, ["TVING LIVE", "TVING QUICK", "TVING VOD"])
     _render_aggrid_table(tving_numeric, "▶︎ TVING 합산 시청자수")
+
 #endregion
 
 
