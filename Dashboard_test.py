@@ -1999,7 +1999,6 @@ def render_ip_detail():
             height=None, 
             update_mode=GridUpdateMode.NO_UPDATE, 
             allow_unsafe_jscode=True,
-            fit_columns_on_grid_load=True
         )
 
     tv_numeric = _build_demo_table_numeric(f, ["TV"])
