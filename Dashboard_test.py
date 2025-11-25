@@ -1989,43 +1989,46 @@ def render_ip_detail():
       }}
     }}""")
 
+# [진단 모드] 꾸미기 기능(JS) 제거 + 데이터 강제 출력 + 높이 고정
     def _render_aggrid_table(df_numeric, title):
         st.markdown(f"###### {title}")
         
-        # [디버깅용] 데이터프레임이 비어있으면 메시지 출력
-        if df_numeric.empty: 
-            st.info("⚠️ 데이터 집계 결과가 없습니다. (필터 조건 확인 필요)")
+        # 1. 데이터 생존 여부 확인 (화면에 날것 그대로 찍어보기)
+        if df_numeric.empty:
+            st.error(f"❌ '{title}' 데이터가 텅 비어있습니다. 필터링 로직을 확인해야 합니다.")
             return
-
-        # [디버깅용] 아래 주석을 풀면, AgGrid 위에 원본 데이터를 보여줍니다.
-        # 데이터는 있는데 AgGrid가 안 나오면 -> JS 문제
-        # 데이터 자체가 이상하면 -> Python 로직 문제
-        # st.caption("▼ 디버깅용 원본 데이터 미리보기")
-        # st.dataframe(df_numeric.head(3)) 
-
-        gb = GridOptionsBuilder.from_dataframe(df_numeric)
-        gb.configure_grid_options(rowHeight=34, suppressMenuHide=True, domLayout='autoHeight')
-        gb.configure_default_column(sortable=False, resizable=True, filter=False, cellStyle={'textAlign': 'right'}, headerClass='centered-header bold-header')
-        gb.configure_column("회차", header_name="회차", cellStyle={'textAlign': 'left'})
         
+        # 2. 데이터가 있다면, 스트림릿 기본 표로 먼저 보여주기 (AgGrid 문제인지 확인용)
+        # 만약 이 표는 보이는데 아래 AgGrid가 안 보이면 -> AgGrid 설정 문제
+        with st.expander(f"🔍 {title} - 원본 데이터 확인 (클릭)", expanded=False):
+            st.dataframe(df_numeric)
+
+        # 3. AgGrid 설정 (JS 제거, 안전한 설정)
+        gb = GridOptionsBuilder.from_dataframe(df_numeric)
+        
+        # 높이 자동 조절(autoHeight) 대신 고정 높이 사용 (버그 방지)
+        # 꾸미기(JsCode) 전부 제거하고 기본 텍스트로만 출력
+        gb.configure_grid_options(rowHeight=30, suppressMenuHide=True)
+        gb.configure_default_column(sortable=True, resizable=True, filter=True, cellStyle={'textAlign': 'center'})
+        
+        gb.configure_column("회차", pinned="left", cellStyle={'textAlign': 'left', 'fontWeight': 'bold'})
+
+        # 컬럼별 설정 (색상/화살표 로직 일단 뺌)
         for c in [col for col in df_numeric.columns if col != "회차"]:
-            gb.configure_column(c, header_name=c, cellRenderer=diff_renderer, cellStyle=cell_style_renderer)
+            gb.configure_column(c, header_name=c)
             
+        grid_options = gb.build()
+
+        st.caption("▼ 아래 표가 AgGrid입니다.")
         AgGrid(
             df_numeric, 
-            gridOptions=gb.build(), 
+            gridOptions=grid_options, 
             theme="streamlit", 
-            height=None, 
+            height=300, # 높이 강제 고정
+            fit_columns_on_grid_load=False, # 가로폭 강제 맞춤 해제 (스크롤 생기게)
             update_mode=GridUpdateMode.NO_UPDATE, 
-            allow_unsafe_jscode=True,
-            fit_columns_on_grid_load=True
+            allow_unsafe_jscode=False # JS 코드 실행 차단
         )
-
-    tv_numeric = _build_demo_table_numeric(f, ["TV"])
-    _render_aggrid_table(tv_numeric, "📺 TV (시청자수)")
-
-    tving_numeric = _build_demo_table_numeric(f, ["TVING LIVE", "TVING QUICK", "TVING VOD"])
-    _render_aggrid_table(tving_numeric, "▶︎ TVING 합산 시청자수")
     
 #endregion
 
