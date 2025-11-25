@@ -410,7 +410,7 @@ pio.templates.default = 'dashboard_theme'
 def load_data() -> pd.DataFrame:
     """
     [수정] Streamlit Secrets와 gspread를 사용하여 비공개 Google Sheet에서 데이터를 인증하고 로드합니다.
-    st.secrets에 'gcp_service_account', 'SHEET_ID', 'SHEET_NAME'이 있어야 합니다.
+    데이터 로드 직후 '회차_numeric' 및 'value' 컬럼의 타입을 강제로 안전하게 변환합니다.
     """
     
     # --- 1. Google Sheets 인증 ---
@@ -441,30 +441,40 @@ def load_data() -> pd.DataFrame:
         st.error(f"Google Sheets 데이터 로드 중 오류 발생: {e}")
         return pd.DataFrame()
 
-    # --- 3. 데이터 전처리 (원본 코드와 동일) ---
+    # --- 3. 데이터 전처리 ---
+    # (1) 날짜 변환
     if "주차시작일" in df.columns:
         df["주차시작일"] = pd.to_datetime(
             df["주차시작일"].astype(str).str.strip(),
-            format="%Y. %m. %d", 
-            errors="coerce"
+            format="%Y. %m. %d", errors="coerce"
         )
     if "방영시작일" in df.columns:
         df["방영시작일"] = pd.to_datetime(
             df["방영시작일"].astype(str).str.strip(),
-            format="%Y. %m. %d", 
-            errors="coerce"
+            format="%Y. %m. %d", errors="coerce"
         )
 
+    # (2) Value(수치) 안전 변환 (쉼표, % 제거 후 float)
     if "value" in df.columns:
         v = df["value"].astype(str).str.replace(",", "", regex=False).str.replace("%", "", regex=False)
         df["value"] = pd.to_numeric(v, errors="coerce").fillna(0)
 
+    # (3) 문자열 컬럼 공백 제거
     for c in ["IP", "편성", "지표구분", "매체", "데모", "metric", "회차", "주차"]:
         if c in df.columns:
             df[c] = df[c].astype(str).str.strip() 
 
+    # (4) [핵심] 회차_numeric 안전 생성
+    # "종영", "스페셜" 등이 섞여 있어도 숫자만 추출하여 float로 변환
     if "회차" in df.columns:
-        df["회차_numeric"] = df["회차"].str.extract(r"(\d+)", expand=False).astype(float)
+        # 문자열로 확실히 변환
+        df["_ep_temp_str"] = df["회차"].astype(str)
+        # 정규식으로 숫자만 추출
+        df["회차_numeric"] = df["_ep_temp_str"].str.extract(r"(\d+)", expand=False)
+        # 숫자로 변환 (실패 시 NaN)
+        df["회차_numeric"] = pd.to_numeric(df["회차_numeric"], errors="coerce")
+        # 임시 컬럼 삭제
+        del df["_ep_temp_str"]
     else:
         df["회차_numeric"] = pd.NA
 
@@ -473,17 +483,13 @@ def load_data() -> pd.DataFrame:
 # ===== 3.2. UI / 포맷팅 헬퍼 함수 =====
 
 def fmt(v, digits=3, intlike=False):
-    """
-    숫자 포맷팅 헬퍼 (None이나 NaN은 '–'로 표시)
-    """
+    """숫자 포맷팅 헬퍼 (None이나 NaN은 '–'로 표시)"""
     if v is None or pd.isna(v):
         return "–"
     return f"{v:,.0f}" if intlike else f"{v:.{digits}f}"
 
 def kpi(col, title, value):
-    """
-    Streamlit 컬럼 내에 KPI 카드를 렌더링합니다. (CSS .kpi-card 필요)
-    """
+    """Streamlit 컬럼 내에 KPI 카드를 렌더링합니다."""
     with col:
         st.markdown(
             f'<div class="kpi-card"><div class="kpi-title">{title}</div>'
@@ -492,9 +498,7 @@ def kpi(col, title, value):
         )
 
 def render_gradient_title(main_text: str, emoji: str = "🎬"):
-    """
-    사이드바용 그라디언트 타이틀을 렌더링합니다. (CSS .page-title-wrap 필요)
-    """
+    """사이드바용 그라디언트 타이틀을 렌더링합니다."""
     st.markdown(
         f"""
         <div class="page-title-wrap">
@@ -508,23 +512,16 @@ def render_gradient_title(main_text: str, emoji: str = "🎬"):
 # ===== 3.3. 페이지 라우팅 / 데이터 헬퍼 함수 =====
 
 def get_current_page_default(default="Overview"):
-    """
-    URL 쿼리 파라미터(?page=...)에서 현재 페이지를 읽어옵니다.
-    """
     try:
         qp = st.query_params
         p = qp.get("page", None)
-        if p is None:
-            return default
+        if p is None: return default
         return p if isinstance(p, str) else p[0]
     except Exception:
         qs = st.experimental_get_query_params()
         return (qs.get("page", [default])[0])
 
 def _set_page_query_param(page_key: str):
-    """
-    URL 쿼리 파라미터에 page 키를 설정합니다. (리로드 없음)
-    """
     try:
         qp = st.query_params
         qp["page"] = page_key
@@ -533,9 +530,10 @@ def _set_page_query_param(page_key: str):
         st.experimental_set_query_params(page=page_key)
 
 def get_episode_options(df: pd.DataFrame) -> List[str]:
-    """데이터에서 사용 가능한 회차 목록 (문자열, '00' 제외, '차'/'화' 제거)을 추출합니다."""
-    
+    """데이터에서 사용 가능한 회차 목록 (문자열)을 추출합니다."""
     valid_options = []
+    
+    # 회차_numeric 우선 사용
     if "회차_numeric" in df.columns:
         unique_episodes_num = sorted([
             int(ep) for ep in df["회차_numeric"].dropna().unique() if ep > 0
@@ -543,31 +541,31 @@ def get_episode_options(df: pd.DataFrame) -> List[str]:
         if unique_episodes_num:
             max_ep_num = unique_episodes_num[-1]
             for ep_num in unique_episodes_num: valid_options.append(str(ep_num))
+            
+            # 마지막화 표기 로직
             last_ep_str_num = str(max_ep_num)
             if last_ep_str_num in valid_options and valid_options[-1] != last_ep_str_num:
                  valid_options.remove(last_ep_str_num); valid_options.append(last_ep_str_num)
             if len(valid_options) > 0 and "(마지막화)" not in valid_options[-1]:
                  valid_options[-1] = f"{valid_options[-1]} (마지막화)"
             return valid_options
-        else: return []
-    elif "회차" in df.columns:
+            
+    # 회차_numeric이 없으면 문자열 컬럼 파싱 (fallback)
+    if "회차" in df.columns:
         raw_options = sorted(df["회차"].dropna().unique())
+        temp_opts = []
         for opt in raw_options:
-            if not opt.startswith("00"):
-                cleaned_opt = re.sub(r"[화차]", "", opt)
-                if cleaned_opt.isdigit() and int(cleaned_opt) > 0: 
-                    valid_options.append(cleaned_opt)
-        return sorted(list(set(valid_options)), key=lambda x: int(x) if x.isdigit() else float('inf')) 
-    else: return []
+            cleaned = re.sub(r"[화차]", "", str(opt))
+            if cleaned.isdigit() and int(cleaned) > 0:
+                temp_opts.append(cleaned)
+        return sorted(list(set(temp_opts)), key=lambda x: int(x))
+        
+    return []
 
-# [신규] 피드백 3번 반영: 조회수 필터 로직 통합
 def _get_view_data(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    '조회수' metric만 필터링하고, 유튜브 PGC/UGC 규칙을 적용하는 공통 유틸.
-    """
+    """'조회수' metric만 필터링하고, 유튜브 PGC/UGC 규칙을 적용하는 공통 유틸."""
     sub = df[df["metric"] == "조회수"].copy()
-    if sub.empty:
-        return sub
+    if sub.empty: return sub
         
     if "매체" in sub.columns and "세부속성1" in sub.columns:
         yt_mask = (sub["매체"] == "유튜브")
@@ -683,28 +681,27 @@ def mean_of_ip_sums(df: pd.DataFrame, metric_name: str, media=None) -> float | N
 
 # ===== 6.1. 데모 문자열 파싱 유틸 =====
 def _gender_from_demo(s: str):
-    """'데모' 문자열에서 성별(남/여/기타)을 추출합니다. (페이지 1, 2, 4용)"""
+    """'데모' 문자열에서 성별(남/여/기타)을 추출합니다."""
     s = str(s)
     if any(k in s for k in ["여", "F", "female", "Female"]): return "여"
     if any(k in s for k in ["남", "M", "male", "Male"]): return "남"
     return "기타"
 
 def gender_from_demo(s: str):
-    """ '데모' 문자열에서 성별 (남/여) 추출, 그 외 None (페이지 3용) """
     s = str(s)
     if any(k in s for k in ["여", "F", "female", "Female"]): return "여"
     if any(k in s for k in ["남", "M", "male", "Male"]):     return "남"
     return None
 
 def _to_decade_label(x: str):
-    """'데모' 문자열에서 연령대(10대, 20대...)를 추출합니다. (페이지 1, 2, 4용)"""
+    """'데모' 문자열에서 연령대(10대, 20대...)를 추출합니다."""
     m = re.search(r"\d+", str(x))
     if not m: return "기타"
     n = int(m.group(0))
     return f"{(n//10)*10}대"
 
 def _decade_label_clamped(x: str):
-    """ 10대~60대 범위로 연령대 라벨 생성, 그 외는 None (페이지 2, 3용) """
+    """ 10대~60대 범위로 연령대 라벨 생성, 그 외는 None """
     m = re.search(r"\d+", str(x))
     if not m: return None
     n = int(m.group(0))
@@ -712,12 +709,11 @@ def _decade_label_clamped(x: str):
     return f"{n}대"
 
 def _decade_key(s: str):
-    """연령대 정렬을 위한 숫자 키를 추출합니다. (페이지 1, 2, 4용)"""
     m = re.search(r"\d+", str(s))
     return int(m.group(0)) if m else 999
 
 def _fmt_ep(n):
-    """ 회차 번호를 '01화' 형태로 포맷팅 (페이지 2, 3용) """
+    """ 회차 번호를 '01화' 형태로 포맷팅 """
     try:
         return f"{int(n):02d}화"
     except Exception:
@@ -728,7 +724,6 @@ COLOR_MALE = "#2a61cc"
 COLOR_FEMALE = "#d93636"
 
 def render_gender_pyramid(container, title: str, df_src: pd.DataFrame, height: int = 260):
-
     if df_src.empty:
         container.info("표시할 데이터가 없습니다.")
         return
@@ -754,84 +749,46 @@ def render_gender_pyramid(container, title: str, df_src: pd.DataFrame, height: i
 
     male = -pvt.get("남", pd.Series(0, index=pvt.index))
     female = pvt.get("여", pd.Series(0, index=pvt.index))
-
     max_abs = float(max(male.abs().max(), female.max()) or 1)
-
+    
     male_share = (male.abs() / male.abs().sum() * 100) if male.abs().sum() else male.abs()
     female_share = (female / female.sum() * 100) if female.sum() else female
 
-    male_text = [f"{v:.1f}%" for v in male_share]
-    female_text = [f"{v:.1f}%" for v in female_share]
-
     fig = go.Figure()
     fig.add_trace(go.Bar(
-        y=pvt.index, x=male, name="남",
-        orientation="h",
-        marker_color=COLOR_MALE,
-        text=male_text,
-        textposition="inside",
-        insidetextanchor="end",
+        y=pvt.index, x=male, name="남", orientation="h", marker_color=COLOR_MALE,
+        text=[f"{v:.1f}%" for v in male_share], textposition="inside", insidetextanchor="end",
         textfont=dict(color="#ffffff", size=12),
-        hovertemplate="연령대=%{y}<br>남성=%{customdata[0]:,.0f}명<br>성별내 비중=%{customdata[1]:.1f}%<extra></extra>",
+        hovertemplate="연령대=%{y}<br>남성=%{customdata[0]:,.0f}명<br>비중=%{customdata[1]:.1f}%<extra></extra>",
         customdata=np.column_stack([male.abs(), male_share])
     ))
     fig.add_trace(go.Bar(
-        y=pvt.index, x=female, name="여",
-        orientation="h",
-        marker_color=COLOR_FEMALE,
-        text=female_text,
-        textposition="inside",
-        insidetextanchor="start",
+        y=pvt.index, x=female, name="여", orientation="h", marker_color=COLOR_FEMALE,
+        text=[f"{v:.1f}%" for v in female_share], textposition="inside", insidetextanchor="start",
         textfont=dict(color="#ffffff", size=12),
-        hovertemplate="연령대=%{y}<br>여성=%{customdata[0]:,.0f}명<br>성별내 비중=%{customdata[1]:.1f}%<extra></extra>",
+        hovertemplate="연령대=%{y}<br>여성=%{customdata[0]:,.0f}명<br>비중=%{customdata[1]:.1f}%<extra></extra>",
         customdata=np.column_stack([female, female_share])
     ))
 
     fig.update_layout(
-        barmode="overlay",
-        height=height,
-        margin=dict(l=8, r=8, t=48, b=8),
-        legend_title=None,
-        bargap=0.15,
-        bargroupgap=0.05,
+        barmode="overlay", height=height, margin=dict(l=8, r=8, t=48, b=8),
+        legend_title=None, bargap=0.15,
+        title=dict(text=title, x=0.0, y=0.98, font=dict(size=14))
     )
-    # 피라미드 차트 전용 로컬 제목 (전역 테마 오버라이드)
-    fig.update_layout(
-        title=dict(
-            text=title,
-            x=0.0, xanchor="left",
-            y=0.98, yanchor="top",
-            font=dict(size=14)
-        )
-    )
-    fig.update_yaxes(
-        categoryorder="array",
-        categoryarray=order,
-        title=None,
-        tickfont=dict(size=12),
-        fixedrange=True
-    )
+    fig.update_yaxes(categoryorder="array", categoryarray=order, fixedrange=True)
     fig.update_xaxes(
-        range=[-max_abs*1.05, max_abs*1.05],
-        title=None,
-        showticklabels=False,
-        showgrid=False,
-        zeroline=True,
-        zerolinewidth=1,
-        zerolinecolor="#888",
-        fixedrange=True
+        range=[-max_abs*1.05, max_abs*1.05], showticklabels=False, showgrid=False, 
+        zeroline=True, zerolinecolor="#888", fixedrange=True
     )
+    container.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
 
-    container.plotly_chart(fig, use_container_width=True,
-                           config={"scrollZoom": False, "staticPlot": False, "displayModeBar": False})
-
-# ===== 6.3. 그룹 데모 평균 계산 (페이지 3, 4 통합용) =====
+# ===== 6.3. 그룹 데모 평균 계산 (페이지 3, 4 통합용) - [수정됨] =====
 def get_avg_demo_pop_by_episode(df_src: pd.DataFrame, medias: List[str], max_ep: float = None) -> pd.DataFrame:
     """
     여러 IP가 포함된 df_src에서, 회차별/데모별 *평균* 시청자수(시청인구)를 계산합니다.
-    [수정] max_ep 파라미터 추가: 지정된 회차까지만 필터링하여 계산
+    [수정] "종영" 제거, 숫자형 강제 변환, 중복 데이터 합산 로직 적용
     """
-    # 1. 매체 및 지표 필터링
+    # 1. 기본 필터링
     sub = df_src[
         (df_src["metric"] == "시청인구") &
         (df_src["데모"].notna()) &
@@ -841,47 +798,61 @@ def get_avg_demo_pop_by_episode(df_src: pd.DataFrame, medias: List[str], max_ep:
     if sub.empty:
         return pd.DataFrame(columns=["회차"] + DEMO_COLS_ORDER)
     
-    # 2. 회차 Numeric 컬럼 확보 및 필터링
+    # 2. [강력한 필터] "종영", "최종", "스페셜" 등 텍스트 포함 행 강제 제거
+    exclude_keywords = "종영|최종|스페셜|마지막"
+    mask_exclude = sub["회차"].astype(str).str.contains(exclude_keywords, regex=True, na=False)
+    sub = sub[~mask_exclude]
+
+    # 3. 회차 Numeric 안전 추출 (혹시 load_data에서 놓쳤을 경우 대비)
     if "회차_numeric" not in sub.columns:
-        sub["회차_numeric"] = sub["회차"].str.extract(r"(\d+)", expand=False).astype(float)
+         sub["회차_numeric"] = sub["회차"].astype(str).str.extract(r"(\d+)", expand=False)
     
+    sub["회차_numeric"] = pd.to_numeric(sub["회차_numeric"], errors="coerce")
     sub = sub.dropna(subset=["회차_numeric"])
     
-    # [핵심] max_ep가 있으면 그 이하 회차만 남김
+    # max_ep 필터링
     if max_ep is not None:
         sub = sub[sub["회차_numeric"] <= max_ep]
 
     if sub.empty:
         return pd.DataFrame(columns=["회차"] + DEMO_COLS_ORDER)
 
-    sub["value"] = pd.to_numeric(sub["value"], errors="coerce").replace(0, np.nan)
+    # 4. Value 안전 변환
+    sub["value"] = pd.to_numeric(sub["value"], errors="coerce").fillna(0)
     sub = sub.dropna(subset=["value"])
 
+    # 5. 데모 파싱
     sub["성별"] = sub["데모"].apply(gender_from_demo)
     sub["연령대_대"] = sub["데모"].apply(_decade_label_clamped)
     sub = sub[sub["성별"].isin(["남", "여"]) & sub["연령대_대"].notna()].copy()
+    
     sub["회차_num"] = sub["회차_numeric"].astype(int)
-
     sub["라벨"] = sub.apply(lambda r: f"{r['연령대_대']}{'남성' if r['성별']=='남' else '여성'}", axis=1)
 
-    ip_ep_demo_sum = sub.groupby(["IP", "회차_num", "라벨"])["value"].sum().reset_index()
-    ep_demo_mean = ip_ep_demo_sum.groupby(["회차_num", "라벨"])["value"].mean().reset_index()
+    # 6. [중요] 중복 데이터 사전 병합 (IP별, 회차별, 데모별 합산) -> 이후 평균
+    # 먼저 개별 IP 내에서 중복 회차가 있으면 합산
+    ip_ep_demo_sum = sub.groupby(["IP", "회차_num", "라벨"], as_index=False)["value"].sum()
+    
+    # 그 다음, 모든 IP들의 평균을 구함 (비교군 평균 등)
+    ep_demo_mean = ip_ep_demo_sum.groupby(["회차_num", "라벨"], as_index=False)["value"].mean()
 
-    pvt = ep_demo_mean.pivot_table(index="회차_num", columns="라벨", values="value").fillna(0)
+    # 7. 피벗 테이블 (fill_value=0 필수)
+    pvt = ep_demo_mean.pivot_table(index="회차_num", columns="라벨", values="value", fill_value=0)
 
     for c in DEMO_COLS_ORDER:
         if c not in pvt.columns:
-            pvt[c] = 0
+            pvt[c] = 0.0
     pvt = pvt[DEMO_COLS_ORDER].sort_index()
 
+    # 8. 포맷팅
     pvt.insert(0, "회차", pvt.index.map(_fmt_ep))
+    pvt.columns.name = None
+    
     return pvt.reset_index(drop=True)
 
-# ===== 6.4. [이동] 히트맵 렌더링 (구 Region 9에서 이동) =====
+# ===== 6.4. 히트맵 렌더링 =====
 def render_heatmap(df_plot: pd.DataFrame, title: str):
-    """
-    데이터프레임을 받아 Plotly 히트맵을 렌더링합니다.
-    """
+    """데이터프레임을 받아 Plotly 히트맵을 렌더링합니다."""
     st.markdown(f"###### {title}")
 
     if df_plot.empty:
@@ -906,8 +877,7 @@ def render_heatmap(df_plot: pd.DataFrame, title: str):
     
     fig = px.imshow(
         df_heatmap,
-        text_auto=False, 
-        aspect="auto",
+        text_auto=False, aspect="auto",
         color_continuous_scale='RdBu_r', 
         range_color=[-abs_max, abs_max], 
         color_continuous_midpoint=0
@@ -926,9 +896,7 @@ def render_heatmap(df_plot: pd.DataFrame, title: str):
 
     fig.update_layout(
         height=max(520, len(df_heatmap.index) * 46), 
-        xaxis_title=None,
-        yaxis_title=None,
-        xaxis=dict(side="top"),
+        xaxis_title=None, yaxis_title=None, xaxis=dict(side="top"),
     )
     
     c_heatmap, = st.columns(1)
@@ -1878,74 +1846,74 @@ def render_ip_detail():
 # === [Row5] 데모분석 상세 표 (AgGrid) ===
     st.markdown("#### 👥 회차별 시청자수 분포")
 
-# [수정] 데이터 처리 안전장치 강화 (회차 타입 강제 변환, 종영 텍스트 필터링, Value 숫자형 강제)
+# [수정] "종영" 텍스트 명시적 제거 + 중복 데이터 안전 처리 + 디버깅용 예외처리
     def _build_demo_table_numeric(df_src, medias):
-        # 1. 기본 필터링: 지표(시청인구) & 매체 & 데모값이 있는 경우만
-        # [방어 로직] copy()를 사용하여 원본 데이터 보존
+        # 1. 기본 필터링
+        # 원본 데이터 보호를 위해 copy() 필수
         sub = df_src[(df_src["metric"] == "시청인구") & (df_src["데모"].notna()) & (df_src["매체"].isin(medias))].copy()
         
         if sub.empty: 
             return pd.DataFrame(columns=["회차"] + DEMO_COLS_ORDER)
 
-        # 2. 데모 정보 파싱 (성별/연령대 추출)
-        sub["성별"] = sub["데모"].apply(_gender_from_demo)
-        sub["연령대_대"] = sub["데모"].apply(_decade_label_clamped)
-        # 유효한 성별/연령대만 남김
-        sub = sub[sub["성별"].isin(["남", "여"]) & sub["연령대_대"].notna()].copy()
-
-        # 3. [핵심] 회차 정보 정제
-        # 기존 회차_num 컬럼이 있다면 충돌 방지를 위해 제거
-        if "회차_num" in sub.columns:
-            del sub["회차_num"]
-
-        # (1) 회차 컬럼을 문자열로 변환
-        sub["회차_str"] = sub["회차"].astype(str)
-
-        # (2) [추가] "종영"이라는 텍스트가 포함된 행은 데이터 아님 -> 즉시 제거
-        # "16화(종영)"과 같이 숫자가 포함된 경우도 있을 수 있으나, 
-        # 사용자 피드백("TV/티빙데이터가 아냐")에 따라 "종영" 텍스트 행이 노이즈라면 제거하는 것이 안전합니다.
-        # 만약 "16화(종영)"은 살려야 한다면 아래 줄을 주석 처리하고 (3)번 로직에 의존하세요.
-        # sub = sub[~sub["회차_str"].str.contains("종영", na=False)] 
-
-        # (3) 숫자만 정규식으로 추출 ("16화" -> 16, "종영" -> NaN)
-        sub["회차_num"] = sub["회차_str"].str.extract(r"(\d+)", expand=False)
-        
-        # (4) 숫자로 변환 (변환 불가 시 NaN) 후 NaN 행 제거
-        sub["회차_num"] = pd.to_numeric(sub["회차_num"], errors="coerce")
-        sub = sub.dropna(subset=["회차_num"])
-        
-        # 4. [핵심] Value 컬럼 숫자형 강제 변환 (문자열, 특수기호 섞임 방지)
-        sub["value"] = pd.to_numeric(sub["value"], errors="coerce")
-        sub = sub.dropna(subset=["value"])
+        # 2. [강력한 필터] "종영", "최종", "스페셜" 텍스트가 포함된 행을 아예 제외
+        # regex extraction에 의존하지 않고, 문자열 자체를 검사해서 날려버립니다.
+        exclude_keywords = "종영|최종|스페셜|마지막"
+        mask_exclude = sub["회차"].astype(str).str.contains(exclude_keywords, regex=True, na=False)
+        sub = sub[~mask_exclude]
 
         if sub.empty:
             return pd.DataFrame(columns=["회차"] + DEMO_COLS_ORDER)
 
-        # 회차를 정수형으로 변환
-        sub["회차_num"] = sub["회차_num"].astype(int)
+        # 3. 데모 정보 파싱
+        sub["성별"] = sub["데모"].apply(_gender_from_demo)
+        sub["연령대_대"] = sub["데모"].apply(_decade_label_clamped)
+        sub = sub[sub["성별"].isin(["남", "여"]) & sub["연령대_대"].notna()].copy()
+
+        # 4. 회차 숫자 추출 (기존 로직 유지하되 안전장치 추가)
+        if "회차_num" in sub.columns:
+            del sub["회차_num"]
+
+        sub["회차_str"] = sub["회차"].astype(str)
+        sub["회차_num"] = sub["회차_str"].str.extract(r"(\d+)", expand=False)
+        sub["회차_num"] = pd.to_numeric(sub["회차_num"], errors="coerce")
         
-        # 피벗을 위한 라벨 생성 (예: 20대남성)
+        # 숫자로 변환되지 않은 행 제거
+        sub = sub.dropna(subset=["회차_num"])
+        sub["회차_num"] = sub["회차_num"].astype(int)
+
+        # 5. Value 컬럼 안전 처리 (문자열 섞임 방지)
+        sub["value"] = pd.to_numeric(sub["value"], errors="coerce").fillna(0)
+
+        # 6. 피벗 라벨 생성
         sub["라벨"] = sub.apply(lambda r: f"{r['연령대_대']}{'남성' if r['성별']=='남' else '여성'}", axis=1)
 
-        # 5. 피벗 테이블 생성
-        # fill_value=0 을 사용하여 결측치를 0으로 채움
-        pvt = sub.pivot_table(index="회차_num", columns="라벨", values="value", aggfunc="sum", fill_value=0)
+        # 7. [핵심] 중복 데이터 사전 집계 (Pivot 에러 방지)
+        # 같은 회차, 같은 라벨에 데이터가 여러 개 있으면 미리 합쳐버립니다.
+        sub_agg = sub.groupby(["회차_num", "라벨"], as_index=False)["value"].sum()
+
+        if sub_agg.empty:
+            return pd.DataFrame(columns=["회차"] + DEMO_COLS_ORDER)
+
+        # 8. 피벗 테이블 생성
+        try:
+            pvt = sub_agg.pivot_table(index="회차_num", columns="라벨", values="value", fill_value=0)
+        except Exception as e:
+            st.error(f"데이터 집계 중 오류 발생: {e}")
+            return pd.DataFrame(columns=["회차"] + DEMO_COLS_ORDER)
         
-        # 컬럼 순서 맞추기 (없으면 0으로 채움)
+        # 컬럼 순서 보정
         for c in DEMO_COLS_ORDER:
             if c not in pvt.columns: 
                 pvt[c] = 0.0
             
         pvt = pvt[DEMO_COLS_ORDER].sort_index()
 
-        # 6. 회차 표시명 포맷팅 (01화, 02화...)
+        # 9. 회차 포맷팅
         def _fmt_ep_simple(n):
             return f"{int(n):02d}화"
 
         pvt.insert(0, "회차", pvt.index.map(_fmt_ep_simple))
-        
-        # 피벗 과정에서 생긴 컬럼 이름(columns.name) 제거 (AgGrid 호환성)
-        pvt.columns.name = None
+        pvt.columns.name = None # 인덱스 이름 제거
         
         return pvt.reset_index(drop=True)
 
