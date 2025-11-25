@@ -1842,69 +1842,84 @@ def render_ip_detail():
     # === [Row5] 데모분석 상세 표 (AgGrid) ===
     st.markdown("#### 👥 회차별 시청자수 분포")
 
-    # [수정] "종영" 텍스트 명시적 제거 + 중복 데이터 안전 처리 (Region 8 로컬 함수)
-    def _build_demo_table_numeric(df_src, medias):
-        # 1. 기본 필터링: 지표(시청인구) & 매체 & 데모값이 있는 경우만
-        sub = df_src[(df_src["metric"] == "시청인구") & (df_src["데모"].notna()) & (df_src["매체"].isin(medias))].copy()
-        
-        if sub.empty: 
-            return pd.DataFrame(columns=["회차"] + DEMO_COLS_ORDER)
 
-        # 2. [강력한 필터] "종영", "최종", "스페셜" 텍스트 포함 행 강제 제외
-        exclude_keywords = "종영|최종|스페셜|마지막"
-        mask_exclude = sub["회차"].astype(str).str.contains(exclude_keywords, regex=True, na=False)
-        sub = sub[~mask_exclude]
+    # [수정] 회차 문자열에 '종영' 등 비숫자 텍스트가 섞여 있어도 안전하게 집계 (Region 8 로컬 함수)
+    def _build_demo_table_numeric(df_src, medias):
+        """단일 IP(df_src)에서 회차별 데모 시청자수(시청인구)를 집계해
+        AgGrid용 숫자 테이블로 반환한다.
+        - metric == '시청인구'
+        - 매체 in medias
+        - 데모값이 있는 행만 사용
+        - 회차 문자열에서 숫자만 추출해 회차_num으로 사용
+        """
+        # 1. 기본 필터링: 지표(시청인구) & 매체 & 데모값이 있는 경우만
+        sub = df_src[
+            (df_src["metric"] == "시청인구") &
+            (df_src["데모"].notna()) &
+            (df_src["매체"].isin(medias))
+        ].copy()
 
         if sub.empty:
             return pd.DataFrame(columns=["회차"] + DEMO_COLS_ORDER)
 
-        # 3. 데모 파싱
+        # 2. 회차 숫자 추출: '1화', '1회(종영)', '종영' 등 모두 처리
+        sub["_ep_str"] = sub["회차"].astype(str)
+        sub["회차_num"] = sub["_ep_str"].str.extract(r"(\d+)", expand=False)
+        sub["회차_num"] = pd.to_numeric(sub["회차_num"], errors="coerce")
+
+        # 숫자가 전혀 없는 행(예: '종영' 단독)은 제거
+        sub = sub.dropna(subset=["회차_num"])
+        if sub.empty:
+            return pd.DataFrame(columns=["회차"] + DEMO_COLS_ORDER)
+
+        sub["회차_num"] = sub["회차_num"].astype(int)
+        del sub["_ep_str"]
+
+        # 3. value 컬럼 안전 변환
+        sub["value"] = pd.to_numeric(sub["value"], errors="coerce").fillna(0)
+
+        # 4. 데모 파싱
         sub["성별"] = sub["데모"].apply(_gender_from_demo)
         sub["연령대_대"] = sub["데모"].apply(_decade_label_clamped)
         sub = sub[sub["성별"].isin(["남", "여"]) & sub["연령대_대"].notna()].copy()
 
-        # 4. 회차 숫자 강제 추출 (혹시 남아있을 수 있는 오염 방지)
-        if "회차_num" in sub.columns:
-            del sub["회차_num"]
-        
-        sub["회차_str"] = sub["회차"].astype(str)
-        sub["회차_num"] = sub["회차_str"].str.extract(r"(\d+)", expand=False)
-        sub["회차_num"] = pd.to_numeric(sub["회차_num"], errors="coerce")
-        sub = sub.dropna(subset=["회차_num"]) # 숫자로 변환 안되면 버림
-        sub["회차_num"] = sub["회차_num"].astype(int)
+        if sub.empty:
+            return pd.DataFrame(columns=["회차"] + DEMO_COLS_ORDER)
 
-        # 5. Value 컬럼 안전 처리
-        sub["value"] = pd.to_numeric(sub["value"], errors="coerce").fillna(0)
+        # 5. 라벨 생성 (예: '20대남성')
+        sub["라벨"] = sub.apply(
+            lambda r: f"{r['연령대_대']}{'남성' if r['성별'] == '남' else '여성'}",
+            axis=1,
+        )
 
-        # 6. 피벗 라벨 생성
-        sub["라벨"] = sub.apply(lambda r: f"{r['연령대_대']}{'남성' if r['성별']=='남' else '여성'}", axis=1)
-
-        # 7. [핵심] 중복 데이터 사전 집계 (Pivot 에러 방지)
+        # 6. 회차/데모별 시청자수 합산 (중복 데이터 사전 집계)
         sub_agg = sub.groupby(["회차_num", "라벨"], as_index=False)["value"].sum()
-
         if sub_agg.empty:
             return pd.DataFrame(columns=["회차"] + DEMO_COLS_ORDER)
 
-        # 8. 피벗 테이블 생성
-        try:
-            pvt = sub_agg.pivot_table(index="회차_num", columns="라벨", values="value", fill_value=0)
-        except Exception:
-            return pd.DataFrame(columns=["회차"] + DEMO_COLS_ORDER)
-        
-        # 컬럼 순서 보정
+        # 7. 피벗 테이블 생성
+        pvt = sub_agg.pivot_table(
+            index="회차_num",
+            columns="라벨",
+            values="value",
+            fill_value=0,
+        )
+
+        # 8. 컬럼 순서 보정 (누락 컬럼은 0으로 채움)
         for c in DEMO_COLS_ORDER:
-            if c not in pvt.columns: pvt[c] = 0.0
-            
+            if c not in pvt.columns:
+                pvt[c] = 0.0
         pvt = pvt[DEMO_COLS_ORDER].sort_index()
 
-        # 9. 포맷팅
+        # 9. 회차 라벨 포맷팅
         def _fmt_ep_simple(n):
             return f"{int(n):02d}화"
 
         pvt.insert(0, "회차", pvt.index.map(_fmt_ep_simple))
         pvt.columns.name = None
-        
+
         return pvt.reset_index(drop=True)
+
 
 # [수정] 1. JS 렌더러 안전장치 강화 (0으로 나누기 방지, NaN 방어)
     diff_renderer = JsCode("""
@@ -1989,46 +2004,43 @@ def render_ip_detail():
       }}
     }}""")
 
-# [진단 모드] 꾸미기 기능(JS) 제거 + 데이터 강제 출력 + 높이 고정
     def _render_aggrid_table(df_numeric, title):
         st.markdown(f"###### {title}")
         
-        # 1. 데이터 생존 여부 확인 (화면에 날것 그대로 찍어보기)
-        if df_numeric.empty:
-            st.error(f"❌ '{title}' 데이터가 텅 비어있습니다. 필터링 로직을 확인해야 합니다.")
+        # [디버깅용] 데이터프레임이 비어있으면 메시지 출력
+        if df_numeric.empty: 
+            st.info("⚠️ 데이터 집계 결과가 없습니다. (필터 조건 확인 필요)")
             return
-        
-        # 2. 데이터가 있다면, 스트림릿 기본 표로 먼저 보여주기 (AgGrid 문제인지 확인용)
-        # 만약 이 표는 보이는데 아래 AgGrid가 안 보이면 -> AgGrid 설정 문제
-        with st.expander(f"🔍 {title} - 원본 데이터 확인 (클릭)", expanded=False):
-            st.dataframe(df_numeric)
 
-        # 3. AgGrid 설정 (JS 제거, 안전한 설정)
+        # [디버깅용] 아래 주석을 풀면, AgGrid 위에 원본 데이터를 보여줍니다.
+        # 데이터는 있는데 AgGrid가 안 나오면 -> JS 문제
+        # 데이터 자체가 이상하면 -> Python 로직 문제
+        # st.caption("▼ 디버깅용 원본 데이터 미리보기")
+        # st.dataframe(df_numeric.head(3)) 
+
         gb = GridOptionsBuilder.from_dataframe(df_numeric)
+        gb.configure_grid_options(rowHeight=34, suppressMenuHide=True, domLayout='autoHeight')
+        gb.configure_default_column(sortable=False, resizable=True, filter=False, cellStyle={'textAlign': 'right'}, headerClass='centered-header bold-header')
+        gb.configure_column("회차", header_name="회차", cellStyle={'textAlign': 'left'})
         
-        # 높이 자동 조절(autoHeight) 대신 고정 높이 사용 (버그 방지)
-        # 꾸미기(JsCode) 전부 제거하고 기본 텍스트로만 출력
-        gb.configure_grid_options(rowHeight=30, suppressMenuHide=True)
-        gb.configure_default_column(sortable=True, resizable=True, filter=True, cellStyle={'textAlign': 'center'})
-        
-        gb.configure_column("회차", pinned="left", cellStyle={'textAlign': 'left', 'fontWeight': 'bold'})
-
-        # 컬럼별 설정 (색상/화살표 로직 일단 뺌)
         for c in [col for col in df_numeric.columns if col != "회차"]:
-            gb.configure_column(c, header_name=c)
+            gb.configure_column(c, header_name=c, cellRenderer=diff_renderer, cellStyle=cell_style_renderer)
             
-        grid_options = gb.build()
-
-        st.caption("▼ 아래 표가 AgGrid입니다.")
         AgGrid(
             df_numeric, 
-            gridOptions=grid_options, 
+            gridOptions=gb.build(), 
             theme="streamlit", 
-            height=300, # 높이 강제 고정
-            fit_columns_on_grid_load=False, # 가로폭 강제 맞춤 해제 (스크롤 생기게)
+            height=None, 
             update_mode=GridUpdateMode.NO_UPDATE, 
-            allow_unsafe_jscode=False # JS 코드 실행 차단
+            allow_unsafe_jscode=True,
+            fit_columns_on_grid_load=True
         )
+
+    tv_numeric = _build_demo_table_numeric(f, ["TV"])
+    _render_aggrid_table(tv_numeric, "📺 TV (시청자수)")
+
+    tving_numeric = _build_demo_table_numeric(f, ["TVING LIVE", "TVING QUICK", "TVING VOD"])
+    _render_aggrid_table(tving_numeric, "▶︎ TVING 합산 시청자수")
     
 #endregion
 
