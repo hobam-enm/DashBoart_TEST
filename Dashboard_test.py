@@ -1061,7 +1061,7 @@ def render_overview():
     kpi(c4, "⚡ 티빙 당일 VOD UV", fmt(tving_quick, intlike=True)) 
     kpi(c5, "▶️ 티빙 주간 VOD UV", fmt(tving_vod, intlike=True))   
     
-    kpi(c6, "👀 디지털 조회", fmt(digital_view, intlike=True))
+    kpi(c6, "👀 디지털 조회수", fmt(digital_view, intlike=True))
     kpi(c7, "💬 디지털 언급량", fmt(digital_buzz, intlike=True))
     kpi(c8, "🔥 화제성 점수",  fmt(f_score, intlike=True))
     kpi(c9, "🥇 펀덱스 1위", f"{fundex_top1}작품")
