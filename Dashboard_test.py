@@ -410,7 +410,7 @@ pio.templates.default = 'dashboard_theme'
 def load_data() -> pd.DataFrame:
     """
     [수정] Streamlit Secrets와 gspread를 사용하여 비공개 Google Sheet에서 데이터를 인증하고 로드합니다.
-    데이터 로드 직후 '회차_numeric' 및 'value' 컬럼의 타입을 강제로 안전하게 변환합니다.
+    st.secrets에 'gcp_service_account', 'SHEET_ID', 'SHEET_NAME'이 있어야 합니다.
     """
     
     # --- 1. Google Sheets 인증 ---
@@ -441,40 +441,30 @@ def load_data() -> pd.DataFrame:
         st.error(f"Google Sheets 데이터 로드 중 오류 발생: {e}")
         return pd.DataFrame()
 
-    # --- 3. 데이터 전처리 ---
-    # (1) 날짜 변환
+    # --- 3. 데이터 전처리 (원본 코드와 동일) ---
     if "주차시작일" in df.columns:
         df["주차시작일"] = pd.to_datetime(
             df["주차시작일"].astype(str).str.strip(),
-            format="%Y. %m. %d", errors="coerce"
+            format="%Y. %m. %d", 
+            errors="coerce"
         )
     if "방영시작일" in df.columns:
         df["방영시작일"] = pd.to_datetime(
             df["방영시작일"].astype(str).str.strip(),
-            format="%Y. %m. %d", errors="coerce"
+            format="%Y. %m. %d", 
+            errors="coerce"
         )
 
-    # (2) Value(수치) 안전 변환 (쉼표, % 제거 후 float)
     if "value" in df.columns:
         v = df["value"].astype(str).str.replace(",", "", regex=False).str.replace("%", "", regex=False)
         df["value"] = pd.to_numeric(v, errors="coerce").fillna(0)
 
-    # (3) 문자열 컬럼 공백 제거
     for c in ["IP", "편성", "지표구분", "매체", "데모", "metric", "회차", "주차"]:
         if c in df.columns:
             df[c] = df[c].astype(str).str.strip() 
 
-    # (4) [핵심] 회차_numeric 안전 생성
-    # "종영", "스페셜" 등이 섞여 있어도 숫자만 추출하여 float로 변환
     if "회차" in df.columns:
-        # 문자열로 확실히 변환
-        df["_ep_temp_str"] = df["회차"].astype(str)
-        # 정규식으로 숫자만 추출
-        df["회차_numeric"] = df["_ep_temp_str"].str.extract(r"(\d+)", expand=False)
-        # 숫자로 변환 (실패 시 NaN)
-        df["회차_numeric"] = pd.to_numeric(df["회차_numeric"], errors="coerce")
-        # 임시 컬럼 삭제
-        del df["_ep_temp_str"]
+        df["회차_numeric"] = df["회차"].str.extract(r"(\d+)", expand=False).astype(float)
     else:
         df["회차_numeric"] = pd.NA
 
@@ -483,13 +473,17 @@ def load_data() -> pd.DataFrame:
 # ===== 3.2. UI / 포맷팅 헬퍼 함수 =====
 
 def fmt(v, digits=3, intlike=False):
-    """숫자 포맷팅 헬퍼 (None이나 NaN은 '–'로 표시)"""
+    """
+    숫자 포맷팅 헬퍼 (None이나 NaN은 '–'로 표시)
+    """
     if v is None or pd.isna(v):
         return "–"
     return f"{v:,.0f}" if intlike else f"{v:.{digits}f}"
 
 def kpi(col, title, value):
-    """Streamlit 컬럼 내에 KPI 카드를 렌더링합니다."""
+    """
+    Streamlit 컬럼 내에 KPI 카드를 렌더링합니다. (CSS .kpi-card 필요)
+    """
     with col:
         st.markdown(
             f'<div class="kpi-card"><div class="kpi-title">{title}</div>'
@@ -498,7 +492,9 @@ def kpi(col, title, value):
         )
 
 def render_gradient_title(main_text: str, emoji: str = "🎬"):
-    """사이드바용 그라디언트 타이틀을 렌더링합니다."""
+    """
+    사이드바용 그라디언트 타이틀을 렌더링합니다. (CSS .page-title-wrap 필요)
+    """
     st.markdown(
         f"""
         <div class="page-title-wrap">
@@ -512,16 +508,23 @@ def render_gradient_title(main_text: str, emoji: str = "🎬"):
 # ===== 3.3. 페이지 라우팅 / 데이터 헬퍼 함수 =====
 
 def get_current_page_default(default="Overview"):
+    """
+    URL 쿼리 파라미터(?page=...)에서 현재 페이지를 읽어옵니다.
+    """
     try:
         qp = st.query_params
         p = qp.get("page", None)
-        if p is None: return default
+        if p is None:
+            return default
         return p if isinstance(p, str) else p[0]
     except Exception:
         qs = st.experimental_get_query_params()
         return (qs.get("page", [default])[0])
 
 def _set_page_query_param(page_key: str):
+    """
+    URL 쿼리 파라미터에 page 키를 설정합니다. (리로드 없음)
+    """
     try:
         qp = st.query_params
         qp["page"] = page_key
@@ -530,10 +533,9 @@ def _set_page_query_param(page_key: str):
         st.experimental_set_query_params(page=page_key)
 
 def get_episode_options(df: pd.DataFrame) -> List[str]:
-    """데이터에서 사용 가능한 회차 목록 (문자열)을 추출합니다."""
-    valid_options = []
+    """데이터에서 사용 가능한 회차 목록 (문자열, '00' 제외, '차'/'화' 제거)을 추출합니다."""
     
-    # 회차_numeric 우선 사용
+    valid_options = []
     if "회차_numeric" in df.columns:
         unique_episodes_num = sorted([
             int(ep) for ep in df["회차_numeric"].dropna().unique() if ep > 0
@@ -541,31 +543,31 @@ def get_episode_options(df: pd.DataFrame) -> List[str]:
         if unique_episodes_num:
             max_ep_num = unique_episodes_num[-1]
             for ep_num in unique_episodes_num: valid_options.append(str(ep_num))
-            
-            # 마지막화 표기 로직
             last_ep_str_num = str(max_ep_num)
             if last_ep_str_num in valid_options and valid_options[-1] != last_ep_str_num:
                  valid_options.remove(last_ep_str_num); valid_options.append(last_ep_str_num)
             if len(valid_options) > 0 and "(마지막화)" not in valid_options[-1]:
                  valid_options[-1] = f"{valid_options[-1]} (마지막화)"
             return valid_options
-            
-    # 회차_numeric이 없으면 문자열 컬럼 파싱 (fallback)
-    if "회차" in df.columns:
+        else: return []
+    elif "회차" in df.columns:
         raw_options = sorted(df["회차"].dropna().unique())
-        temp_opts = []
         for opt in raw_options:
-            cleaned = re.sub(r"[화차]", "", str(opt))
-            if cleaned.isdigit() and int(cleaned) > 0:
-                temp_opts.append(cleaned)
-        return sorted(list(set(temp_opts)), key=lambda x: int(x))
-        
-    return []
+            if not opt.startswith("00"):
+                cleaned_opt = re.sub(r"[화차]", "", opt)
+                if cleaned_opt.isdigit() and int(cleaned_opt) > 0: 
+                    valid_options.append(cleaned_opt)
+        return sorted(list(set(valid_options)), key=lambda x: int(x) if x.isdigit() else float('inf')) 
+    else: return []
 
+# [신규] 피드백 3번 반영: 조회수 필터 로직 통합
 def _get_view_data(df: pd.DataFrame) -> pd.DataFrame:
-    """'조회수' metric만 필터링하고, 유튜브 PGC/UGC 규칙을 적용하는 공통 유틸."""
+    """
+    '조회수' metric만 필터링하고, 유튜브 PGC/UGC 규칙을 적용하는 공통 유틸.
+    """
     sub = df[df["metric"] == "조회수"].copy()
-    if sub.empty: return sub
+    if sub.empty:
+        return sub
         
     if "매체" in sub.columns and "세부속성1" in sub.columns:
         yt_mask = (sub["매체"] == "유튜브")
@@ -681,27 +683,28 @@ def mean_of_ip_sums(df: pd.DataFrame, metric_name: str, media=None) -> float | N
 
 # ===== 6.1. 데모 문자열 파싱 유틸 =====
 def _gender_from_demo(s: str):
-    """'데모' 문자열에서 성별(남/여/기타)을 추출합니다."""
+    """'데모' 문자열에서 성별(남/여/기타)을 추출합니다. (페이지 1, 2, 4용)"""
     s = str(s)
     if any(k in s for k in ["여", "F", "female", "Female"]): return "여"
     if any(k in s for k in ["남", "M", "male", "Male"]): return "남"
     return "기타"
 
 def gender_from_demo(s: str):
+    """ '데모' 문자열에서 성별 (남/여) 추출, 그 외 None (페이지 3용) """
     s = str(s)
     if any(k in s for k in ["여", "F", "female", "Female"]): return "여"
     if any(k in s for k in ["남", "M", "male", "Male"]):     return "남"
     return None
 
 def _to_decade_label(x: str):
-    """'데모' 문자열에서 연령대(10대, 20대...)를 추출합니다."""
+    """'데모' 문자열에서 연령대(10대, 20대...)를 추출합니다. (페이지 1, 2, 4용)"""
     m = re.search(r"\d+", str(x))
     if not m: return "기타"
     n = int(m.group(0))
     return f"{(n//10)*10}대"
 
 def _decade_label_clamped(x: str):
-    """ 10대~60대 범위로 연령대 라벨 생성, 그 외는 None """
+    """ 10대~60대 범위로 연령대 라벨 생성, 그 외는 None (페이지 2, 3용) """
     m = re.search(r"\d+", str(x))
     if not m: return None
     n = int(m.group(0))
@@ -709,11 +712,12 @@ def _decade_label_clamped(x: str):
     return f"{n}대"
 
 def _decade_key(s: str):
+    """연령대 정렬을 위한 숫자 키를 추출합니다. (페이지 1, 2, 4용)"""
     m = re.search(r"\d+", str(s))
     return int(m.group(0)) if m else 999
 
 def _fmt_ep(n):
-    """ 회차 번호를 '01화' 형태로 포맷팅 """
+    """ 회차 번호를 '01화' 형태로 포맷팅 (페이지 2, 3용) """
     try:
         return f"{int(n):02d}화"
     except Exception:
@@ -724,6 +728,7 @@ COLOR_MALE = "#2a61cc"
 COLOR_FEMALE = "#d93636"
 
 def render_gender_pyramid(container, title: str, df_src: pd.DataFrame, height: int = 260):
+
     if df_src.empty:
         container.info("표시할 데이터가 없습니다.")
         return
@@ -749,46 +754,84 @@ def render_gender_pyramid(container, title: str, df_src: pd.DataFrame, height: i
 
     male = -pvt.get("남", pd.Series(0, index=pvt.index))
     female = pvt.get("여", pd.Series(0, index=pvt.index))
+
     max_abs = float(max(male.abs().max(), female.max()) or 1)
-    
+
     male_share = (male.abs() / male.abs().sum() * 100) if male.abs().sum() else male.abs()
     female_share = (female / female.sum() * 100) if female.sum() else female
 
+    male_text = [f"{v:.1f}%" for v in male_share]
+    female_text = [f"{v:.1f}%" for v in female_share]
+
     fig = go.Figure()
     fig.add_trace(go.Bar(
-        y=pvt.index, x=male, name="남", orientation="h", marker_color=COLOR_MALE,
-        text=[f"{v:.1f}%" for v in male_share], textposition="inside", insidetextanchor="end",
+        y=pvt.index, x=male, name="남",
+        orientation="h",
+        marker_color=COLOR_MALE,
+        text=male_text,
+        textposition="inside",
+        insidetextanchor="end",
         textfont=dict(color="#ffffff", size=12),
-        hovertemplate="연령대=%{y}<br>남성=%{customdata[0]:,.0f}명<br>비중=%{customdata[1]:.1f}%<extra></extra>",
+        hovertemplate="연령대=%{y}<br>남성=%{customdata[0]:,.0f}명<br>성별내 비중=%{customdata[1]:.1f}%<extra></extra>",
         customdata=np.column_stack([male.abs(), male_share])
     ))
     fig.add_trace(go.Bar(
-        y=pvt.index, x=female, name="여", orientation="h", marker_color=COLOR_FEMALE,
-        text=[f"{v:.1f}%" for v in female_share], textposition="inside", insidetextanchor="start",
+        y=pvt.index, x=female, name="여",
+        orientation="h",
+        marker_color=COLOR_FEMALE,
+        text=female_text,
+        textposition="inside",
+        insidetextanchor="start",
         textfont=dict(color="#ffffff", size=12),
-        hovertemplate="연령대=%{y}<br>여성=%{customdata[0]:,.0f}명<br>비중=%{customdata[1]:.1f}%<extra></extra>",
+        hovertemplate="연령대=%{y}<br>여성=%{customdata[0]:,.0f}명<br>성별내 비중=%{customdata[1]:.1f}%<extra></extra>",
         customdata=np.column_stack([female, female_share])
     ))
 
     fig.update_layout(
-        barmode="overlay", height=height, margin=dict(l=8, r=8, t=48, b=8),
-        legend_title=None, bargap=0.15,
-        title=dict(text=title, x=0.0, y=0.98, font=dict(size=14))
+        barmode="overlay",
+        height=height,
+        margin=dict(l=8, r=8, t=48, b=8),
+        legend_title=None,
+        bargap=0.15,
+        bargroupgap=0.05,
     )
-    fig.update_yaxes(categoryorder="array", categoryarray=order, fixedrange=True)
+    # 피라미드 차트 전용 로컬 제목 (전역 테마 오버라이드)
+    fig.update_layout(
+        title=dict(
+            text=title,
+            x=0.0, xanchor="left",
+            y=0.98, yanchor="top",
+            font=dict(size=14)
+        )
+    )
+    fig.update_yaxes(
+        categoryorder="array",
+        categoryarray=order,
+        title=None,
+        tickfont=dict(size=12),
+        fixedrange=True
+    )
     fig.update_xaxes(
-        range=[-max_abs*1.05, max_abs*1.05], showticklabels=False, showgrid=False, 
-        zeroline=True, zerolinecolor="#888", fixedrange=True
+        range=[-max_abs*1.05, max_abs*1.05],
+        title=None,
+        showticklabels=False,
+        showgrid=False,
+        zeroline=True,
+        zerolinewidth=1,
+        zerolinecolor="#888",
+        fixedrange=True
     )
-    container.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
 
-# ===== 6.3. 그룹 데모 평균 계산 (페이지 3, 4 통합용) - [수정됨] =====
+    container.plotly_chart(fig, use_container_width=True,
+                           config={"scrollZoom": False, "staticPlot": False, "displayModeBar": False})
+
+# ===== 6.3. 그룹 데모 평균 계산 (페이지 3, 4 통합용) =====
 def get_avg_demo_pop_by_episode(df_src: pd.DataFrame, medias: List[str], max_ep: float = None) -> pd.DataFrame:
     """
     여러 IP가 포함된 df_src에서, 회차별/데모별 *평균* 시청자수(시청인구)를 계산합니다.
-    [수정] "종영" 제거, 숫자형 강제 변환, 중복 데이터 합산 로직 적용
+    [수정] max_ep 파라미터 추가: 지정된 회차까지만 필터링하여 계산
     """
-    # 1. 기본 필터링
+    # 1. 매체 및 지표 필터링
     sub = df_src[
         (df_src["metric"] == "시청인구") &
         (df_src["데모"].notna()) &
@@ -798,61 +841,47 @@ def get_avg_demo_pop_by_episode(df_src: pd.DataFrame, medias: List[str], max_ep:
     if sub.empty:
         return pd.DataFrame(columns=["회차"] + DEMO_COLS_ORDER)
     
-    # 2. [강력한 필터] "종영", "최종", "스페셜" 등 텍스트 포함 행 강제 제거
-    exclude_keywords = "종영|최종|스페셜|마지막"
-    mask_exclude = sub["회차"].astype(str).str.contains(exclude_keywords, regex=True, na=False)
-    sub = sub[~mask_exclude]
-
-    # 3. 회차 Numeric 안전 추출 (혹시 load_data에서 놓쳤을 경우 대비)
+    # 2. 회차 Numeric 컬럼 확보 및 필터링
     if "회차_numeric" not in sub.columns:
-         sub["회차_numeric"] = sub["회차"].astype(str).str.extract(r"(\d+)", expand=False)
+        sub["회차_numeric"] = sub["회차"].str.extract(r"(\d+)", expand=False).astype(float)
     
-    sub["회차_numeric"] = pd.to_numeric(sub["회차_numeric"], errors="coerce")
     sub = sub.dropna(subset=["회차_numeric"])
     
-    # max_ep 필터링
+    # [핵심] max_ep가 있으면 그 이하 회차만 남김
     if max_ep is not None:
         sub = sub[sub["회차_numeric"] <= max_ep]
 
     if sub.empty:
         return pd.DataFrame(columns=["회차"] + DEMO_COLS_ORDER)
 
-    # 4. Value 안전 변환
-    sub["value"] = pd.to_numeric(sub["value"], errors="coerce").fillna(0)
+    sub["value"] = pd.to_numeric(sub["value"], errors="coerce").replace(0, np.nan)
     sub = sub.dropna(subset=["value"])
 
-    # 5. 데모 파싱
     sub["성별"] = sub["데모"].apply(gender_from_demo)
     sub["연령대_대"] = sub["데모"].apply(_decade_label_clamped)
     sub = sub[sub["성별"].isin(["남", "여"]) & sub["연령대_대"].notna()].copy()
-    
     sub["회차_num"] = sub["회차_numeric"].astype(int)
+
     sub["라벨"] = sub.apply(lambda r: f"{r['연령대_대']}{'남성' if r['성별']=='남' else '여성'}", axis=1)
 
-    # 6. [중요] 중복 데이터 사전 병합 (IP별, 회차별, 데모별 합산) -> 이후 평균
-    # 먼저 개별 IP 내에서 중복 회차가 있으면 합산
-    ip_ep_demo_sum = sub.groupby(["IP", "회차_num", "라벨"], as_index=False)["value"].sum()
-    
-    # 그 다음, 모든 IP들의 평균을 구함 (비교군 평균 등)
-    ep_demo_mean = ip_ep_demo_sum.groupby(["회차_num", "라벨"], as_index=False)["value"].mean()
+    ip_ep_demo_sum = sub.groupby(["IP", "회차_num", "라벨"])["value"].sum().reset_index()
+    ep_demo_mean = ip_ep_demo_sum.groupby(["회차_num", "라벨"])["value"].mean().reset_index()
 
-    # 7. 피벗 테이블 (fill_value=0 필수)
-    pvt = ep_demo_mean.pivot_table(index="회차_num", columns="라벨", values="value", fill_value=0)
+    pvt = ep_demo_mean.pivot_table(index="회차_num", columns="라벨", values="value").fillna(0)
 
     for c in DEMO_COLS_ORDER:
         if c not in pvt.columns:
-            pvt[c] = 0.0
+            pvt[c] = 0
     pvt = pvt[DEMO_COLS_ORDER].sort_index()
 
-    # 8. 포맷팅
     pvt.insert(0, "회차", pvt.index.map(_fmt_ep))
-    pvt.columns.name = None
-    
     return pvt.reset_index(drop=True)
 
-# ===== 6.4. 히트맵 렌더링 =====
+# ===== 6.4. [이동] 히트맵 렌더링 (구 Region 9에서 이동) =====
 def render_heatmap(df_plot: pd.DataFrame, title: str):
-    """데이터프레임을 받아 Plotly 히트맵을 렌더링합니다."""
+    """
+    데이터프레임을 받아 Plotly 히트맵을 렌더링합니다.
+    """
     st.markdown(f"###### {title}")
 
     if df_plot.empty:
@@ -877,7 +906,8 @@ def render_heatmap(df_plot: pd.DataFrame, title: str):
     
     fig = px.imshow(
         df_heatmap,
-        text_auto=False, aspect="auto",
+        text_auto=False, 
+        aspect="auto",
         color_continuous_scale='RdBu_r', 
         range_color=[-abs_max, abs_max], 
         color_continuous_midpoint=0
@@ -896,7 +926,9 @@ def render_heatmap(df_plot: pd.DataFrame, title: str):
 
     fig.update_layout(
         height=max(520, len(df_heatmap.index) * 46), 
-        xaxis_title=None, yaxis_title=None, xaxis=dict(side="top"),
+        xaxis_title=None,
+        yaxis_title=None,
+        xaxis=dict(side="top"),
     )
     
     c_heatmap, = st.columns(1)
@@ -1246,7 +1278,7 @@ def render_ip_detail():
             label_visibility="collapsed"
         )
 
-    # --- 데이터 전처리 ---
+    # --- 데이터 전처리 (Default 설정을 위해 위치 이동) ---
     if "방영시작일" in df_full.columns and df_full["방영시작일"].notna().any():
         date_col_for_filter = "방영시작일"
     else:
@@ -1294,13 +1326,10 @@ def render_ip_detail():
     # --- 선택 IP 데이터 필터링 ---
     f = target_ip_rows.copy()
 
-    # 회차_numeric 사용 (없으면 생성)
-    if "회차_numeric" not in f.columns:
-        f["회차_str_temp"] = f["회차"].astype(str)
-        f["회차_numeric"] = f["회차_str_temp"].str.extract(r"(\d+)", expand=False)
-        f["회차_numeric"] = pd.to_numeric(f["회차_numeric"], errors="coerce")
-
-    f["회차_num"] = pd.to_numeric(f["회차_numeric"], errors="coerce")
+    if "회차_numeric" in f.columns:
+        f["회차_num"] = pd.to_numeric(f["회차_numeric"], errors="coerce")
+    else:
+        f["회차_num"] = pd.to_numeric(f["회차"].str.extract(r"(\d+)", expand=False), errors="coerce")
     
     my_max_ep = f["회차_num"].max()
 
@@ -1340,13 +1369,11 @@ def render_ip_detail():
     
     prog_label = " & ".join(group_name_parts) + " 평균"
 
-    # --- 베이스 데이터 회차 처리 ---
-    if "회차_numeric" not in base_raw.columns:
-        base_raw["회차_str_temp"] = base_raw["회차"].astype(str)
-        base_raw["회차_numeric"] = base_raw["회차_str_temp"].str.extract(r"(\d+)", expand=False)
-        base_raw["회차_numeric"] = pd.to_numeric(base_raw["회차_numeric"], errors="coerce")
-
-    base_raw["회차_num"] = base_raw["회차_numeric"]
+    # --- (이하 로직 동일) ---
+    if "회차_numeric" in base_raw.columns:
+        base_raw["회차_num"] = pd.to_numeric(base_raw["회차_numeric"], errors="coerce")
+    else:
+        base_raw["회차_num"] = pd.to_numeric(base_raw["회차"].str.extract(r"(\d+)", expand=False), errors="coerce")
     
     if pd.notna(my_max_ep):
         base = base_raw[base_raw["회차_num"] <= my_max_ep].copy()
@@ -1493,13 +1520,16 @@ def render_ip_detail():
         pct = (val / base_val) * 100
         return "#d93636" if pct > 100 else ("#2a61cc" if pct < 100 else "#444")
 
+    # [수정] 순위 표시에 '총 N개 중' 및 '1위 왕관' 추가
     def sublines_html(prog_label: str, rank_tuple: tuple, val, base_val):
         rnk, total = rank_tuple if rank_tuple else (None, 0)
+        
         if rnk is not None and total > 0:
             prefix = "👑 " if rnk == 1 else ""
             rank_label = f"{prefix}{rnk}위<span style='font-size:11px;font-weight:400;color:#9ca3af;margin-left:2px'>(총{total}개)</span>"
         else:
             rank_label = "–위"
+
         pct_txt = "–"; col = "#888"
         try:
             if (val is not None) and (base_val not in (None, 0)) and (not (pd.isna(val) or pd.isna(base_val))):
@@ -1555,6 +1585,7 @@ def render_ip_detail():
         )
     kpi_with_rank(c9, "🔥 화제성 점수", val_topic_avg, base_topic_avg, rk_fscr, prog_label, intlike=True)
     with c10:
+        # 더미 카드 (레이아웃 맞춤용, 투명 처리)
         st.markdown(
             f"<div class='kpi-card' style='opacity:0; pointer-events:none;'><div class='kpi-title'>-</div>"
             f"<div class='kpi-value'>-</div>{sublines_dummy()}</div>",
@@ -1616,10 +1647,11 @@ def render_ip_detail():
             fig_tving = go.Figure()
             for m in stack_order:
                 if m in pvt.columns:
+                    # [수정] 계열별 레이블(text) 제거
                     fig_tving.add_trace(go.Bar(
                         name=m, x=pvt.index, y=pvt[m],
                         marker_color=colors[m],
-                        text=None,
+                        text=None, # 레이블 제거
                         hovertemplate=f"<b>%{{x}}</b><br>{m}: %{{y:,.0f}}<extra></extra>"
                     ))
             
@@ -1627,6 +1659,7 @@ def render_ip_detail():
             max_val = total_vals.max()
             total_txt = [fmt_live_kor(v) for v in total_vals]
             
+            # 총합 레이블만 유지
             fig_tving.add_trace(go.Scatter(
                 x=pvt.index, y=total_vals, mode='text',
                 text=total_txt, textposition='top center',
@@ -1647,19 +1680,21 @@ def render_ip_detail():
     # === [Row2] 데모 분포 ===
     cG, cH, cI = st.columns(3)
 
-    # 로컬 render_pyramid_local 정의
     def _render_pyramid_local(container, title, df_src, height=260):
         if df_src.empty:
             container.info("표시할 데이터가 없습니다."); return
 
         COLOR_MALE_NEW = "#5B85D9"; COLOR_FEMALE_NEW = "#E66C6C"
+
         df_demo = df_src.copy()
         df_demo["성별"] = df_demo["데모"].apply(_gender_from_demo)
         df_demo["연령대_대"] = df_demo["데모"].apply(_to_decade_label)
         df_demo = df_demo[df_demo["성별"].isin(["남","여"]) & df_demo["연령대_대"].notna()]
+
         if df_demo.empty: container.info("데이터 없음"); return
 
         order = ["60대", "50대", "40대", "30대", "20대", "10대"]
+
         pvt = df_demo.groupby(["연령대_대","성별"])["value"].sum().unstack("성별").reindex(order).fillna(0)
         male = -pvt.get("남", pd.Series(0, index=pvt.index))
         female = pvt.get("여", pd.Series(0, index=pvt.index))
@@ -1689,6 +1724,7 @@ def render_ip_detail():
             hovertemplate="연령대=%{y}<br>여성=%{customdata[0]:,.0f}명<br>전체비중=%{customdata[1]:.1f}%<extra></extra>",
             customdata=np.column_stack([female, female_share])
         ))
+
         fig.update_layout(
             barmode="overlay", height=height, margin=dict(l=8, r=8, t=48, b=8),
             legend_title=None, bargap=0.15,
@@ -1839,115 +1875,95 @@ def render_ip_detail():
 
     st.divider()
 
-    # === [Row5] 데모분석 상세 표 (AgGrid) ===
+# === [Row5] 데모분석 상세 표 (AgGrid) ===
     st.markdown("#### 👥 회차별 시청자수 분포")
 
-    # [수정] "종영" 텍스트 명시적 제거 + 중복 데이터 안전 처리 (Region 8 로컬 함수)
     def _build_demo_table_numeric(df_src, medias):
-        """페이지 2 전용: 단일 IP의 회차별 데모 시청자수를 표 형태로 변환.
-        공통 그룹 함수(get_avg_demo_pop_by_episode)를 thin wrapper로 사용한다.
-        my_max_ep(해당 IP의 최대 회차)까지만 포함한다.
-        """
-        return get_avg_demo_pop_by_episode(df_src, medias, max_ep=my_max_ep)
+        sub = df_src[(df_src["metric"]=="시청인구") & (df_src["데모"].notna()) & (df_src["매체"].isin(medias))].copy()
+        if sub.empty: return pd.DataFrame(columns=["회차"] + DEMO_COLS_ORDER)
+        sub["성별"] = sub["데모"].apply(_gender_from_demo)
+        sub["연령대_대"] = sub["데모"].apply(_decade_label_clamped)
+        sub = sub[sub["성별"].isin(["남", "여"]) & sub["연령대_대"].notna()].copy()
+        if "회차_num" not in sub.columns:
+            sub["회차_num"] = sub["회차"].str.extract(r"(\d+)", expand=False).astype(float)
+        sub = sub.dropna(subset=["회차_num"])
+        sub["회차_num"] = sub["회차_num"].astype(int)
+        sub["라벨"] = sub.apply(lambda r: f"{r['연령대_대']}{'남성' if r['성별']=='남' else '여성'}", axis=1)
+        pvt = sub.pivot_table(index="회차_num", columns="라벨", values="value", aggfunc="sum").fillna(0)
+        for c in DEMO_COLS_ORDER:
+            if c not in pvt.columns: pvt[c] = 0
+        pvt = pvt[DEMO_COLS_ORDER].sort_index()
+        pvt.insert(0, "회차", pvt.index.map(_fmt_ep))
+        return pvt.reset_index(drop=True)
 
-
-# [수정] 1. JS 렌더러 안전장치 강화 (0으로 나누기 방지, NaN 방어)
+    # [수정] 작은 삼각형(▴, ▾) 적용 & 클래스 방식 렌더러
     diff_renderer = JsCode("""
     class DiffRenderer {
       init(params) {
         this.eGui = document.createElement('span');
-        try {
-            const api = params.api;
-            const colId = params.column.getColId();
-            const rowIndex = params.node.rowIndex;
-            const val = Number(params.value); // null/undefined는 0이 됨
+        
+        const api = params.api;
+        const colId = params.column.getColId();
+        const rowIndex = params.node.rowIndex;
+        const val = Number(params.value || 0);
+        
+        // 1. 숫자 포맷팅
+        let displayVal = colId === "회차" ? params.value : Math.round(val).toLocaleString();
+        
+        // 2. 화살표 로직
+        let arrow = "";
+        if (colId !== "회차" && rowIndex > 0) {
+          const prev = api.getDisplayedRowAtIndex(rowIndex - 1);
+          if (prev && prev.data && prev.data[colId] != null) {
+            const pv = Number(prev.data[colId] || 0);
             
-            // 1. 숫자 포맷팅 (NaN이면 빈칸 처리)
-            let displayVal = colId === "회차" ? params.value : (isNaN(val) ? "" : Math.round(val).toLocaleString());
-            
-            // 2. 화살표 로직
-            let arrow = "";
-            if (colId !== "회차" && rowIndex > 0) {
-              const prev = api.getDisplayedRowAtIndex(rowIndex - 1);
-              if (prev && prev.data) {
-                const pv = Number(prev.data[colId]);
-                if (!isNaN(pv) && !isNaN(val)) {
-                    if (val > pv) {
-                       arrow = '<span style="margin-left:4px;">(<span style="color:#d93636;">▴</span>)</span>';
-                    } else if (val < pv) {
-                       arrow = '<span style="margin-left:4px;">(<span style="color:#2a61cc;">▾</span>)</span>';
-                    }
-                }
-              }
+            if (val > pv) {
+               // 상승: (▴) 작은 삼각형, 빨간색
+               arrow = '<span style="margin-left:4px;">(<span style="color:#d93636;">▴</span>)</span>';
+            } else if (val < pv) {
+               // 하락: (▾) 작은 삼각형, 파란색
+               arrow = '<span style="margin-left:4px;">(<span style="color:#2a61cc;">▾</span>)</span>';
             }
-            this.eGui.innerHTML = displayVal + arrow;
-        } catch (e) {
-            this.eGui.innerHTML = params.value; // 에러나면 그냥 값 출력
+          }
         }
+        
+        // 3. HTML 주입
+        this.eGui.innerHTML = displayVal + arrow;
       }
-      getGui() { return this.eGui; }
+
+      getGui() {
+        return this.eGui;
+      }
     }
     """)
 
     _js_demo_cols = "[" + ",".join([f'"{c}"' for c in DEMO_COLS_ORDER]) + "]"
-    
-    # [수정] 색상 계산 로직에서 무한대/NaN 발생 방지
     cell_style_renderer = JsCode(f"""
     function(params){{
-      try {{
-          const field = params.colDef.field;
-          if (field === "회차") return {{'text-align':'left','font-weight':'600','background-color':'#fff'}};
-          
-          const COLS = {_js_demo_cols};
-          let rowVals = [];
-          
-          // 유효한 숫자만 수집
-          for (let k of COLS) {{
-            if (params.data && params.data[k] !== null && params.data[k] !== undefined) {{
-                const v = Number(params.data[k]);
-                if (!isNaN(v)) rowVals.push(v);
-            }}
-          }}
-          
-          let bg = '#ffffff';
-          // 데이터가 있고, 최댓값이 0보다 클 때만 색상 계산
-          if (rowVals.length > 0) {{
-            const v = Number(params.value || 0);
-            const mn = Math.min.apply(null, rowVals);
-            const mx = Math.max.apply(null, rowVals);
-            
-            // [핵심] 분모가 0이 되는 상황(mx === mn) 방어
-            if (mx > mn) {{
-                let norm = (v - mn) / (mx - mn);
-                // norm이 범위 밖으로 나가는 것 방지
-                norm = Math.max(0, Math.min(1, norm));
-                const alpha = 0.12 + 0.45 * norm;
-                bg = 'rgba(30,90,255,' + alpha.toFixed(3) + ')';
-            }} else if (mx > 0 && mx === mn) {{
-                // 모든 값이 같지만 0은 아닌 경우 (약한 파랑)
-                bg = 'rgba(30,90,255,0.2)';
-            }}
-          }}
-          return {{'background-color': bg, 'text-align': 'right', 'padding': '2px 4px', 'font-weight': '500'}};
-      }} catch (e) {{
-          return {{'background-color': '#fff', 'text-align': 'right'}};
+      const field = params.colDef.field;
+      if (field === "회차") return {{'text-align':'left','font-weight':'600','background-color':'#fff'}};
+      const COLS = {_js_demo_cols};
+      let rowVals = [];
+      for (let k of COLS) {{
+        const v = Number((params.data && params.data[k] != null) ? params.data[k] : NaN);
+        if (!isNaN(v)) rowVals.push(v);
       }}
+      let bg = '#ffffff';
+      if (rowVals.length > 0) {{
+        const v = Number(params.value || 0);
+        const mn = Math.min.apply(null, rowVals);
+        const mx = Math.max.apply(null, rowVals);
+        let norm = 0.5;
+        if (mx > mn) norm = (v - mn) / (mx - mn);
+        const alpha = 0.12 + 0.45 * Math.max(0, Math.min(1, norm));
+        bg = 'rgba(30,90,255,' + alpha.toFixed(3) + ')';
+      }}
+      return {{'background-color': bg, 'text-align': 'right', 'padding': '2px 4px', 'font-weight': '500'}};
     }}""")
 
     def _render_aggrid_table(df_numeric, title):
         st.markdown(f"###### {title}")
-        
-        # [디버깅용] 데이터프레임이 비어있으면 메시지 출력
-        if df_numeric.empty: 
-            st.info("⚠️ 데이터 집계 결과가 없습니다. (필터 조건 확인 필요)")
-            return
-
-        # [디버깅용] 아래 주석을 풀면, AgGrid 위에 원본 데이터를 보여줍니다.
-        # 데이터는 있는데 AgGrid가 안 나오면 -> JS 문제
-        # 데이터 자체가 이상하면 -> Python 로직 문제
-        # st.caption("▼ 디버깅용 원본 데이터 미리보기")
-        # st.dataframe(df_numeric.head(3)) 
-
+        if df_numeric.empty: st.info("데이터 없음"); return
         gb = GridOptionsBuilder.from_dataframe(df_numeric)
         gb.configure_grid_options(rowHeight=34, suppressMenuHide=True, domLayout='autoHeight')
         gb.configure_default_column(sortable=False, resizable=True, filter=False, cellStyle={'textAlign': 'right'}, headerClass='centered-header bold-header')
@@ -1956,6 +1972,7 @@ def render_ip_detail():
         for c in [col for col in df_numeric.columns if col != "회차"]:
             gb.configure_column(c, header_name=c, cellRenderer=diff_renderer, cellStyle=cell_style_renderer)
             
+        # [수정] fit_columns_on_grid_load=True 추가 (가로 폭 맞춤)
         AgGrid(
             df_numeric, 
             gridOptions=gb.build(), 
@@ -1971,7 +1988,6 @@ def render_ip_detail():
 
     tving_numeric = _build_demo_table_numeric(f, ["TVING LIVE", "TVING QUICK", "TVING VOD"])
     _render_aggrid_table(tving_numeric, "▶︎ TVING 합산 시청자수")
-    
 #endregion
 
 
