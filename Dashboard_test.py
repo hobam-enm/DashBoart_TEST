@@ -1246,7 +1246,7 @@ def render_ip_detail():
             label_visibility="collapsed"
         )
 
-    # --- 데이터 전처리 (Default 설정을 위해 위치 이동) ---
+    # --- 데이터 전처리 ---
     if "방영시작일" in df_full.columns and df_full["방영시작일"].notna().any():
         date_col_for_filter = "방영시작일"
     else:
@@ -1294,10 +1294,13 @@ def render_ip_detail():
     # --- 선택 IP 데이터 필터링 ---
     f = target_ip_rows.copy()
 
-    if "회차_numeric" in f.columns:
-        f["회차_num"] = pd.to_numeric(f["회차_numeric"], errors="coerce")
-    else:
-        f["회차_num"] = pd.to_numeric(f["회차"].str.extract(r"(\d+)", expand=False), errors="coerce")
+    # 회차_numeric 사용 (없으면 생성)
+    if "회차_numeric" not in f.columns:
+        f["회차_str_temp"] = f["회차"].astype(str)
+        f["회차_numeric"] = f["회차_str_temp"].str.extract(r"(\d+)", expand=False)
+        f["회차_numeric"] = pd.to_numeric(f["회차_numeric"], errors="coerce")
+
+    f["회차_num"] = pd.to_numeric(f["회차_numeric"], errors="coerce")
     
     my_max_ep = f["회차_num"].max()
 
@@ -1337,11 +1340,13 @@ def render_ip_detail():
     
     prog_label = " & ".join(group_name_parts) + " 평균"
 
-    # --- (이하 로직 동일) ---
-    if "회차_numeric" in base_raw.columns:
-        base_raw["회차_num"] = pd.to_numeric(base_raw["회차_numeric"], errors="coerce")
-    else:
-        base_raw["회차_num"] = pd.to_numeric(base_raw["회차"].str.extract(r"(\d+)", expand=False), errors="coerce")
+    # --- 베이스 데이터 회차 처리 ---
+    if "회차_numeric" not in base_raw.columns:
+        base_raw["회차_str_temp"] = base_raw["회차"].astype(str)
+        base_raw["회차_numeric"] = base_raw["회차_str_temp"].str.extract(r"(\d+)", expand=False)
+        base_raw["회차_numeric"] = pd.to_numeric(base_raw["회차_numeric"], errors="coerce")
+
+    base_raw["회차_num"] = base_raw["회차_numeric"]
     
     if pd.notna(my_max_ep):
         base = base_raw[base_raw["회차_num"] <= my_max_ep].copy()
@@ -1488,16 +1493,13 @@ def render_ip_detail():
         pct = (val / base_val) * 100
         return "#d93636" if pct > 100 else ("#2a61cc" if pct < 100 else "#444")
 
-    # [수정] 순위 표시에 '총 N개 중' 및 '1위 왕관' 추가
     def sublines_html(prog_label: str, rank_tuple: tuple, val, base_val):
         rnk, total = rank_tuple if rank_tuple else (None, 0)
-        
         if rnk is not None and total > 0:
             prefix = "👑 " if rnk == 1 else ""
             rank_label = f"{prefix}{rnk}위<span style='font-size:11px;font-weight:400;color:#9ca3af;margin-left:2px'>(총{total}개)</span>"
         else:
             rank_label = "–위"
-
         pct_txt = "–"; col = "#888"
         try:
             if (val is not None) and (base_val not in (None, 0)) and (not (pd.isna(val) or pd.isna(base_val))):
@@ -1553,7 +1555,6 @@ def render_ip_detail():
         )
     kpi_with_rank(c9, "🔥 화제성 점수", val_topic_avg, base_topic_avg, rk_fscr, prog_label, intlike=True)
     with c10:
-        # 더미 카드 (레이아웃 맞춤용, 투명 처리)
         st.markdown(
             f"<div class='kpi-card' style='opacity:0; pointer-events:none;'><div class='kpi-title'>-</div>"
             f"<div class='kpi-value'>-</div>{sublines_dummy()}</div>",
@@ -1615,11 +1616,10 @@ def render_ip_detail():
             fig_tving = go.Figure()
             for m in stack_order:
                 if m in pvt.columns:
-                    # [수정] 계열별 레이블(text) 제거
                     fig_tving.add_trace(go.Bar(
                         name=m, x=pvt.index, y=pvt[m],
                         marker_color=colors[m],
-                        text=None, # 레이블 제거
+                        text=None,
                         hovertemplate=f"<b>%{{x}}</b><br>{m}: %{{y:,.0f}}<extra></extra>"
                     ))
             
@@ -1627,7 +1627,6 @@ def render_ip_detail():
             max_val = total_vals.max()
             total_txt = [fmt_live_kor(v) for v in total_vals]
             
-            # 총합 레이블만 유지
             fig_tving.add_trace(go.Scatter(
                 x=pvt.index, y=total_vals, mode='text',
                 text=total_txt, textposition='top center',
@@ -1648,21 +1647,19 @@ def render_ip_detail():
     # === [Row2] 데모 분포 ===
     cG, cH, cI = st.columns(3)
 
+    # 로컬 render_pyramid_local 정의
     def _render_pyramid_local(container, title, df_src, height=260):
         if df_src.empty:
             container.info("표시할 데이터가 없습니다."); return
 
         COLOR_MALE_NEW = "#5B85D9"; COLOR_FEMALE_NEW = "#E66C6C"
-
         df_demo = df_src.copy()
         df_demo["성별"] = df_demo["데모"].apply(_gender_from_demo)
         df_demo["연령대_대"] = df_demo["데모"].apply(_to_decade_label)
         df_demo = df_demo[df_demo["성별"].isin(["남","여"]) & df_demo["연령대_대"].notna()]
-
         if df_demo.empty: container.info("데이터 없음"); return
 
         order = ["60대", "50대", "40대", "30대", "20대", "10대"]
-
         pvt = df_demo.groupby(["연령대_대","성별"])["value"].sum().unstack("성별").reindex(order).fillna(0)
         male = -pvt.get("남", pd.Series(0, index=pvt.index))
         female = pvt.get("여", pd.Series(0, index=pvt.index))
@@ -1692,7 +1689,6 @@ def render_ip_detail():
             hovertemplate="연령대=%{y}<br>여성=%{customdata[0]:,.0f}명<br>전체비중=%{customdata[1]:.1f}%<extra></extra>",
             customdata=np.column_stack([female, female_share])
         ))
-
         fig.update_layout(
             barmode="overlay", height=height, margin=dict(l=8, r=8, t=48, b=8),
             legend_title=None, bargap=0.15,
@@ -1843,20 +1839,18 @@ def render_ip_detail():
 
     st.divider()
 
-# === [Row5] 데모분석 상세 표 (AgGrid) ===
+    # === [Row5] 데모분석 상세 표 (AgGrid) ===
     st.markdown("#### 👥 회차별 시청자수 분포")
 
-# [수정] "종영" 텍스트 명시적 제거 + 중복 데이터 안전 처리 + 디버깅용 예외처리
+    # [수정] "종영" 텍스트 명시적 제거 + 중복 데이터 안전 처리 (Region 8 로컬 함수)
     def _build_demo_table_numeric(df_src, medias):
-        # 1. 기본 필터링
-        # 원본 데이터 보호를 위해 copy() 필수
+        # 1. 기본 필터링: 지표(시청인구) & 매체 & 데모값이 있는 경우만
         sub = df_src[(df_src["metric"] == "시청인구") & (df_src["데모"].notna()) & (df_src["매체"].isin(medias))].copy()
         
         if sub.empty: 
             return pd.DataFrame(columns=["회차"] + DEMO_COLS_ORDER)
 
-        # 2. [강력한 필터] "종영", "최종", "스페셜" 텍스트가 포함된 행을 아예 제외
-        # regex extraction에 의존하지 않고, 문자열 자체를 검사해서 날려버립니다.
+        # 2. [강력한 필터] "종영", "최종", "스페셜" 텍스트 포함 행 강제 제외
         exclude_keywords = "종영|최종|스페셜|마지막"
         mask_exclude = sub["회차"].astype(str).str.contains(exclude_keywords, regex=True, na=False)
         sub = sub[~mask_exclude]
@@ -1864,31 +1858,28 @@ def render_ip_detail():
         if sub.empty:
             return pd.DataFrame(columns=["회차"] + DEMO_COLS_ORDER)
 
-        # 3. 데모 정보 파싱
+        # 3. 데모 파싱
         sub["성별"] = sub["데모"].apply(_gender_from_demo)
         sub["연령대_대"] = sub["데모"].apply(_decade_label_clamped)
         sub = sub[sub["성별"].isin(["남", "여"]) & sub["연령대_대"].notna()].copy()
 
-        # 4. 회차 숫자 추출 (기존 로직 유지하되 안전장치 추가)
+        # 4. 회차 숫자 강제 추출 (혹시 남아있을 수 있는 오염 방지)
         if "회차_num" in sub.columns:
             del sub["회차_num"]
-
+        
         sub["회차_str"] = sub["회차"].astype(str)
         sub["회차_num"] = sub["회차_str"].str.extract(r"(\d+)", expand=False)
         sub["회차_num"] = pd.to_numeric(sub["회차_num"], errors="coerce")
-        
-        # 숫자로 변환되지 않은 행 제거
-        sub = sub.dropna(subset=["회차_num"])
+        sub = sub.dropna(subset=["회차_num"]) # 숫자로 변환 안되면 버림
         sub["회차_num"] = sub["회차_num"].astype(int)
 
-        # 5. Value 컬럼 안전 처리 (문자열 섞임 방지)
+        # 5. Value 컬럼 안전 처리
         sub["value"] = pd.to_numeric(sub["value"], errors="coerce").fillna(0)
 
         # 6. 피벗 라벨 생성
         sub["라벨"] = sub.apply(lambda r: f"{r['연령대_대']}{'남성' if r['성별']=='남' else '여성'}", axis=1)
 
         # 7. [핵심] 중복 데이터 사전 집계 (Pivot 에러 방지)
-        # 같은 회차, 같은 라벨에 데이터가 여러 개 있으면 미리 합쳐버립니다.
         sub_agg = sub.groupby(["회차_num", "라벨"], as_index=False)["value"].sum()
 
         if sub_agg.empty:
@@ -1897,23 +1888,21 @@ def render_ip_detail():
         # 8. 피벗 테이블 생성
         try:
             pvt = sub_agg.pivot_table(index="회차_num", columns="라벨", values="value", fill_value=0)
-        except Exception as e:
-            st.error(f"데이터 집계 중 오류 발생: {e}")
+        except Exception:
             return pd.DataFrame(columns=["회차"] + DEMO_COLS_ORDER)
         
         # 컬럼 순서 보정
         for c in DEMO_COLS_ORDER:
-            if c not in pvt.columns: 
-                pvt[c] = 0.0
+            if c not in pvt.columns: pvt[c] = 0.0
             
         pvt = pvt[DEMO_COLS_ORDER].sort_index()
 
-        # 9. 회차 포맷팅
+        # 9. 포맷팅
         def _fmt_ep_simple(n):
             return f"{int(n):02d}화"
 
         pvt.insert(0, "회차", pvt.index.map(_fmt_ep_simple))
-        pvt.columns.name = None # 인덱스 이름 제거
+        pvt.columns.name = None
         
         return pvt.reset_index(drop=True)
 
@@ -1922,7 +1911,6 @@ def render_ip_detail():
     class DiffRenderer {
       init(params) {
         this.eGui = document.createElement('span');
-        
         const api = params.api;
         const colId = params.column.getColId();
         const rowIndex = params.node.rowIndex;
@@ -1937,24 +1925,16 @@ def render_ip_detail():
           const prev = api.getDisplayedRowAtIndex(rowIndex - 1);
           if (prev && prev.data && prev.data[colId] != null) {
             const pv = Number(prev.data[colId] || 0);
-            
             if (val > pv) {
-               // 상승: (▴) 작은 삼각형, 빨간색
                arrow = '<span style="margin-left:4px;">(<span style="color:#d93636;">▴</span>)</span>';
             } else if (val < pv) {
-               // 하락: (▾) 작은 삼각형, 파란색
                arrow = '<span style="margin-left:4px;">(<span style="color:#2a61cc;">▾</span>)</span>';
             }
           }
         }
-        
-        // 3. HTML 주입
         this.eGui.innerHTML = displayVal + arrow;
       }
-
-      getGui() {
-        return this.eGui;
-      }
+      getGui() { return this.eGui; }
     }
     """)
 
@@ -1993,7 +1973,6 @@ def render_ip_detail():
         for c in [col for col in df_numeric.columns if col != "회차"]:
             gb.configure_column(c, header_name=c, cellRenderer=diff_renderer, cellStyle=cell_style_renderer)
             
-        # [수정] fit_columns_on_grid_load=True 추가 (가로 폭 맞춤)
         AgGrid(
             df_numeric, 
             gridOptions=gb.build(), 
