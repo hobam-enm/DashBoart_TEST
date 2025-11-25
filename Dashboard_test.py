@@ -1906,65 +1906,103 @@ def render_ip_detail():
         
         return pvt.reset_index(drop=True)
 
-    # [수정] 작은 삼각형(▴, ▾) 적용 & 클래스 방식 렌더러
+# [수정] 1. JS 렌더러 안전장치 강화 (0으로 나누기 방지, NaN 방어)
     diff_renderer = JsCode("""
     class DiffRenderer {
       init(params) {
         this.eGui = document.createElement('span');
-        const api = params.api;
-        const colId = params.column.getColId();
-        const rowIndex = params.node.rowIndex;
-        const val = Number(params.value || 0);
-        
-        // 1. 숫자 포맷팅
-        let displayVal = colId === "회차" ? params.value : Math.round(val).toLocaleString();
-        
-        // 2. 화살표 로직
-        let arrow = "";
-        if (colId !== "회차" && rowIndex > 0) {
-          const prev = api.getDisplayedRowAtIndex(rowIndex - 1);
-          if (prev && prev.data && prev.data[colId] != null) {
-            const pv = Number(prev.data[colId] || 0);
-            if (val > pv) {
-               arrow = '<span style="margin-left:4px;">(<span style="color:#d93636;">▴</span>)</span>';
-            } else if (val < pv) {
-               arrow = '<span style="margin-left:4px;">(<span style="color:#2a61cc;">▾</span>)</span>';
+        try {
+            const api = params.api;
+            const colId = params.column.getColId();
+            const rowIndex = params.node.rowIndex;
+            const val = Number(params.value); // null/undefined는 0이 됨
+            
+            // 1. 숫자 포맷팅 (NaN이면 빈칸 처리)
+            let displayVal = colId === "회차" ? params.value : (isNaN(val) ? "" : Math.round(val).toLocaleString());
+            
+            // 2. 화살표 로직
+            let arrow = "";
+            if (colId !== "회차" && rowIndex > 0) {
+              const prev = api.getDisplayedRowAtIndex(rowIndex - 1);
+              if (prev && prev.data) {
+                const pv = Number(prev.data[colId]);
+                if (!isNaN(pv) && !isNaN(val)) {
+                    if (val > pv) {
+                       arrow = '<span style="margin-left:4px;">(<span style="color:#d93636;">▴</span>)</span>';
+                    } else if (val < pv) {
+                       arrow = '<span style="margin-left:4px;">(<span style="color:#2a61cc;">▾</span>)</span>';
+                    }
+                }
+              }
             }
-          }
+            this.eGui.innerHTML = displayVal + arrow;
+        } catch (e) {
+            this.eGui.innerHTML = params.value; // 에러나면 그냥 값 출력
         }
-        this.eGui.innerHTML = displayVal + arrow;
       }
       getGui() { return this.eGui; }
     }
     """)
 
     _js_demo_cols = "[" + ",".join([f'"{c}"' for c in DEMO_COLS_ORDER]) + "]"
+    
+    # [수정] 색상 계산 로직에서 무한대/NaN 발생 방지
     cell_style_renderer = JsCode(f"""
     function(params){{
-      const field = params.colDef.field;
-      if (field === "회차") return {{'text-align':'left','font-weight':'600','background-color':'#fff'}};
-      const COLS = {_js_demo_cols};
-      let rowVals = [];
-      for (let k of COLS) {{
-        const v = Number((params.data && params.data[k] != null) ? params.data[k] : NaN);
-        if (!isNaN(v)) rowVals.push(v);
+      try {{
+          const field = params.colDef.field;
+          if (field === "회차") return {{'text-align':'left','font-weight':'600','background-color':'#fff'}};
+          
+          const COLS = {_js_demo_cols};
+          let rowVals = [];
+          
+          // 유효한 숫자만 수집
+          for (let k of COLS) {{
+            if (params.data && params.data[k] !== null && params.data[k] !== undefined) {{
+                const v = Number(params.data[k]);
+                if (!isNaN(v)) rowVals.push(v);
+            }}
+          }}
+          
+          let bg = '#ffffff';
+          // 데이터가 있고, 최댓값이 0보다 클 때만 색상 계산
+          if (rowVals.length > 0) {{
+            const v = Number(params.value || 0);
+            const mn = Math.min.apply(null, rowVals);
+            const mx = Math.max.apply(null, rowVals);
+            
+            // [핵심] 분모가 0이 되는 상황(mx === mn) 방어
+            if (mx > mn) {{
+                let norm = (v - mn) / (mx - mn);
+                // norm이 범위 밖으로 나가는 것 방지
+                norm = Math.max(0, Math.min(1, norm));
+                const alpha = 0.12 + 0.45 * norm;
+                bg = 'rgba(30,90,255,' + alpha.toFixed(3) + ')';
+            }} else if (mx > 0 && mx === mn) {{
+                // 모든 값이 같지만 0은 아닌 경우 (약한 파랑)
+                bg = 'rgba(30,90,255,0.2)';
+            }}
+          }}
+          return {{'background-color': bg, 'text-align': 'right', 'padding': '2px 4px', 'font-weight': '500'}};
+      }} catch (e) {{
+          return {{'background-color': '#fff', 'text-align': 'right'}};
       }}
-      let bg = '#ffffff';
-      if (rowVals.length > 0) {{
-        const v = Number(params.value || 0);
-        const mn = Math.min.apply(null, rowVals);
-        const mx = Math.max.apply(null, rowVals);
-        let norm = 0.5;
-        if (mx > mn) norm = (v - mn) / (mx - mn);
-        const alpha = 0.12 + 0.45 * Math.max(0, Math.min(1, norm));
-        bg = 'rgba(30,90,255,' + alpha.toFixed(3) + ')';
-      }}
-      return {{'background-color': bg, 'text-align': 'right', 'padding': '2px 4px', 'font-weight': '500'}};
     }}""")
 
     def _render_aggrid_table(df_numeric, title):
         st.markdown(f"###### {title}")
-        if df_numeric.empty: st.info("데이터 없음"); return
+        
+        # [디버깅용] 데이터프레임이 비어있으면 메시지 출력
+        if df_numeric.empty: 
+            st.info("⚠️ 데이터 집계 결과가 없습니다. (필터 조건 확인 필요)")
+            return
+
+        # [디버깅용] 아래 주석을 풀면, AgGrid 위에 원본 데이터를 보여줍니다.
+        # 데이터는 있는데 AgGrid가 안 나오면 -> JS 문제
+        # 데이터 자체가 이상하면 -> Python 로직 문제
+        # st.caption("▼ 디버깅용 원본 데이터 미리보기")
+        # st.dataframe(df_numeric.head(3)) 
+
         gb = GridOptionsBuilder.from_dataframe(df_numeric)
         gb.configure_grid_options(rowHeight=34, suppressMenuHide=True, domLayout='autoHeight')
         gb.configure_default_column(sortable=False, resizable=True, filter=False, cellStyle={'textAlign': 'right'}, headerClass='centered-header bold-header')
@@ -1988,6 +2026,7 @@ def render_ip_detail():
 
     tving_numeric = _build_demo_table_numeric(f, ["TVING LIVE", "TVING QUICK", "TVING VOD"])
     _render_aggrid_table(tving_numeric, "▶︎ TVING 합산 시청자수")
+    
 #endregion
 
 
