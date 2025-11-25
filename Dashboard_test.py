@@ -1880,8 +1880,6 @@ def render_ip_detail():
 
     def _build_demo_table_numeric(df_src, medias):
         sub = df_src[(df_src["metric"]=="시청인구") & (df_src["데모"].notna()) & (df_src["매체"].isin(medias))].copy()
-        sub["데모"] = sub["데모"].astype(str)
-        sub = sub[~sub["데모"].str.contains("전체", na=False)]
         if sub.empty: return pd.DataFrame(columns=["회차"] + DEMO_COLS_ORDER)
         sub["성별"] = sub["데모"].apply(_gender_from_demo)
         sub["연령대_대"] = sub["데모"].apply(_decade_label_clamped)
