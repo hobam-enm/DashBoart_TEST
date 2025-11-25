@@ -2077,12 +2077,12 @@ def render_ip_detail():
         rows = len(df_numeric)
         base_row_height = 34
         header_height = 34
-        max_visible_rows = 12   # 12화까지는 스크롤 없이 한 번에 보이도록
+        max_visible_rows = 17   # 12화까지는 스크롤 없이 한 번에 보이도록
 
         if rows <= max_visible_rows:
-            height = base_row_height * rows + header_height + 16
+            height = base_row_height * rows + header_height + 24
         else:
-            height = base_row_height * max_visible_rows + header_height + 16
+            height = base_row_height * max_visible_rows + header_height + 24
 
         AgGrid(
             df_numeric,
