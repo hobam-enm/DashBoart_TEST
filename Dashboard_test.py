@@ -1964,8 +1964,9 @@ def render_ip_detail():
     def _render_aggrid_table(df_numeric, title):
         st.markdown(f"###### {title}")
         if df_numeric.empty: st.info("데이터 없음"); return
+        grid_height = len(df_numeric) * 35 + 60
         gb = GridOptionsBuilder.from_dataframe(df_numeric)
-        gb.configure_grid_options(rowHeight=34, suppressMenuHide=True, domLayout='autoHeight')
+        gb.configure_grid_options(rowHeight=34, suppressMenuHide=True)
         gb.configure_default_column(sortable=False, resizable=True, filter=False, cellStyle={'textAlign': 'right'}, headerClass='centered-header bold-header')
         gb.configure_column("회차", header_name="회차", cellStyle={'textAlign': 'left'})
         
@@ -1977,7 +1978,7 @@ def render_ip_detail():
             df_numeric, 
             gridOptions=gb.build(), 
             theme="streamlit", 
-            height=None, 
+            height=grid_height, 
             update_mode=GridUpdateMode.NO_UPDATE, 
             allow_unsafe_jscode=True,
             fit_columns_on_grid_load=True
