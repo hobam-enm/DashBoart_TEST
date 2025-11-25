@@ -1878,22 +1878,41 @@ def render_ip_detail():
 # === [Row5] 데모분석 상세 표 (AgGrid) ===
     st.markdown("#### 👥 회차별 시청자수 분포")
 
+# [수정] 데이터 처리 안전장치 강화 (회차 타입 강제 변환 등)
     def _build_demo_table_numeric(df_src, medias):
+        # 1. 데이터 필터링
         sub = df_src[(df_src["metric"]=="시청인구") & (df_src["데모"].notna()) & (df_src["매체"].isin(medias))].copy()
-        if sub.empty: return pd.DataFrame(columns=["회차"] + DEMO_COLS_ORDER)
+        
+        if sub.empty: 
+            return pd.DataFrame(columns=["회차"] + DEMO_COLS_ORDER)
+
+        # 2. 데모 정보 파싱
         sub["성별"] = sub["데모"].apply(_gender_from_demo)
         sub["연령대_대"] = sub["데모"].apply(_decade_label_clamped)
         sub = sub[sub["성별"].isin(["남", "여"]) & sub["연령대_대"].notna()].copy()
+
+        # 3. [핵심 수정] 회차 정보 추출 안전장치 (문자열 강제 변환 후 추출)
+        # 데이터에 '비하인드' 등이 섞여있으면 NaN이 되어 전체가 날아가는 것 방지
         if "회차_num" not in sub.columns:
-            sub["회차_num"] = sub["회차"].str.extract(r"(\d+)", expand=False).astype(float)
-        sub = sub.dropna(subset=["회차_num"])
+            sub["회차_num"] = sub["회차"].astype(str).str.extract(r"(\d+)", expand=False).astype(float)
+        
+        sub = sub.dropna(subset=["회차_num"]) # 숫자가 없는 행 제거
+        
+        if sub.empty:
+            return pd.DataFrame(columns=["회차"] + DEMO_COLS_ORDER)
+
         sub["회차_num"] = sub["회차_num"].astype(int)
         sub["라벨"] = sub.apply(lambda r: f"{r['연령대_대']}{'남성' if r['성별']=='남' else '여성'}", axis=1)
+
+        # 4. 피벗 및 포맷팅
         pvt = sub.pivot_table(index="회차_num", columns="라벨", values="value", aggfunc="sum").fillna(0)
+        
         for c in DEMO_COLS_ORDER:
             if c not in pvt.columns: pvt[c] = 0
+            
         pvt = pvt[DEMO_COLS_ORDER].sort_index()
         pvt.insert(0, "회차", pvt.index.map(_fmt_ep))
+        
         return pvt.reset_index(drop=True)
 
     # [수정] 작은 삼각형(▴, ▾) 적용 & 클래스 방식 렌더러
