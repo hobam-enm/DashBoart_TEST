@@ -1931,6 +1931,111 @@ def render_ip_detail():
 
         return pvt.reset_index(drop=True)
 
+    # === JS 렌더러 (▲/▾ + 행별 그라디언트) ===
+
+    # DiffRenderer: 전 회차 대비 ▲/▾ 표시
+    diff_renderer = JsCode("""
+    class DiffRenderer {
+      init(params) {
+        this.eGui = document.createElement('span');
+
+        if (!params) {
+          this.eGui.innerText = '';
+          return;
+        }
+
+        const api = params.api;
+        const colId = params.column ? params.column.getColId() : null;
+        const rowIndex = params.node ? params.node.rowIndex : 0;
+        const rawVal = (params.value === null || params.value === undefined) ? 0 : params.value;
+        const val = Number(rawVal) || 0;
+
+        // 1. 숫자 포맷팅
+        let displayVal = (colId === "회차")
+          ? (params.value || "")
+          : Math.round(val).toLocaleString();
+
+        // 2. 화살표 로직
+        let arrow = "";
+        if (colId !== "회차" && api && typeof api.getDisplayedRowAtIndex === "function" && rowIndex > 0) {
+          const prev = api.getDisplayedRowAtIndex(rowIndex - 1);
+          if (prev && prev.data && prev.data[colId] != null) {
+            const pv = Number(prev.data[colId] || 0);
+
+            if (val > pv) {
+              // 상승: (▴) 작은 삼각형, 빨간색
+              arrow = '<span style="margin-left:4px;">(<span style="color:#d93636;">▴</span>)</span>';
+            } else if (val < pv) {
+              // 하락: (▾) 작은 삼각형, 파란색
+              arrow = '<span style="margin-left:4px;">(<span style="color:#2a61cc;">▾</span>)</span>';
+            }
+          }
+        }
+
+        this.eGui.innerHTML = displayVal + arrow;
+      }
+
+      getGui() {
+        return this.eGui;
+      }
+    }
+    """)
+
+    # 행 내에서 min~max 기준으로 블루 그라디언트
+    _js_demo_cols = "[" + ",".join([f'"{c}"' for c in DEMO_COLS_ORDER]) + "]"
+    cell_style_renderer = JsCode(f"""
+    function(params){{
+      const field = params.colDef.field;
+      // 회차 열: 좌측 정렬, 흰 배경 고정
+      if (field === "회차") {{
+        return {{
+          'text-align': 'left',
+          'font-weight': '600',
+          'background-color': '#ffffff'
+        }};
+      }}
+
+      if (!params || !params.data) {{
+        return {{
+          'background-color': '#ffffff',
+          'text-align': 'right',
+          'padding': '2px 4px',
+          'font-weight': '500'
+        }};
+      }}
+
+      const COLS = {_js_demo_cols};
+      let rowVals = [];
+      for (let k of COLS) {{
+        if (params.data.hasOwnProperty(k)) {{
+          const v = Number(params.data[k]);
+          if (!isNaN(v)) rowVals.push(v);
+        }}
+      }}
+
+      let bg = '#ffffff';
+      if (rowVals.length > 0) {{
+        const v = Number(params.value || 0);
+        const mn = Math.min.apply(null, rowVals);
+        const mx = Math.max.apply(null, rowVals);
+        let norm = 0.5;
+        if (mx > mn) {{
+          norm = (v - mn) / (mx - mn);
+        }}
+        norm = Math.max(0, Math.min(1, norm));
+        const alpha = 0.12 + 0.45 * norm;
+        bg = 'rgba(30,90,255,' + alpha.toFixed(3) + ')';
+      }}
+
+      return {{
+        'background-color': bg,
+        'text-align': 'right',
+        'padding': '2px 4px',
+        'font-weight': '500'
+      }};
+    }}
+    """)
+
     def _render_aggrid_table(df_numeric, title):
         st.markdown(f"###### {title}")
         if df_numeric.empty:
@@ -1939,10 +2044,10 @@ def render_ip_detail():
 
         gb = GridOptionsBuilder.from_dataframe(df_numeric)
 
-        # 다른 AgGrid들과 스타일 맞추기 (domLayout 제거, height 고정)
         gb.configure_grid_options(
             rowHeight=34,
             suppressMenuHide=True,
+            # domLayout는 사용 안 함 (height를 직접 계산해서 지정)
         )
 
         gb.configure_default_column(
@@ -1959,18 +2064,34 @@ def render_ip_detail():
             cellStyle={"textAlign": "left"},
         )
 
-        # 나머지 컬럼: 기본 숫자 표시
+        # 나머지 컬럼: JS 렌더러 적용
         for c in [col for col in df_numeric.columns if col != "회차"]:
-            gb.configure_column(c, header_name=c)
+            gb.configure_column(
+                c,
+                header_name=c,
+                cellRenderer=diff_renderer,
+                cellStyle=cell_style_renderer,
+            )
+
+        # 🔹 행 수에 따라 height 동적 계산
+        rows = len(df_numeric)
+        base_row_height = 34
+        header_height = 34
+        max_visible_rows = 12   # 12화까지는 스크롤 없이 한 번에 보이도록
+
+        if rows <= max_visible_rows:
+            height = base_row_height * rows + header_height + 16
+        else:
+            height = base_row_height * max_visible_rows + header_height + 16
 
         AgGrid(
             df_numeric,
             gridOptions=gb.build(),
             theme="streamlit",
-            height=360,  # 🔹 고정 높이 (필요하면 300~420 사이로 조정)
+            height=height,
             fit_columns_on_grid_load=True,
             update_mode=GridUpdateMode.NO_UPDATE,
-            allow_unsafe_jscode=False,  # JS 안 쓰므로 False
+            allow_unsafe_jscode=True,  # JS 사용
         )
 
     tv_numeric = _build_demo_table_numeric(f, ["TV"])
@@ -1980,6 +2101,7 @@ def render_ip_detail():
         f, ["TVING LIVE", "TVING QUICK", "TVING VOD"]
     )
     _render_aggrid_table(tving_numeric, "▶︎ TVING 합산 시청자수")
+
 
 
 #endregion
