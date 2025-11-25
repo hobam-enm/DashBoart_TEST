@@ -1841,85 +1841,113 @@ def render_ip_detail():
 
     # === [Row5] 데모분석 상세 표 (AgGrid) ===
     st.markdown("#### 👥 회차별 시청자수 분포")
-
-
-    # [수정] 회차 문자열에 '종영' 등 비숫자 텍스트가 섞여 있어도 안전하게 집계 (Region 8 로컬 함수)
+    # [수정] "종영" 텍스트 명시적 제거 + 중복 데이터 안전 처리 (Region 8 로컬 함수)
     def _build_demo_table_numeric(df_src, medias):
-        """단일 IP(df_src)에서 회차별 데모 시청자수(시청인구)를 집계해
-        AgGrid용 숫자 테이블로 반환한다.
+        """
+        단일 IP의 회차별 데모 시청자수 테이블을 만든다.
         - metric == '시청인구'
         - 매체 in medias
-        - 데모값이 있는 행만 사용
-        - 회차 문자열에서 숫자만 추출해 회차_num으로 사용
+        - 데모 컬럼 파싱 (성별/연령대)
+        - 회차는 숫자 부분만 사용
+        - '종영' 등 텍스트로만 된 행은 자동 제거
         """
-        # 1. 기본 필터링: 지표(시청인구) & 매체 & 데모값이 있는 경우만
-        sub = df_src[
+        # 1. 기본 필터링
+        base = df_src[
             (df_src["metric"] == "시청인구") &
             (df_src["데모"].notna()) &
             (df_src["매체"].isin(medias))
         ].copy()
 
-        if sub.empty:
+        if base.empty:
             return pd.DataFrame(columns=["회차"] + DEMO_COLS_ORDER)
 
-        # 2. 회차 숫자 추출: '1화', '1회(종영)', '종영' 등 모두 처리
-        sub["_ep_str"] = sub["회차"].astype(str)
-        sub["회차_num"] = sub["_ep_str"].str.extract(r"(\d+)", expand=False)
-        sub["회차_num"] = pd.to_numeric(sub["회차_num"], errors="coerce")
+        exclude_keywords = "종영|최종|스페셜|마지막"
 
-        # 숫자가 전혀 없는 행(예: '종영' 단독)은 제거
-        sub = sub.dropna(subset=["회차_num"])
-        if sub.empty:
-            return pd.DataFrame(columns=["회차"] + DEMO_COLS_ORDER)
+        def _inner_build(sub: pd.DataFrame) -> pd.DataFrame:
+            """내부 집계 로직: 데모 파싱 → 회차 numeric → 집계/피벗 → 포맷팅"""
+            if sub.empty:
+                return pd.DataFrame(columns=["회차"] + DEMO_COLS_ORDER)
 
-        sub["회차_num"] = sub["회차_num"].astype(int)
-        del sub["_ep_str"]
+            # 1) 데모 파싱
+            sub["성별"] = sub["데모"].apply(_gender_from_demo)
+            sub["연령대_대"] = sub["데모"].apply(_decade_label_clamped)
+            sub = sub[sub["성별"].isin(["남", "여"]) & sub["연령대_대"].notna()].copy()
+            if sub.empty:
+                return pd.DataFrame(columns=["회차"] + DEMO_COLS_ORDER)
 
-        # 3. value 컬럼 안전 변환
-        sub["value"] = pd.to_numeric(sub["value"], errors="coerce").fillna(0)
+            # 2) 회차 numeric (기존 회차_numeric 있으면 우선 사용)
+            if "회차_num" in sub.columns:
+                sub = sub.drop(columns=["회차_num"])
 
-        # 4. 데모 파싱
-        sub["성별"] = sub["데모"].apply(_gender_from_demo)
-        sub["연령대_대"] = sub["데모"].apply(_decade_label_clamped)
-        sub = sub[sub["성별"].isin(["남", "여"]) & sub["연령대_대"].notna()].copy()
+            if "회차_numeric" in sub.columns:
+                sub["회차_num"] = pd.to_numeric(sub["회차_numeric"], errors="coerce")
+            elif "회차" in sub.columns:
+                sub["회차_str"] = sub["회차"].astype(str)
+                sub["회차_num"] = sub["회차_str"].str.extract(r"(\d+)", expand=False)
+                sub["회차_num"] = pd.to_numeric(sub["회차_num"], errors="coerce")
+            else:
+                return pd.DataFrame(columns=["회차"] + DEMO_COLS_ORDER)
 
-        if sub.empty:
-            return pd.DataFrame(columns=["회차"] + DEMO_COLS_ORDER)
+            sub = sub.dropna(subset=["회차_num"])
+            if sub.empty:
+                return pd.DataFrame(columns=["회차"] + DEMO_COLS_ORDER)
 
-        # 5. 라벨 생성 (예: '20대남성')
-        sub["라벨"] = sub.apply(
-            lambda r: f"{r['연령대_대']}{'남성' if r['성별'] == '남' else '여성'}",
-            axis=1,
-        )
+            sub["회차_num"] = sub["회차_num"].astype(int)
 
-        # 6. 회차/데모별 시청자수 합산 (중복 데이터 사전 집계)
-        sub_agg = sub.groupby(["회차_num", "라벨"], as_index=False)["value"].sum()
-        if sub_agg.empty:
-            return pd.DataFrame(columns=["회차"] + DEMO_COLS_ORDER)
+            # 3) value numeric
+            sub["value"] = pd.to_numeric(sub["value"], errors="coerce").fillna(0)
 
-        # 7. 피벗 테이블 생성
-        pvt = sub_agg.pivot_table(
-            index="회차_num",
-            columns="라벨",
-            values="value",
-            fill_value=0,
-        )
+            # 4) 라벨
+            sub["라벨"] = sub.apply(
+                lambda r: f"{r['연령대_대']}{'남성' if r['성별']=='남' else '여성'}",
+                axis=1
+            )
 
-        # 8. 컬럼 순서 보정 (누락 컬럼은 0으로 채움)
-        for c in DEMO_COLS_ORDER:
-            if c not in pvt.columns:
-                pvt[c] = 0.0
-        pvt = pvt[DEMO_COLS_ORDER].sort_index()
+            # 5) 집계 & 피벗
+            sub_agg = sub.groupby(["회차_num", "라벨"], as_index=False)["value"].sum()
+            if sub_agg.empty:
+                return pd.DataFrame(columns=["회차"] + DEMO_COLS_ORDER)
 
-        # 9. 회차 라벨 포맷팅
-        def _fmt_ep_simple(n):
-            return f"{int(n):02d}화"
+            try:
+                pvt = sub_agg.pivot_table(
+                    index="회차_num",
+                    columns="라벨",
+                    values="value",
+                    fill_value=0
+                )
+            except Exception:
+                return pd.DataFrame(columns=["회차"] + DEMO_COLS_ORDER)
 
-        pvt.insert(0, "회차", pvt.index.map(_fmt_ep_simple))
-        pvt.columns.name = None
+            # 컬럼 순서 보정
+            for c in DEMO_COLS_ORDER:
+                if c not in pvt.columns:
+                    pvt[c] = 0.0
+            pvt = pvt[DEMO_COLS_ORDER].sort_index()
 
-        return pvt.reset_index(drop=True)
+            # 회차 라벨
+            def _fmt_ep_simple(n):
+                return f"{int(n):02d}화"
 
+            pvt.insert(0, "회차", pvt.index.map(_fmt_ep_simple))
+            pvt.columns.name = None
+            return pvt.reset_index(drop=True)
+
+        # 1차 시도: '종영' 등 키워드가 들어간 행 제거 후 집계
+        sub1 = base.copy()
+        if "회차" in sub1.columns:
+            mask_exclude = sub1["회차"].astype(str).str.contains(
+                exclude_keywords, regex=True, na=False
+            )
+            sub1 = sub1[~mask_exclude]
+
+        df1 = _inner_build(sub1)
+
+        # 만약 집계 결과가 완전히 비면, 키워드 필터 없이 한 번 더 시도
+        if df1.empty:
+            df2 = _inner_build(base)
+            return df2
+
+        return df1
 
 # [수정] 1. JS 렌더러 안전장치 강화 (0으로 나누기 방지, NaN 방어)
     diff_renderer = JsCode("""
