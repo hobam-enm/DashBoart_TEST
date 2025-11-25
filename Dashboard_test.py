@@ -1891,12 +1891,28 @@ def render_ip_detail():
         sub["연령대_대"] = sub["데모"].apply(_decade_label_clamped)
         sub = sub[sub["성별"].isin(["남", "여"]) & sub["연령대_대"].notna()].copy()
 
-        # 3. [핵심 수정] 회차 정보 추출 안전장치 (문자열 강제 변환 후 추출)
-        # 데이터에 '비하인드' 등이 섞여있으면 NaN이 되어 전체가 날아가는 것 방지
-        if "회차_num" not in sub.columns:
-            sub["회차_num"] = sub["회차"].astype(str).str.extract(r"(\d+)", expand=False).astype(float)
+        # 3. [핵심] 상위에서 넘어온 회차_num이 있어도 무시하고(del), 강제로 다시 계산
+        #    이유: 상위 로직에서 "종영"을 NaN으로 만들어버렸을 수 있음
+        if "회차_num" in sub.columns:
+            del sub["회차_num"]
+
+        # 문자열로 변환하여 처리
+        sub["회차_str"] = sub["회차"].astype(str)
         
-        sub = sub.dropna(subset=["회차_num"]) # 숫자가 없는 행 제거
+        # (1) 숫자 추출
+        sub["회차_num"] = sub["회차_str"].str.extract(r"(\d+)", expand=False).astype(float)
+        
+        # (2) "종영" 또는 "최종" 텍스트가 있는데 숫자가 안 뽑힌 경우 -> 가상의 큰 숫자(999) 부여해서 살림
+        #     예: "종영" -> 999, "16화(종영)" -> 16 (이미 뽑힘)
+        mask_final = (sub["회차_num"].isna()) & (sub["회차_str"].str.contains("종영|최종|마지막", regex=True))
+        if mask_final.any():
+            # 기존 회차 중 가장 큰 값 + 1을 부여하거나, 없으면 999 부여
+            max_ep = sub["회차_num"].max()
+            fill_val = 999 if pd.isna(max_ep) else max_ep + 1
+            sub.loc[mask_final, "회차_num"] = fill_val
+
+        # (3) 그래도 NaN인 행(순수 텍스트 등)은 제거
+        sub = sub.dropna(subset=["회차_num"])
         
         if sub.empty:
             return pd.DataFrame(columns=["회차"] + DEMO_COLS_ORDER)
@@ -1904,14 +1920,21 @@ def render_ip_detail():
         sub["회차_num"] = sub["회차_num"].astype(int)
         sub["라벨"] = sub.apply(lambda r: f"{r['연령대_대']}{'남성' if r['성별']=='남' else '여성'}", axis=1)
 
-        # 4. 피벗 및 포맷팅
+        # 4. 피벗 테이블 생성
         pvt = sub.pivot_table(index="회차_num", columns="라벨", values="value", aggfunc="sum").fillna(0)
         
         for c in DEMO_COLS_ORDER:
             if c not in pvt.columns: pvt[c] = 0
             
         pvt = pvt[DEMO_COLS_ORDER].sort_index()
-        pvt.insert(0, "회차", pvt.index.map(_fmt_ep))
+
+        # 5. [핵심] 회차 표시명 복구 (999 등 가상 숫자를 '종영' 등으로 표기)
+        def _fmt_ep_custom(n):
+            if n >= 900: # 위에서 999로 처리한 경우
+                return "최종화(종영)"
+            return f"{int(n):02d}화"
+
+        pvt.insert(0, "회차", pvt.index.map(_fmt_ep_custom))
         
         return pvt.reset_index(drop=True)
 
@@ -1999,6 +2022,7 @@ def render_ip_detail():
             height=None, 
             update_mode=GridUpdateMode.NO_UPDATE, 
             allow_unsafe_jscode=True,
+            fit_columns_on_grid_load=True
         )
 
     tv_numeric = _build_demo_table_numeric(f, ["TV"])
