@@ -1885,11 +1885,10 @@ def render_ip_detail():
             & (df_src["매체"].isin(medias))
         ].copy()
 
-        # 시청인구 + 데모 + 매체 필터 이후 데이터가 아예 없으면, 빈 DF 리턴
         if sub.empty:
             return pd.DataFrame(columns=["회차"] + DEMO_COLS_ORDER)
 
-        # 데모 → 성별 / 연령대 라벨 추출
+        # 데모 → 성별 / 연령대
         sub["성별"] = sub["데모"].apply(_gender_from_demo)
         sub["연령대_대"] = sub["데모"].apply(_decade_label_clamped)
         sub = sub[sub["성별"].isin(["남", "여"]) & sub["연령대_대"].notna()].copy()
@@ -1905,13 +1904,13 @@ def render_ip_detail():
 
         sub["회차_num"] = sub["회차_num"].astype(int)
 
-        # 라벨: "20대남성", "30대여성" 형태
+        # 라벨: "20대남성", "30대여성"
         sub["라벨"] = sub.apply(
             lambda r: f"{r['연령대_대']}{'남성' if r['성별']=='남' else '여성'}",
             axis=1,
         )
 
-        # 피벗: index=회차_num, columns=라벨, values=value(시청인구)
+        # 피벗: 회차 × 데모 매트릭스
         pvt = (
             sub.pivot_table(
                 index="회차_num",
@@ -1922,37 +1921,28 @@ def render_ip_detail():
             .fillna(0)
         )
 
-        # 없는 데모 컬럼 0으로 채워서 순서 맞추기
+        # 없는 데모 컬럼 0으로 채워서 순서 통일
         for c in DEMO_COLS_ORDER:
             if c not in pvt.columns:
                 pvt[c] = 0
 
         pvt = pvt[DEMO_COLS_ORDER].sort_index()
-
-        # 회차 라벨 컬럼 추가
         pvt.insert(0, "회차", pvt.index.map(_fmt_ep))
 
         return pvt.reset_index(drop=True)
 
     def _render_aggrid_table(df_numeric, title):
         st.markdown(f"###### {title}")
-
-        # 🔍 디버그: 현재 DF 크기 확인
-        st.caption(f"[DEBUG] {title} 데이터 shape = {df_numeric.shape}")
-
         if df_numeric.empty:
             st.info("데이터 없음")
             return
 
-        # 🔍 디버그: 원본 DF 한 번 그냥 보여주기 (AgGrid 이전에)
-        st.dataframe(df_numeric, use_container_width=True)
-
         gb = GridOptionsBuilder.from_dataframe(df_numeric)
 
+        # 다른 AgGrid들과 스타일 맞추기 (domLayout 제거, height 고정)
         gb.configure_grid_options(
             rowHeight=34,
             suppressMenuHide=True,
-            domLayout="autoHeight",
         )
 
         gb.configure_default_column(
@@ -1969,7 +1959,7 @@ def render_ip_detail():
             cellStyle={"textAlign": "left"},
         )
 
-        # 나머지 컬럼은 기본 숫자 표시 (JS 렌더러 제거)
+        # 나머지 컬럼: 기본 숫자 표시
         for c in [col for col in df_numeric.columns if col != "회차"]:
             gb.configure_column(c, header_name=c)
 
@@ -1977,10 +1967,10 @@ def render_ip_detail():
             df_numeric,
             gridOptions=gb.build(),
             theme="streamlit",
-            height=None,
-            update_mode=GridUpdateMode.NO_UPDATE,
-            allow_unsafe_jscode=False,  # JS 안 씀
+            height=360,  # 🔹 고정 높이 (필요하면 300~420 사이로 조정)
             fit_columns_on_grid_load=True,
+            update_mode=GridUpdateMode.NO_UPDATE,
+            allow_unsafe_jscode=False,  # JS 안 쓰므로 False
         )
 
     tv_numeric = _build_demo_table_numeric(f, ["TV"])
@@ -1990,6 +1980,7 @@ def render_ip_detail():
         f, ["TVING LIVE", "TVING QUICK", "TVING VOD"]
     )
     _render_aggrid_table(tving_numeric, "▶︎ TVING 합산 시청자수")
+
 
 #endregion
 
