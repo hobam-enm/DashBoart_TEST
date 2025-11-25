@@ -1963,25 +1963,39 @@ def render_ip_detail():
 
     def _render_aggrid_table(df_numeric, title):
         st.markdown(f"###### {title}")
-        if df_numeric.empty: st.info("데이터 없음"); return
+        if df_numeric.empty:
+            st.info("데이터 없음")
+            return
+
         gb = GridOptionsBuilder.from_dataframe(df_numeric)
-        gb.configure_grid_options(rowHeight=34, suppressMenuHide=True, domLayout='autoHeight')
-        gb.configure_default_column(sortable=False, resizable=True, filter=False, cellStyle={'textAlign': 'right'}, headerClass='centered-header bold-header')
-        gb.configure_column("회차", header_name="회차", cellStyle={'textAlign': 'left'})
-        
-        for c in [col for col in df_numeric.columns if col != "회차"]:
-            gb.configure_column(c, header_name=c, cellRenderer=diff_renderer, cellStyle=cell_style_renderer)
-            
-        # [수정] fit_columns_on_grid_load=True 추가 (가로 폭 맞춤)
-        AgGrid(
-            df_numeric, 
-            gridOptions=gb.build(), 
-            theme="streamlit", 
-            height=None, 
-            update_mode=GridUpdateMode.NO_UPDATE, 
-            allow_unsafe_jscode=True,
-            fit_columns_on_grid_load=True
+        gb.configure_grid_options(
+            rowHeight=34,
+            suppressMenuHide=True,
+            domLayout="autoHeight",
         )
+        gb.configure_default_column(
+            sortable=False,
+            resizable=True,
+            filter=False,
+            cellStyle={"textAlign": "right"},
+            headerClass="centered-header bold-header",
+        )
+        gb.configure_column("회차", header_name="회차", cellStyle={"textAlign": "left"})
+
+        # 🔴 일단 JsCode 렌더러는 모두 끈 상태로 테스트
+        for c in [col for col in df_numeric.columns if c != "회차"]:
+            gb.configure_column(c, header_name=c)
+
+        AgGrid(
+            df_numeric,
+            gridOptions=gb.build(),
+            theme="streamlit",
+            height=None,
+            update_mode=GridUpdateMode.NO_UPDATE,
+            allow_unsafe_jscode=False,  # ↼ 여기까지 꺼버리기
+            fit_columns_on_grid_load=True,
+        )
+
 
     tv_numeric = _build_demo_table_numeric(f, ["TV"])
     _render_aggrid_table(tv_numeric, "📺 TV (시청자수)")
