@@ -25,7 +25,7 @@ import extra_streamlit_components as stx  # [추가] 쿠키 매니저 라이브�
 #region [ 1-0. 페이지 설정  ]
 # =====================================================
 st.set_page_config(
-    page_title="(TEST)Drama Dashboard",
+    page_title="Drama Dashboard",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -971,42 +971,54 @@ def render_overview():
             label_visibility="collapsed"
         )
 
+    # [수정] 연도 필터: '편성연도' 컬럼 사용 (날짜 파싱 X)
+    all_years = []
+    if "편성연도" in df.columns:
+        unique_vals = df["편성연도"].dropna().unique()
+        try:
+            all_years = sorted(unique_vals, reverse=True)
+        except:
+            all_years = sorted([str(x) for x in unique_vals], reverse=True)
+
+    # [수정] 월 필터: 기존 날짜 컬럼 사용 (연도와 분리)
     if "방영시작일" in df.columns and df["방영시작일"].notna().any():
-        date_col_for_filter = "방영시작일"
+        date_col_for_month = "방영시작일"
     else:
-        date_col_for_filter = "주차시작일"
-        
-    date_series = df[date_col_for_filter].dropna()
-    if not date_series.empty:
-        all_years = sorted(date_series.dt.year.unique().tolist(), reverse=True)
-        all_months = sorted(date_series.dt.month.unique().tolist())
-        
-        with filter_cols[2]:
-            year_sel = st.multiselect(
-                "연도", 
-                all_years, 
-                placeholder="연도 선택",
-                label_visibility="collapsed"
-            )
-        with filter_cols[3]:
-            month_sel = st.multiselect(
-                "월", 
-                all_months, 
-                placeholder="월 선택",
-                label_visibility="collapsed"
-            )
-    else:
-        year_sel = None
-        month_sel = None
+        date_col_for_month = "주차시작일"
+    
+    all_months = []
+    if date_col_for_month in df.columns:
+        date_series = df[date_col_for_month].dropna()
+        if not date_series.empty:
+            all_months = sorted(date_series.dt.month.unique().tolist())
+
+    with filter_cols[2]:
+        year_sel = st.multiselect(
+            "연도", 
+            all_years, 
+            placeholder="연도 선택",
+            label_visibility="collapsed"
+        )
+    with filter_cols[3]:
+        month_sel = st.multiselect(
+            "월", 
+            all_months, 
+            placeholder="월 선택",
+            label_visibility="collapsed"
+        )
 
     # --- 필터 적용 ---
     f = df.copy()
     if prog_sel:
         f = f[f["편성"].isin(prog_sel)]
-    if year_sel and date_col_for_filter in f.columns:
-        f = f[f[date_col_for_filter].dt.year.isin(year_sel)]
-    if month_sel and date_col_for_filter in f.columns:
-        f = f[f[date_col_for_filter].dt.month.isin(month_sel)]
+    
+    # [수정] 연도 필터 적용 (값 직접 비교)
+    if year_sel and "편성연도" in f.columns:
+        f = f[f["편성연도"].isin(year_sel)]
+        
+    # [수정] 월 필터 적용 (기존 날짜 컬럼 활용)
+    if month_sel and date_col_for_month in f.columns:
+        f = f[f[date_col_for_month].dt.month.isin(month_sel)]
 
     # --- 요약카드 계산 서브함수 (KPI 공통 유틸 사용) ---
     def avg_of_ip_means(metric_name: str):
@@ -1279,10 +1291,8 @@ def render_ip_detail():
         )
 
     # --- 데이터 전처리 (Default 설정을 위해 위치 이동) ---
-    if "방영시작일" in df_full.columns and df_full["방영시작일"].notna().any():
-        date_col_for_filter = "방영시작일"
-    else:
-        date_col_for_filter = "주차시작일"
+    # [수정] 방영 연도 필터 기준을 '편성연도' 컬럼으로 변경 (날짜 파싱 X)
+    date_col_for_filter = "편성연도"
 
     target_ip_rows = df_full[df_full["IP"] == ip_selected]
     
@@ -1292,16 +1302,25 @@ def render_ip_detail():
     
     if not target_ip_rows.empty:
         try:
-            y_mode = target_ip_rows[date_col_for_filter].dropna().dt.year.mode()
-            if not y_mode.empty:
-                default_year_list = [int(y_mode.iloc[0])]
+            # [수정] 날짜 파싱(.dt.year) 없이 값 그대로 모드 추출
+            if date_col_for_filter in target_ip_rows.columns:
+                y_mode = target_ip_rows[date_col_for_filter].dropna().mode()
+                if not y_mode.empty:
+                    default_year_list = [y_mode.iloc[0]]
+            
             sel_prog = target_ip_rows["편성"].dropna().mode().iloc[0]
         except Exception:
             pass
             
     all_years = []
+    # [수정] '편성연도' 컬럼의 고유값을 그대로 사용
     if date_col_for_filter in df_full.columns:
-        all_years = sorted(df_full[date_col_for_filter].dropna().dt.year.unique().astype(int).tolist(), reverse=True)
+        unique_vals = df_full[date_col_for_filter].dropna().unique()
+        try:
+            all_years = sorted(unique_vals, reverse=True)
+        except:
+            # 정렬 실패(타입 혼재 등) 시 문자열 변환 후 정렬
+            all_years = sorted([str(x) for x in unique_vals], reverse=True)
 
     # [Col 2] 방영 연도
     with filter_cols[2]:
@@ -1355,12 +1374,18 @@ def render_ip_detail():
 
     # 2. 방영 연도 필터
     if selected_years:
-        base_raw = base_raw[base_raw[date_col_for_filter].dt.year.isin(selected_years)]
+        # [수정] 날짜 파싱(.dt.year) 없이 컬럼 값 그대로 비교
+        base_raw = base_raw[base_raw[date_col_for_filter].isin(selected_years)]
+        
         if len(selected_years) <= 3:
             years_str = ",".join(map(str, sorted(selected_years)))
-            group_name_parts.append(f"{years_str}년")
+            # [수정] 데이터 값 자체("24년")를 사용하므로 "년" 접미사 제거
+            group_name_parts.append(f"{years_str}")
         else:
-            group_name_parts.append(f"{min(selected_years)}~{max(selected_years)}년")
+            try:
+                group_name_parts.append(f"{min(selected_years)}~{max(selected_years)}")
+            except:
+                group_name_parts.append("선택연도")
     else:
         st.warning("선택된 연도가 없습니다. (전체 연도 데이터와 비교)", icon="⚠️")
 
@@ -1934,6 +1959,7 @@ def render_ip_detail():
     # === JS 렌더러 (▲/▾ + 행별 그라디언트) ===
 
     # DiffRenderer: 전 회차 대비 ▲/▾ 표시
+    # [수정] DiffRenderer: 주석 스타일 변경(//) 및 특수문자 HTML Entity 사용
     diff_renderer = JsCode("""
     class DiffRenderer {
       init(params) {
@@ -1963,11 +1989,11 @@ def render_ip_detail():
             const pv = Number(prev.data[colId] || 0);
 
             if (val > pv) {
-              // 상승: (▴) 작은 삼각형, 빨간색
-              arrow = '<span style="margin-left:4px;">(<span style="color:#d93636;">▴</span>)</span>';
+              // 상승: 작은 삼각형(Red) -> HTML Entity 사용
+              arrow = '<span style="margin-left:4px;">(<span style="color:#d93636;">&#9652;</span>)</span>';
             } else if (val < pv) {
-              // 하락: (▾) 작은 삼각형, 파란색
-              arrow = '<span style="margin-left:4px;">(<span style="color:#2a61cc;">▾</span>)</span>';
+              // 하락: 작은 역삼각형(Blue) -> HTML Entity 사용
+              arrow = '<span style="margin-left:4px;">(<span style="color:#2a61cc;">&#9662;</span>)</span>';
             }
           }
         }
@@ -2683,13 +2709,22 @@ def render_comparison():
     # --- IP vs 그룹 평균 모드 ---
     else: 
         base_ip_info_rows = df_all[df_all["IP"] == selected_ip1];
+        
+        # [수정] '편성연도' 컬럼 사용
         all_years = []
-        date_col = "방영시작일" if "방영시작일" in df_all.columns and df_all["방영시작일"].notna().any() else "주차시작일"
-        if date_col in df_all.columns:
-            all_years = sorted(df_all[date_col].dropna().dt.year.unique().astype(int).tolist(), reverse=True)
-            
-        base_ip_year = base_ip_info_rows[date_col].dropna().dt.year.mode().iloc[0] if not base_ip_info_rows[date_col].dropna().empty else None
-        default_year_list = [int(base_ip_year)] if base_ip_year else []
+        if "편성연도" in df_all.columns:
+            unique_vals = df_all["편성연도"].dropna().unique()
+            try:
+                all_years = sorted(unique_vals, reverse=True)
+            except:
+                all_years = sorted([str(x) for x in unique_vals], reverse=True)
+
+        # Default selection
+        default_year_list = []
+        if "편성연도" in base_ip_info_rows.columns:
+            y_mode = base_ip_info_rows["편성연도"].dropna().mode()
+            if not y_mode.empty:
+                default_year_list = [y_mode.iloc[0]]
 
         with filter_cols[2]:
             selected_ip1 = st.selectbox(
@@ -2750,7 +2785,6 @@ def render_comparison():
         df_comp = df_all.copy()
         
         ip_prog = df_target["편성"].dropna().mode().iloc[0] if not df_target["편성"].dropna().empty else None
-        date_col = "방영시작일" if "방영시작일" in df_target.columns else "주차시작일"
         
         if use_same_prog: 
             if ip_prog:
@@ -2758,13 +2792,18 @@ def render_comparison():
                 group_name_parts.append(f"'{ip_prog}'")
             else: st.warning("편성 정보 없음 (제외)")
         
-        if selected_years: 
-            df_comp = df_comp[df_comp[date_col].dt.year.isin(selected_years)]
+        if selected_years:
+            # [수정] 값 직접 비교
+            df_comp = df_comp[df_comp["편성연도"].isin(selected_years)]
+
             if len(selected_years) <= 3:
                 years_str = ",".join(map(str, sorted(selected_years)))
-                group_name_parts.append(f"{years_str}년")
+                group_name_parts.append(f"{years_str}") # '년' 제거 (데이터에 포함됨)
             else:
-                group_name_parts.append(f"{min(selected_years)}~{max(selected_years)}년")
+                try:
+                    group_name_parts.append(f"{min(selected_years)}~{max(selected_years)}")
+                except:
+                    group_name_parts.append("선택연도")
         
         if not group_name_parts: group_name_parts.append("전체")
         comp_name = " & ".join(group_name_parts) + " 평균"
@@ -2849,7 +2888,6 @@ def render_comparison():
         _render_kpi_row_ip_vs_ip(kpis_target, kpis_comp, selected_ip1, selected_ip2)
         _render_unified_charts(df_target, df_comp, selected_ip1, comp_name, kpi_percentiles, comp_color="#aaaaaa")
 #endregion
-
 
 #region [ 10. 페이지 4: 성장스코어-방영성과 ]
 # =====================================================
