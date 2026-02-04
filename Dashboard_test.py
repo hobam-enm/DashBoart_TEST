@@ -18,10 +18,6 @@ import streamlit as st
 from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode, JsCode
 from pymongo import MongoClient
 import extra_streamlit_components as stx
-
-# [추가] 구글 시트 직접 연동용
-import gspread
-from oauth2client.service_account import ServiceAccountCredentials
 #endregion
 
 
@@ -407,12 +403,16 @@ pio.templates.default = 'dashboard_theme'
 
 #region [ 3. 공통 함수: 데이터 로드 / 유틸리티 ]
 # =====================================================
-import urllib.parse 
 
 # ===== 3.1. 데이터 로드 (MongoDB) =====
 @st.cache_data(ttl=600)
 def load_data() -> pd.DataFrame:
+    """
+    MongoDB에서 데이터를 로드합니다.
+    ETL 과정에서 전처리가 완료된 상태이므로 로드 속도가 빠릅니다.
+    """
     try:
+        # 1. MongoDB 연결
         uri = st.secrets["mongo"]["uri"]
         db_name = st.secrets["mongo"]["db"]
         col_name = st.secrets["mongo"]["collection"]
@@ -421,69 +421,55 @@ def load_data() -> pd.DataFrame:
         db = client[db_name]
         collection = db[col_name]
 
+        # 2. 데이터 가져오기 (전체 조회, _id 제외)
         cursor = collection.find({}, {"_id": 0})
         data = list(cursor)
         
-        if not data: return pd.DataFrame()
+        if not data:
+            return pd.DataFrame()
+
         df = pd.DataFrame(data)
 
     except Exception as e:
         st.error(f"MongoDB 데이터 로드 중 오류 발생: {e}")
         return pd.DataFrame()
 
-    # 데이터 타입 안전장치
+    # --- 3. 데이터 타입 안전장치 ---
+    # 날짜 컬럼 변환
     for col in ["주차시작일", "방영시작일"]:
         if col in df.columns:
             df[col] = pd.to_datetime(df[col], errors="coerce")
 
+    # 숫자 컬럼 변환 (결측치 0 처리)
     if "value" in df.columns:
         df["value"] = pd.to_numeric(df["value"], errors="coerce").fillna(0)
 
+    # 문자열 공백 제거
     str_cols = ["IP", "편성", "지표구분", "매체", "데모", "metric", "회차", "주차"]
     existing_cols = [c for c in str_cols if c in df.columns]
     if existing_cols:
         df[existing_cols] = df[existing_cols].astype(str).apply(lambda x: x.str.strip())
 
+    # 회차_numeric 안전장치
     if "회차_numeric" not in df.columns:
         df["회차_numeric"] = pd.NA
 
     return df
 
-
-# ===== [신규] 구글 시트 포스터 데이터 로드 =====
-@st.cache_data(ttl=600)
-def load_poster_map() -> Dict[str, str]:
-    SHEET_ID = "1fKVPXGN-R2bsrv018dz8zTmg431ZSBHx1PCTnMpdoWY"
-    TAB_NAME = "포스터"
-
-    try:
-        if "gcp_service_account" not in st.secrets: return {}
-        creds_dict = st.secrets["gcp_service_account"]
-        scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
-        creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
-        client = gspread.authorize(creds)
-
-        sheet = client.open_by_key(SHEET_ID)
-        worksheet = sheet.worksheet(TAB_NAME)
-        all_records = worksheet.get_all_records()
-        
-        poster_map = {}
-        for row in all_records:
-            p_ip = str(row.get("IP명", row.get("IP", ""))).strip()
-            p_url = str(row.get("포스터URL", row.get("포스터", row.get("URL", "")))).strip()
-            if p_ip and p_url: poster_map[p_ip] = p_url
-        return poster_map
-    except Exception as e:
-        print(f"포스터 로드 실패: {e}")
-        return {}
-
-
 # ===== 3.2. UI / 포맷팅 헬퍼 함수 =====
+
 def fmt(v, digits=3, intlike=False):
-    if v is None or pd.isna(v): return "–"
+    """
+    숫자 포맷팅 헬퍼 (None이나 NaN은 '–'로 표시)
+    """
+    if v is None or pd.isna(v):
+        return "–"
     return f"{v:,.0f}" if intlike else f"{v:.{digits}f}"
 
 def kpi(col, title, value):
+    """
+    Streamlit 컬럼 내에 KPI 카드를 렌더링합니다. (CSS .kpi-card 필요)
+    """
     with col:
         st.markdown(
             f'<div class="kpi-card"><div class="kpi-title">{title}</div>'
@@ -492,6 +478,9 @@ def kpi(col, title, value):
         )
 
 def render_gradient_title(main_text: str, emoji: str = "🎬"):
+    """
+    사이드바용 그라디언트 타이틀을 렌더링합니다. (CSS .page-title-wrap 필요)
+    """
     st.markdown(
         f"""
         <div class="page-title-wrap">
@@ -503,23 +492,32 @@ def render_gradient_title(main_text: str, emoji: str = "🎬"):
     )
 
 # ===== 3.3. 페이지 라우팅 / 데이터 헬퍼 함수 =====
+
 def get_current_page_default(default="Overview"):
+    """
+    URL 쿼리 파라미터(?page=...)에서 현재 페이지를 읽어옵니다.
+    """
     try:
         qp = st.query_params
         p = qp.get("page", None)
-        if p is None: return default
+        if p is None:
+            return default
         return p if isinstance(p, str) else p[0]
-    except Exception: return default
+    except Exception:
+        # 구버전 호환성
+        return default
 
 def _set_page_query_param(page_key: str):
-    try: st.query_params["page"] = page_key
-    except Exception: pass
-
-def _rerun():
-    try: st.rerun()
-    except AttributeError: st.experimental_rerun()
+    """
+    URL 쿼리 파라미터에 page 키를 설정합니다.
+    """
+    try:
+        st.query_params["page"] = page_key
+    except Exception:
+        pass
 
 def get_episode_options(df: pd.DataFrame) -> List[str]:
+    """데이터에서 사용 가능한 회차 목록 (문자열)을 추출합니다."""
     valid_options = []
     if "회차_numeric" in df.columns:
         unique_episodes_num = sorted([
@@ -528,6 +526,7 @@ def get_episode_options(df: pd.DataFrame) -> List[str]:
         if unique_episodes_num:
             max_ep_num = unique_episodes_num[-1]
             valid_options = [str(ep) for ep in unique_episodes_num]
+            
             last_ep_str = str(max_ep_num)
             if len(valid_options) > 0 and "(마지막화)" not in valid_options[-1]:
                  valid_options[-1] = f"{last_ep_str} (마지막화)"
@@ -535,263 +534,78 @@ def get_episode_options(df: pd.DataFrame) -> List[str]:
     return []
 
 # ===== 3.4. 통합 데이터 필터링 유틸 =====
+
 def _get_view_data(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    '조회수' metric만 필터링하고, 유튜브 PGC/UGC 규칙을 적용하는 공통 유틸.
+    """
     sub = df[df["metric"] == "조회수"].copy()
-    if sub.empty: return sub
+    if sub.empty:
+        return sub
+        
     if "매체" in sub.columns and "세부속성1" in sub.columns:
         yt_mask = (sub["매체"] == "유튜브")
         attr_mask = sub["세부속성1"].isin(["PGC", "UGC"])
         sub = sub[~yt_mask | (yt_mask & attr_mask)]
+    
     return sub
 
 # ===== 3.5. 집계 계산 유틸 =====
+
 def _episode_col(df: pd.DataFrame) -> str:
+    """데이터프레임에 존재하는 회차 숫자 컬럼명을 반환합니다."""
     return "회차_numeric" if "회차_numeric" in df.columns else ("회차_num" if "회차_num" in df.columns else "회차")
 
 def mean_of_ip_episode_sum(df: pd.DataFrame, metric_name: str, media=None) -> float | None:
     sub = df[(df["metric"] == metric_name)].copy()
-    if media is not None: sub = sub[sub["매체"].isin(media)]
-    if sub.empty: return None
+    if media is not None:
+        sub = sub[sub["매체"].isin(media)]
+    if sub.empty:
+        return None
     ep_col = _episode_col(sub)
     sub = sub.dropna(subset=[ep_col]).copy()
+    
     sub["value"] = pd.to_numeric(sub["value"], errors="coerce").replace(0, np.nan)
     sub = sub.dropna(subset=["value"])
+
     ep_sum = sub.groupby(["IP", ep_col], as_index=False)["value"].sum()
     per_ip_mean = ep_sum.groupby("IP")["value"].mean()
     return float(per_ip_mean.mean()) if not per_ip_mean.empty else None
 
 def mean_of_ip_episode_mean(df: pd.DataFrame, metric_name: str, media=None) -> float | None:
     sub = df[(df["metric"] == metric_name)].copy()
-    if media is not None: sub = sub[sub["매체"].isin(media)]
-    if sub.empty: return None
+    if media is not None:
+        sub = sub[sub["매체"].isin(media)]
+    if sub.empty:
+        return None
     ep_col = _episode_col(sub)
     sub = sub.dropna(subset=[ep_col]).copy()
+    
     sub["value"] = pd.to_numeric(sub["value"], errors="coerce").replace(0, np.nan)
     sub = sub.dropna(subset=["value"])
+
     ep_mean = sub.groupby(["IP", ep_col], as_index=False)["value"].mean()
     per_ip_mean = ep_mean.groupby("IP")["value"].mean()
     return float(per_ip_mean.mean()) if not per_ip_mean.empty else None
 
 def mean_of_ip_sums(df: pd.DataFrame, metric_name: str, media=None) -> float | None:
-    if metric_name == "조회수": sub = _get_view_data(df) 
-    else: sub = df[df["metric"] == metric_name].copy()
-    if media is not None: sub = sub[sub["매체"].isin(media)]
-    if sub.empty: return None
+    
+    if metric_name == "조회수":
+        sub = _get_view_data(df) 
+    else:
+        sub = df[df["metric"] == metric_name].copy()
+
+    if media is not None:
+        sub = sub[sub["매체"].isin(media)]
+    
+    if sub.empty:
+        return None
+        
     sub["value"] = pd.to_numeric(sub["value"], errors="coerce").replace(0, np.nan)
     sub = sub.dropna(subset=["value"])
+
     per_ip_sum = sub.groupby("IP")["value"].sum()
     return float(per_ip_sum.mean()) if not per_ip_sum.empty else None
-
-# ===== 3.6. 히트맵 렌더러 =====
-def render_heatmap(df_index: pd.DataFrame, title: str):
-    st.markdown(f"###### {title}")
-    if df_index.empty:
-        st.info("데이터 없음")
-        return
-
-    gb = GridOptionsBuilder.from_dataframe(df_index)
-    gb.configure_grid_options(rowHeight=34, suppressMenuHide=True)
-    gb.configure_default_column(
-        sortable=False, resizable=True, filter=False,
-        cellStyle={'textAlign': 'center'},
-        headerClass='centered-header bold-header'
-    )
-    gb.configure_column("회차", header_name="회차", pinned='left', cellStyle={'textAlign': 'center', 'fontWeight': 'bold'})
-
-    cell_style_js = JsCode("""
-    function(params) {
-        if (params.colDef.field === '회차') return {'textAlign': 'center', 'fontWeight': 'bold'};
-        const val = params.value;
-        if (val === null || val === undefined || val === 999) return {'textAlign': 'center', 'color': '#ccc'};
-        
-        let color = '#333';
-        let bg = '#fff';
-        
-        if (val > 0) {
-            const opacity = Math.min(Math.abs(val) / 100, 0.8);
-            bg = `rgba(217, 54, 54, ${opacity})`; 
-            if (opacity > 0.4) color = '#fff';
-        } else if (val < 0) {
-            const opacity = Math.min(Math.abs(val) / 100, 0.8);
-            bg = `rgba(42, 97, 204, ${opacity})`;
-            if (opacity > 0.4) color = '#fff';
-        }
-        return {'textAlign': 'center', 'backgroundColor': bg, 'color': color};
-    }
-    """)
-    
-    val_fmt = JsCode("""
-    function(params) {
-        if (params.value === 999) return '-';
-        if (params.value === undefined || params.value === null) return '';
-        return params.value.toFixed(1) + '%';
-    }
-    """)
-
-    for col in df_index.columns:
-        if col != "회차":
-            gb.configure_column(col, cellStyle=cell_style_js, valueFormatter=val_fmt)
-
-    AgGrid(
-        df_index, gridOptions=gb.build(),
-        height=400, theme="streamlit",
-        fit_columns_on_grid_load=True,
-        allow_unsafe_jscode=True
-    )
-
-
-# ===== [3.7 수정] IP 선택 팝업 (DPAA 스타일 적용) =====
-@st.dialog("🎬 분석할 IP를 선택하세요", width="large")
-def ip_selector_dialog(current_ip):
-    # DPAA 스타일 CSS 주입
-    st.markdown("""
-    <style>
-    /* [DPAA 스타일] 카드 & 포스터 */
-    .drama-card {
-        display: block !important;
-        margin-bottom: 20px;
-        text-decoration: none;
-        color: inherit;
-        position: relative;
-        cursor: pointer;
-        background: transparent;
-        border: none;
-        transition: transform 0.2s ease;
-    }
-    .drama-card:hover {
-        transform: translateY(-5px);
-        z-index: 10;
-    }
-    
-    /* 2:3 비율 박스 */
-    .poster-wrapper {
-        position: relative !important;
-        width: 100% !important;
-        height: 0 !important;
-        padding-bottom: 150% !important; /* 2:3 Aspect Ratio */
-        border-radius: 8px;
-        overflow: hidden;
-        background-color: #202124;
-        box-shadow: 0 4px 10px rgba(0,0,0,0.2);
-    }
-    
-    /* 포스터 이미지 (꽉 채우기) */
-    .drama-poster {
-        position: absolute !important;
-        top: 0 !important; left: 0 !important;
-        width: 100% !important; height: 100% !important;
-        object-fit: cover !important;
-        object-position: center !important;
-    }
-    
-    /* 오버레이 (하단 그라디언트 + 텍스트) */
-    .drama-overlay {
-        position: absolute;
-        top: 0; left: 0; right: 0; bottom: 0;
-        background: linear-gradient(
-            to bottom,
-            rgba(0,0,0,0) 50%,
-            rgba(0,0,0,0.7) 85%,
-            rgba(0,0,0,0.95) 100%
-        );
-        padding: 12px;
-        display: flex;
-        flex-direction: column;
-        justify-content: flex-end;
-    }
-    
-    .overlay-title {
-        font-size: 15px; /* 제목 크기 줄임 */
-        font-weight: 700;
-        color: #fff;
-        margin-bottom: 4px;
-        line-height: 1.2;
-        text-shadow: 0 2px 4px rgba(0,0,0,0.8);
-        word-break: keep-all;
-    }
-    .overlay-meta {
-        font-size: 11px; /* 메타 정보 크기 줄임 */
-        color: #ddd;
-        line-height: 1.2;
-        text-shadow: 0 1px 2px rgba(0,0,0,0.8);
-    }
-    
-    /* 선택된 카드 강조 테두리 */
-    .selected-border .poster-wrapper {
-        border: 3px solid #d93636;
-    }
-    </style>
-    """, unsafe_allow_html=True)
-
-    df = load_data()
-    poster_map = load_poster_map()
-    
-    # 3. 데이터 병합 및 정렬
-    if not df.empty:
-        if "방영시작일" in df.columns:
-            df["방영시작일"] = pd.to_datetime(df["방영시작일"], errors="coerce")
-            ip_meta = df.sort_values("방영시작일", ascending=False).drop_duplicates("IP")
-        else:
-            ip_meta = df.drop_duplicates("IP")
-    else:
-        st.warning("데이터가 없습니다.")
-        return
-
-    # 4. 검색창
-    col_search, _ = st.columns([1, 1])
-    with col_search:
-        search_kw = st.text_input("검색", placeholder="IP명 검색...", label_visibility="collapsed")
-    
-    if search_kw:
-        mask = ip_meta["IP"].astype(str).str.contains(search_kw, case=False)
-        ip_meta = ip_meta[mask]
-
-    st.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
-
-    # 5. 카드 그리드 렌더링 (DPAA 스타일 <a> 태그 활용)
-    cols_per_row = 4
-    rows = [ip_meta.iloc[i:i+cols_per_row] for i in range(0, len(ip_meta), cols_per_row)]
-
-    # 현재 페이지 유지하며 IP만 변경하기 위한 쿼리 파라미터 생성
-    current_page_val = st.session_state.get("page", "Overview")
-
-    for row_data in rows:
-        cols = st.columns(cols_per_row)
-        for idx, (_, row) in enumerate(row_data.iterrows()):
-            with cols[idx]:
-                ip_name = row['IP']
-                img_url = poster_map.get(ip_name, "")
-                if not img_url: img_url = "https://via.placeholder.com/300x450/333/999?text=No+Img"
-                
-                # 메타 정보
-                prog = str(row.get("편성", "")) if pd.notna(row.get("편성")) else ""
-                date_str = ""
-                if pd.notna(row.get("방영시작일")):
-                     date_str = row["방영시작일"].strftime("%y.%m")
-                meta_txt = f"{prog} | {date_str}" if prog and date_str else (prog or date_str)
-                
-                # 선택 여부
-                sel_class = "selected-border" if ip_name == current_ip else ""
-                
-                # [핵심] <a> 태그로 전체 영역 감싸기 (클릭 시 URL 파라미터 변경 -> 리로드 -> Region 4에서 캐치)
-                encoded_ip = urllib.parse.quote(ip_name)
-                # target="_self" : 현재 탭에서 이동 (리로드)
-                link = f"?page={current_page_val}&ip={encoded_ip}"
-                
-                st.markdown(f"""
-                <a href="{link}" target="_self" class="drama-card {sel_class}">
-                    <div class="poster-wrapper">
-                        <img class="drama-poster" src="{img_url}">
-                        <div class="drama-overlay">
-                            <div class="overlay-title">{ip_name}</div>
-                            <div class="overlay-meta">{meta_txt}</div>
-                        </div>
-                    </div>
-                </a>
-                """, unsafe_allow_html=True)
-
-    if ip_meta.empty:
-        st.info("검색 결과가 없습니다.")
 #endregion
 
 
@@ -800,52 +614,46 @@ def ip_selector_dialog(current_ip):
 current_page = get_current_page_default("Overview")
 st.session_state["page"] = current_page
 
-# [신규] URL 쿼리 파라미터로 IP 변경 요청이 들어오면 우선 적용 (팝업 클릭 대응)
-if "ip" in st.query_params:
-    requested_ip = st.query_params["ip"]
-    # 리스트 등에서 문자열만 추출
-    if isinstance(requested_ip, list): requested_ip = requested_ip[0]
-    st.session_state["global_ip"] = requested_ip
-    # 쿼리 파라미터 정리 (URL 깔끔하게)
-    # st.query_params.pop("ip", None) # 필요 시 활성화
-
-# 1. 데이터 로드
+# 사이드바용 데이터 로드
 df_nav = load_data()
 all_ips = sorted(df_nav["IP"].dropna().unique().tolist()) if not df_nav.empty else []
 
-# 2. 기본 IP 설정 (방영일 최신순)
+# [수정] 기본 IP 결정 로직 (방영시작일 최신순)
 default_ip = all_ips[0] if all_ips else None
+
 if not df_nav.empty and "방영시작일" in df_nav.columns:
     try:
+        # 날짜 있는 것만 추려서 -> 내림차순 정렬 -> 첫 번째 행의 IP 추출
         latest_series = df_nav.dropna(subset=["방영시작일"]).sort_values("방영시작일", ascending=False)
         if not latest_series.empty:
             default_ip = latest_series.iloc[0]["IP"]
-    except: pass
+    except:
+        pass # 에러 나면 그냥 가나다순(all_ips[0]) 유지
 
-# 3. 세션 초기화
-if "global_ip" not in st.session_state or st.session_state["global_ip"] not in all_ips:
-    if default_ip:
-        st.session_state["global_ip"] = default_ip
-
-current_ip = st.session_state.get("global_ip", "선택 안됨")
-
-# 4. 사이드바 렌더링
 with st.sidebar:
     render_gradient_title("드라마 성과 대시보드", emoji="")
     
-    # [수정] 심플한 IP 표시 (이미지/헤더 제거, 이름만 강조)
-    st.markdown(
-        f"<h3 style='text-align:center; color:#333; margin-bottom:10px; word-break:keep-all;'>{current_ip}</h3>", 
-        unsafe_allow_html=True
-    )
+    # [수정] 세션 초기화 시 default_ip(최신작) 사용
+    if "global_ip" not in st.session_state or st.session_state["global_ip"] not in all_ips:
+        if default_ip:
+            st.session_state["global_ip"] = default_ip
 
-    # [팝업 트리거 버튼]
-    if st.button("🔄 다른 IP 선택하기", use_container_width=True):
-        ip_selector_dialog(current_ip)
+    if all_ips:
+        selected_global_ip = st.selectbox(
+            "분석할 IP를 선택하세요",
+            all_ips,
+            # 현재 선택된 IP가 목록에 있으면 그 인덱스, 아니면 최신작 인덱스
+            index=all_ips.index(st.session_state["global_ip"]) if st.session_state["global_ip"] in all_ips else all_ips.index(default_ip),
+            key="global_ip_select",
+            label_visibility="collapsed"
+        )
+        st.session_state["global_ip"] = selected_global_ip
+    else:
+        st.warning("데이터가 없습니다.")
 
     st.divider()
 
-    # 네비게이션 메뉴 (기존 유지)
+    # 네비게이션 메뉴
     for key, label in NAV_ITEMS.items():
         is_active = (current_page == key)
         wrapper_cls = "nav-active" if is_active else "nav-inactive"
@@ -864,6 +672,7 @@ with st.sidebar:
             _set_page_query_param(key)
             _rerun()
             
+    st.markdown("<div style='margin-top: 30px;'></div>", unsafe_allow_html=True)
     st.markdown("<div style='margin-top: 30px;'></div>", unsafe_allow_html=True)
     st.markdown(
         "<p class='sidebar-contact' style='font-size:12px; color:gray;'>문의 : 미디어)마케팅팀 데이터인사이트파트</p>",
