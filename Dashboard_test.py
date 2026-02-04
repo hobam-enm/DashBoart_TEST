@@ -16,9 +16,8 @@ from plotly import graph_objects as go
 import plotly.io as pio
 import streamlit as st
 from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode, JsCode
-import gspread
-from google.oauth2.service_account import Credentials
-import extra_streamlit_components as stx  # [추가] 쿠키 매니저 라이브러리
+from pymongo import MongoClient  # [수정] gspread 대신 pymongo 사용
+import extra_streamlit_components as stx 
 #endregion
 
 
@@ -405,67 +404,58 @@ pio.templates.default = 'dashboard_theme'
 #region [ 3. 공통 함수: 데이터 로드 / 유틸리티 ]
 # =====================================================
 
-# ===== 3.1. 데이터 로드 (gspread + Vectorization 최적화) =====
+# ===== 3.1. 데이터 로드 (MongoDB) =====
 @st.cache_data(ttl=600)
 def load_data() -> pd.DataFrame:
     """
-    [수정] 전처리 로직 벡터화 적용 (속도 개선)
+    [수정] Google Sheets 대신 MongoDB에서 데이터를 로드합니다.
+    이미 ETL 과정에서 전처리가 완료된 상태이므로 로드 속도가 빠릅니다.
     """
-    # --- 1. Google Sheets 인증 ---
-    scopes = ["https://www.googleapis.com/auth/spreadsheets"]
     try:
-        creds_info = st.secrets["gcp_service_account"]
-        creds = Credentials.from_service_account_info(creds_info, scopes=scopes)
-        client = gspread.authorize(creds)
+        # 1. MongoDB 연결
+        # secrets.toml에 [mongo] 섹션이 정의되어 있어야 합니다.
+        uri = st.secrets["mongo"]["uri"]
+        db_name = st.secrets["mongo"]["db"]
+        col_name = st.secrets["mongo"]["collection"]
 
-        # --- 2. 데이터 로드 ---
-        sheet_id = st.secrets["SHEET_ID"]
-        worksheet_name = st.secrets["SHEET_NAME"]
+        client = MongoClient(uri)
+        db = client[db_name]
+        collection = db[col_name]
+
+        # 2. 데이터 가져오기 (전체 조회)
+        # _id는 DataFrame 변환 시 불필요하므로 제외하고 가져옵니다.
+        cursor = collection.find({}, {"_id": 0})
+        data = list(cursor)
         
-        spreadsheet = client.open_by_key(sheet_id)
-        worksheet = spreadsheet.worksheet(worksheet_name)
-        
-        data = worksheet.get_all_records()
+        if not data:
+            return pd.DataFrame()
+
         df = pd.DataFrame(data)
 
     except Exception as e:
-        st.error(f"데이터 로드 중 오류 발생: {e}")
+        st.error(f"MongoDB 데이터 로드 중 오류 발생: {e}")
         return pd.DataFrame()
 
-    if df.empty:
-        return df
-
-    # --- 3. 데이터 전처리 (벡터화 연산으로 최적화) ---
-    # (1) 날짜 변환 (Error는 coerce로 처리하여 NaT 반환)
+    # --- 3. 데이터 타입 안전장치 (ETL에서 했지만 한번 더 확인) ---
+    # 날짜 컬럼: 몽고DB는 datetime 객체로 저장하므로 바로 사용 가능하나,
+    # Pandas 호환성을 위해 pd.to_datetime으로 한 번 감싸줍니다 (비용 낮음).
     for col in ["주차시작일", "방영시작일"]:
         if col in df.columns:
-            df[col] = pd.to_datetime(
-                df[col].astype(str).str.strip(),
-                format="%Y. %m. %d",
-                errors="coerce"
-            )
+            df[col] = pd.to_datetime(df[col], errors="coerce")
 
-    # (2) 수치 변환 (콤마, % 제거 후 변환)
+    # 숫자 컬럼: 이미 ETL에서 int/float로 변환했으므로 추가 처리 불필요
+    # 단, 결측치(NaN)가 있으면 0으로 채우는 것은 유지
     if "value" in df.columns:
-        # 정규식으로 , 와 % 를 한 번에 제거
-        df["value"] = pd.to_numeric(
-            df["value"].astype(str).str.replace(r"[,%]", "", regex=True),
-            errors="coerce"
-        ).fillna(0)
+        df["value"] = pd.to_numeric(df["value"], errors="coerce").fillna(0)
 
-    # (3) 문자열 공백 제거 (대상 컬럼 일괄 처리)
+    # 문자열 공백 제거 (안전장치)
     str_cols = ["IP", "편성", "지표구분", "매체", "데모", "metric", "회차", "주차"]
     existing_cols = [c for c in str_cols if c in df.columns]
     if existing_cols:
         df[existing_cols] = df[existing_cols].astype(str).apply(lambda x: x.str.strip())
 
-    # (4) 회차 숫자 추출 (정규식 벡터 연산)
-    if "회차" in df.columns:
-        df["회차_numeric"] = pd.to_numeric(
-            df["회차"].str.extract(r"(\d+)", expand=False),
-            errors="coerce"
-        )
-    else:
+    # 회차_numeric: ETL에서 이미 만들어서 넣었으므로 그대로 사용
+    if "회차_numeric" not in df.columns:
         df["회차_numeric"] = pd.NA
 
     return df
@@ -515,13 +505,14 @@ def get_episode_options(df: pd.DataFrame) -> List[str]:
     """데이터에서 사용 가능한 회차 목록 추출"""
     valid_options = []
     if "회차_numeric" in df.columns:
+        # 몽고DB에서 int로 잘 들어왔겠지만, 안전하게 unique 추출
         unique_episodes_num = sorted([
             int(ep) for ep in df["회차_numeric"].dropna().unique() if ep > 0
         ])
         if unique_episodes_num:
             max_ep_num = unique_episodes_num[-1]
             valid_options = [str(ep) for ep in unique_episodes_num]
-            # 마지막화 처리 로직 유지
+            
             last_ep_str = str(max_ep_num)
             if len(valid_options) > 0 and "(마지막화)" not in valid_options[-1]:
                  valid_options[-1] = f"{last_ep_str} (마지막화)"
@@ -552,7 +543,6 @@ def mean_of_ip_episode_sum(df: pd.DataFrame, metric_name: str, media=None) -> fl
     
     ep_col = _episode_col(sub)
     sub = sub.dropna(subset=[ep_col])
-    # to_numeric은 load_data에서 이미 처리됨
     sub = sub.dropna(subset=["value"])
 
     ep_sum = sub.groupby(["IP", ep_col], as_index=False)["value"].sum()
