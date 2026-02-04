@@ -407,15 +407,12 @@ pio.templates.default = 'dashboard_theme'
 
 #region [ 3. 공통 함수: 데이터 로드 / 유틸리티 ]
 # =====================================================
+import urllib.parse 
 
 # ===== 3.1. 데이터 로드 (MongoDB) =====
 @st.cache_data(ttl=600)
 def load_data() -> pd.DataFrame:
-    """
-    MongoDB에서 데이터를 로드합니다.
-    """
     try:
-        # 1. MongoDB 연결
         uri = st.secrets["mongo"]["uri"]
         db_name = st.secrets["mongo"]["db"]
         col_name = st.secrets["mongo"]["collection"]
@@ -424,36 +421,29 @@ def load_data() -> pd.DataFrame:
         db = client[db_name]
         collection = db[col_name]
 
-        # 2. 데이터 가져오기 (전체 조회, _id 제외)
         cursor = collection.find({}, {"_id": 0})
         data = list(cursor)
         
-        if not data:
-            return pd.DataFrame()
-
+        if not data: return pd.DataFrame()
         df = pd.DataFrame(data)
 
     except Exception as e:
         st.error(f"MongoDB 데이터 로드 중 오류 발생: {e}")
         return pd.DataFrame()
 
-    # --- 3. 데이터 타입 안전장치 ---
-    # 날짜 컬럼 변환
+    # 데이터 타입 안전장치
     for col in ["주차시작일", "방영시작일"]:
         if col in df.columns:
             df[col] = pd.to_datetime(df[col], errors="coerce")
 
-    # 숫자 컬럼 변환 (결측치 0 처리)
     if "value" in df.columns:
         df["value"] = pd.to_numeric(df["value"], errors="coerce").fillna(0)
 
-    # 문자열 공백 제거
     str_cols = ["IP", "편성", "지표구분", "매체", "데모", "metric", "회차", "주차"]
     existing_cols = [c for c in str_cols if c in df.columns]
     if existing_cols:
         df[existing_cols] = df[existing_cols].astype(str).apply(lambda x: x.str.strip())
 
-    # 회차_numeric 안전장치
     if "회차_numeric" not in df.columns:
         df["회차_numeric"] = pd.NA
 
@@ -463,49 +453,32 @@ def load_data() -> pd.DataFrame:
 # ===== [신규] 구글 시트 포스터 데이터 로드 =====
 @st.cache_data(ttl=600)
 def load_poster_map() -> Dict[str, str]:
-    """
-    구글 시트 '포스터' 탭에서 (IP, 포스터URL) 정보를 읽어와 딕셔너리로 반환합니다.
-    """
-    # 사용자 시트 ID 및 설정
     SHEET_ID = "1fKVPXGN-R2bsrv018dz8zTmg431ZSBHx1PCTnMpdoWY"
     TAB_NAME = "포스터"
 
     try:
-        # st.secrets에 저장된 서비스 계정 정보 로드
-        if "gcp_service_account" not in st.secrets:
-            return {}
-            
+        if "gcp_service_account" not in st.secrets: return {}
         creds_dict = st.secrets["gcp_service_account"]
         scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
         creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
         client = gspread.authorize(creds)
 
-        # 시트 및 탭 열기
         sheet = client.open_by_key(SHEET_ID)
         worksheet = sheet.worksheet(TAB_NAME)
-        
-        # 모든 데이터 가져오기 (헤더 포함)
         all_records = worksheet.get_all_records()
         
         poster_map = {}
         for row in all_records:
-            # A열: IP명, B열: 포스터URL (헤더명 유연하게 처리)
             p_ip = str(row.get("IP명", row.get("IP", ""))).strip()
             p_url = str(row.get("포스터URL", row.get("포스터", row.get("URL", "")))).strip()
-            
-            if p_ip and p_url:
-                poster_map[p_ip] = p_url
-                
+            if p_ip and p_url: poster_map[p_ip] = p_url
         return poster_map
-
     except Exception as e:
-        # 에러 발생 시 로그만 남기고 빈 딕셔너리 반환 (대시보드는 멈추지 않게)
         print(f"포스터 로드 실패: {e}")
         return {}
 
 
 # ===== 3.2. UI / 포맷팅 헬퍼 함수 =====
-
 def fmt(v, digits=3, intlike=False):
     if v is None or pd.isna(v): return "–"
     return f"{v:,.0f}" if intlike else f"{v:.{digits}f}"
@@ -530,7 +503,6 @@ def render_gradient_title(main_text: str, emoji: str = "🎬"):
     )
 
 # ===== 3.3. 페이지 라우팅 / 데이터 헬퍼 함수 =====
-
 def get_current_page_default(default="Overview"):
     try:
         qp = st.query_params
@@ -563,7 +535,6 @@ def get_episode_options(df: pd.DataFrame) -> List[str]:
     return []
 
 # ===== 3.4. 통합 데이터 필터링 유틸 =====
-
 def _get_view_data(df: pd.DataFrame) -> pd.DataFrame:
     sub = df[df["metric"] == "조회수"].copy()
     if sub.empty: return sub
@@ -574,7 +545,6 @@ def _get_view_data(df: pd.DataFrame) -> pd.DataFrame:
     return sub
 
 # ===== 3.5. 집계 계산 유틸 =====
-
 def _episode_col(df: pd.DataFrame) -> str:
     return "회차_numeric" if "회차_numeric" in df.columns else ("회차_num" if "회차_num" in df.columns else "회차")
 
@@ -612,15 +582,13 @@ def mean_of_ip_sums(df: pd.DataFrame, metric_name: str, media=None) -> float | N
     per_ip_sum = sub.groupby("IP")["value"].sum()
     return float(per_ip_sum.mean()) if not per_ip_sum.empty else None
 
-# ===== [3.6 수정] 히트맵 렌더러 =====
+# ===== 3.6. 히트맵 렌더러 =====
 def render_heatmap(df_index: pd.DataFrame, title: str):
-    """(기존 히트맵 렌더러 - 유지)"""
     st.markdown(f"###### {title}")
     if df_index.empty:
         st.info("데이터 없음")
         return
 
-    # 스타일링을 위한 AgGrid 설정
     gb = GridOptionsBuilder.from_dataframe(df_index)
     gb.configure_grid_options(rowHeight=34, suppressMenuHide=True)
     gb.configure_default_column(
@@ -630,7 +598,6 @@ def render_heatmap(df_index: pd.DataFrame, title: str):
     )
     gb.configure_column("회차", header_name="회차", pinned='left', cellStyle={'textAlign': 'center', 'fontWeight': 'bold'})
 
-    # 0을 기준으로 양수(Red)/음수(Blue) 그라디언트 JS
     cell_style_js = JsCode("""
     function(params) {
         if (params.colDef.field === '회차') return {'textAlign': 'center', 'fontWeight': 'bold'};
@@ -641,12 +608,10 @@ def render_heatmap(df_index: pd.DataFrame, title: str):
         let bg = '#fff';
         
         if (val > 0) {
-            // Red Scale (0 ~ 100%)
             const opacity = Math.min(Math.abs(val) / 100, 0.8);
             bg = `rgba(217, 54, 54, ${opacity})`; 
             if (opacity > 0.4) color = '#fff';
         } else if (val < 0) {
-            // Blue Scale
             const opacity = Math.min(Math.abs(val) / 100, 0.8);
             bg = `rgba(42, 97, 204, ${opacity})`;
             if (opacity > 0.4) color = '#fff';
@@ -655,7 +620,6 @@ def render_heatmap(df_index: pd.DataFrame, title: str):
     }
     """)
     
-    # 값 포맷팅 (999 -> -, 그 외 % 표시)
     val_fmt = JsCode("""
     function(params) {
         if (params.value === 999) return '-';
@@ -676,88 +640,94 @@ def render_heatmap(df_index: pd.DataFrame, title: str):
     )
 
 
-# ===== 3.7. IP 선택 팝업 (대시보드 직접 연동 버전) =====
+# ===== [3.7 수정] IP 선택 팝업 (DPAA 스타일 적용) =====
 @st.dialog("🎬 분석할 IP를 선택하세요", width="large")
 def ip_selector_dialog(current_ip):
+    # DPAA 스타일 CSS 주입
     st.markdown("""
     <style>
-    /* 카드 스타일 */
-    .ip-card-container {
+    /* [DPAA 스타일] 카드 & 포스터 */
+    .drama-card {
+        display: block !important;
+        margin-bottom: 20px;
+        text-decoration: none;
+        color: inherit;
         position: relative;
-        width: 100%;
-        border-radius: 12px;
-        overflow: hidden;
-        margin-bottom: 12px;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-        transition: transform 0.2s;
-        background-color: #202124;
         cursor: pointer;
+        background: transparent;
+        border: none;
+        transition: transform 0.2s ease;
     }
-    .ip-card-container:hover {
-        transform: translateY(-4px);
-        box-shadow: 0 10px 15px rgba(0,0,0,0.2);
+    .drama-card:hover {
+        transform: translateY(-5px);
+        z-index: 10;
     }
-    .poster-box {
-        width: 100%;
-        padding-top: 150%; /* 2:3 비율 */
-        position: relative;
-        background-size: cover;
-        background-position: center;
-        background-color: #eee;
+    
+    /* 2:3 비율 박스 */
+    .poster-wrapper {
+        position: relative !important;
+        width: 100% !important;
+        height: 0 !important;
+        padding-bottom: 150% !important; /* 2:3 Aspect Ratio */
+        border-radius: 8px;
+        overflow: hidden;
+        background-color: #202124;
+        box-shadow: 0 4px 10px rgba(0,0,0,0.2);
     }
-    /* 포스터 없을 때 대체 배경 (그라디언트) */
-    .poster-box.no-img {
-        background: linear-gradient(135deg, #f6d365 0%, #fda085 100%);
-        display: flex;
-        align-items: center;
-        justify-content: center;
+    
+    /* 포스터 이미지 (꽉 채우기) */
+    .drama-poster {
+        position: absolute !important;
+        top: 0 !important; left: 0 !important;
+        width: 100% !important; height: 100% !important;
+        object-fit: cover !important;
+        object-position: center !important;
     }
-    .poster-overlay {
+    
+    /* 오버레이 (하단 그라디언트 + 텍스트) */
+    .drama-overlay {
         position: absolute;
-        bottom: 0; left: 0; right: 0;
-        background: linear-gradient(to top, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0) 100%);
+        top: 0; left: 0; right: 0; bottom: 0;
+        background: linear-gradient(
+            to bottom,
+            rgba(0,0,0,0) 50%,
+            rgba(0,0,0,0.7) 85%,
+            rgba(0,0,0,0.95) 100%
+        );
         padding: 12px;
         display: flex;
         flex-direction: column;
         justify-content: flex-end;
-        height: 60%;
     }
-    .ip-card-title {
-        color: white;
+    
+    .overlay-title {
+        font-size: 15px; /* 제목 크기 줄임 */
         font-weight: 700;
-        font-size: 16px;
+        color: #fff;
         margin-bottom: 4px;
+        line-height: 1.2;
         text-shadow: 0 2px 4px rgba(0,0,0,0.8);
         word-break: keep-all;
     }
-    .ip-card-meta {
+    .overlay-meta {
+        font-size: 11px; /* 메타 정보 크기 줄임 */
         color: #ddd;
-        font-size: 12px;
-        font-weight: 400;
+        line-height: 1.2;
         text-shadow: 0 1px 2px rgba(0,0,0,0.8);
     }
-    .selected-border {
+    
+    /* 선택된 카드 강조 테두리 */
+    .selected-border .poster-wrapper {
         border: 3px solid #d93636;
-    }
-    .no-img-text {
-        position: absolute;
-        top: 50%; left: 50%;
-        transform: translate(-50%, -50%);
-        font-size: 30px;
-        color: rgba(255,255,255,0.8);
     }
     </style>
     """, unsafe_allow_html=True)
 
-    # 1. MongoDB 데이터 로드
     df = load_data()
-    
-    # 2. 구글 시트 포스터 데이터 로드 (함수 호출)
     poster_map = load_poster_map()
     
     # 3. 데이터 병합 및 정렬
     if not df.empty:
-        # IP 메타 정보 추출
         if "방영시작일" in df.columns:
             df["방영시작일"] = pd.to_datetime(df["방영시작일"], errors="coerce")
             ip_meta = df.sort_values("방영시작일", ascending=False).drop_duplicates("IP")
@@ -778,60 +748,47 @@ def ip_selector_dialog(current_ip):
 
     st.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
 
-    # 5. 카드 그리드 렌더링
-    cols = st.columns(4)
-    
-    for idx, row in ip_meta.iterrows():
-        c = cols[idx % 4]
-        ip_name = row['IP']
-        
-        # [핵심] 구글 시트에서 가져온 poster_url 매핑
-        img_url = poster_map.get(ip_name, "")
-        
-        # 메타 정보 구성
-        prog = str(row.get("편성", "")) if pd.notna(row.get("편성")) else ""
-        date_str = ""
-        if pd.notna(row.get("방영시작일")):
-             date_str = row["방영시작일"].strftime("%y.%m")
-        meta_txt = f"{prog} | {date_str}" if prog and date_str else (prog or date_str)
-        
-        border_cls = "selected-border" if ip_name == current_ip else ""
-        
-        with c:
-            # 이미지 유무에 따른 HTML 분기
-            if img_url:
-                card_html = f"""
-                <div class="ip-card-container {border_cls}">
-                    <div class="poster-box" style="background-image: url('{img_url}');">
-                        <div class="poster-overlay">
-                            <div class="ip-card-title">{ip_name}</div>
-                            <div class="ip-card-meta">{meta_txt}</div>
+    # 5. 카드 그리드 렌더링 (DPAA 스타일 <a> 태그 활용)
+    cols_per_row = 4
+    rows = [ip_meta.iloc[i:i+cols_per_row] for i in range(0, len(ip_meta), cols_per_row)]
+
+    # 현재 페이지 유지하며 IP만 변경하기 위한 쿼리 파라미터 생성
+    current_page_val = st.session_state.get("page", "Overview")
+
+    for row_data in rows:
+        cols = st.columns(cols_per_row)
+        for idx, (_, row) in enumerate(row_data.iterrows()):
+            with cols[idx]:
+                ip_name = row['IP']
+                img_url = poster_map.get(ip_name, "")
+                if not img_url: img_url = "https://via.placeholder.com/300x450/333/999?text=No+Img"
+                
+                # 메타 정보
+                prog = str(row.get("편성", "")) if pd.notna(row.get("편성")) else ""
+                date_str = ""
+                if pd.notna(row.get("방영시작일")):
+                     date_str = row["방영시작일"].strftime("%y.%m")
+                meta_txt = f"{prog} | {date_str}" if prog and date_str else (prog or date_str)
+                
+                # 선택 여부
+                sel_class = "selected-border" if ip_name == current_ip else ""
+                
+                # [핵심] <a> 태그로 전체 영역 감싸기 (클릭 시 URL 파라미터 변경 -> 리로드 -> Region 4에서 캐치)
+                encoded_ip = urllib.parse.quote(ip_name)
+                # target="_self" : 현재 탭에서 이동 (리로드)
+                link = f"?page={current_page_val}&ip={encoded_ip}"
+                
+                st.markdown(f"""
+                <a href="{link}" target="_self" class="drama-card {sel_class}">
+                    <div class="poster-wrapper">
+                        <img class="drama-poster" src="{img_url}">
+                        <div class="drama-overlay">
+                            <div class="overlay-title">{ip_name}</div>
+                            <div class="overlay-meta">{meta_txt}</div>
                         </div>
                     </div>
-                </div>
-                """
-            else:
-                # 이미지가 없을 경우 (그라디언트 + 텍스트)
-                card_html = f"""
-                <div class="ip-card-container {border_cls}">
-                    <div class="poster-box no-img">
-                        <div class="no-img-text">🎬</div>
-                        <div class="poster-overlay">
-                            <div class="ip-card-title">{ip_name}</div>
-                            <div class="ip-card-meta">{meta_txt}</div>
-                        </div>
-                    </div>
-                </div>
-                """
-            
-            st.markdown(card_html, unsafe_allow_html=True)
-            
-            btn_label = "✅ 선택" if ip_name == current_ip else "선택"
-            btn_type = "primary" if ip_name == current_ip else "secondary"
-            
-            if st.button(btn_label, key=f"btn_sel_{ip_name}", type=btn_type, use_container_width=True):
-                st.session_state["global_ip"] = ip_name
-                st.rerun()
+                </a>
+                """, unsafe_allow_html=True)
 
     if ip_meta.empty:
         st.info("검색 결과가 없습니다.")
@@ -843,14 +800,20 @@ def ip_selector_dialog(current_ip):
 current_page = get_current_page_default("Overview")
 st.session_state["page"] = current_page
 
+# [신규] URL 쿼리 파라미터로 IP 변경 요청이 들어오면 우선 적용 (팝업 클릭 대응)
+if "ip" in st.query_params:
+    requested_ip = st.query_params["ip"]
+    # 리스트 등에서 문자열만 추출
+    if isinstance(requested_ip, list): requested_ip = requested_ip[0]
+    st.session_state["global_ip"] = requested_ip
+    # 쿼리 파라미터 정리 (URL 깔끔하게)
+    # st.query_params.pop("ip", None) # 필요 시 활성화
+
 # 1. 데이터 로드
 df_nav = load_data()
 all_ips = sorted(df_nav["IP"].dropna().unique().tolist()) if not df_nav.empty else []
 
-# 2. 포스터 데이터 로드 (사이드바 썸네일용)
-poster_map = load_poster_map()
-
-# 3. 기본 IP 설정 (방영일 최신순)
+# 2. 기본 IP 설정 (방영일 최신순)
 default_ip = all_ips[0] if all_ips else None
 if not df_nav.empty and "방영시작일" in df_nav.columns:
     try:
@@ -859,68 +822,22 @@ if not df_nav.empty and "방영시작일" in df_nav.columns:
             default_ip = latest_series.iloc[0]["IP"]
     except: pass
 
-# 4. 세션 초기화
+# 3. 세션 초기화
 if "global_ip" not in st.session_state or st.session_state["global_ip"] not in all_ips:
     if default_ip:
         st.session_state["global_ip"] = default_ip
 
 current_ip = st.session_state.get("global_ip", "선택 안됨")
 
-# 5. 사이드바 렌더링
+# 4. 사이드바 렌더링
 with st.sidebar:
     render_gradient_title("드라마 성과 대시보드", emoji="")
     
-    st.markdown("### 🎯 분석 대상")
-    
-    # [핵심 변경] 드롭다운(Selectbox) 제거 -> 현재 선택된 IP 정보 카드 + 팝업 버튼
-    
-    # 현재 선택된 IP의 포스터 가져오기
-    cur_img = poster_map.get(current_ip, "")
-    
-    # 사이드바용 미니 카드 스타일
-    st.markdown(f"""
-    <style>
-    .sidebar-ip-card {{
-        border: 1px solid #e0e0e0;
-        border-radius: 10px;
-        overflow: hidden;
-        margin-bottom: 12px;
-        background: #fff;
-    }}
-    .sidebar-img {{
-        width: 100%;
-        height: 140px;
-        object-fit: cover;
-        background-color: #f1f3f5;
-    }}
-    .sidebar-info {{
-        padding: 12px;
-        border-top: 1px solid #f0f0f0;
-    }}
-    .sidebar-title {{
-        font-weight: 700;
-        font-size: 15px;
-        color: #333;
-        margin-bottom: 4px;
-    }}
-    .sidebar-badge {{
-        display: inline-block;
-        font-size: 11px;
-        color: #2a61cc;
-        background: #e8f0fe;
-        padding: 2px 6px;
-        border-radius: 4px;
-        font-weight: 600;
-    }}
-    </style>
-    <div class="sidebar-ip-card">
-        {'<img src="'+cur_img+'" class="sidebar-img">' if cur_img else '<div class="sidebar-img" style="display:flex;align-items:center;justify-content:center;color:#ccc;font-size:30px;">🎬</div>'}
-        <div class="sidebar-info">
-            <div class="sidebar-title">{current_ip}</div>
-            <div class="sidebar-badge">선택됨</div>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+    # [수정] 심플한 IP 표시 (이미지/헤더 제거, 이름만 강조)
+    st.markdown(
+        f"<h3 style='text-align:center; color:#333; margin-bottom:10px; word-break:keep-all;'>{current_ip}</h3>", 
+        unsafe_allow_html=True
+    )
 
     # [팝업 트리거 버튼]
     if st.button("🔄 다른 IP 선택하기", use_container_width=True):
