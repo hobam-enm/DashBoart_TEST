@@ -614,30 +614,39 @@ def mean_of_ip_sums(df: pd.DataFrame, metric_name: str, media=None) -> float | N
 current_page = get_current_page_default("Overview")
 st.session_state["page"] = current_page
 
-# [추가] 사이드바용 데이터 로드 (IP 목록용)
+# 사이드바용 데이터 로드
 df_nav = load_data()
 all_ips = sorted(df_nav["IP"].dropna().unique().tolist()) if not df_nav.empty else []
+
+# [수정] 기본 IP 결정 로직 (방영시작일 최신순)
+default_ip = all_ips[0] if all_ips else None
+
+if not df_nav.empty and "방영시작일" in df_nav.columns:
+    try:
+        # 날짜 있는 것만 추려서 -> 내림차순 정렬 -> 첫 번째 행의 IP 추출
+        latest_series = df_nav.dropna(subset=["방영시작일"]).sort_values("방영시작일", ascending=False)
+        if not latest_series.empty:
+            default_ip = latest_series.iloc[0]["IP"]
+    except:
+        pass # 에러 나면 그냥 가나다순(all_ips[0]) 유지
 
 with st.sidebar:
     render_gradient_title("드라마 성과 대시보드", emoji="")
     
-    # [신규] 전역 IP 필터 (최상단 배치)
-    st.markdown("### 🎯 IP 선택 (Global)")
-    
-    # 세션에 저장된 IP가 없거나 유효하지 않으면 첫 번째 IP로 초기화
+    # [수정] 세션 초기화 시 default_ip(최신작) 사용
     if "global_ip" not in st.session_state or st.session_state["global_ip"] not in all_ips:
-        if all_ips:
-            st.session_state["global_ip"] = all_ips[0]
+        if default_ip:
+            st.session_state["global_ip"] = default_ip
 
     if all_ips:
         selected_global_ip = st.selectbox(
             "분석할 IP를 선택하세요",
             all_ips,
-            index=all_ips.index(st.session_state["global_ip"]) if st.session_state["global_ip"] in all_ips else 0,
+            # 현재 선택된 IP가 목록에 있으면 그 인덱스, 아니면 최신작 인덱스
+            index=all_ips.index(st.session_state["global_ip"]) if st.session_state["global_ip"] in all_ips else all_ips.index(default_ip),
             key="global_ip_select",
             label_visibility="collapsed"
         )
-        # 선택 즉시 세션 업데이트
         st.session_state["global_ip"] = selected_global_ip
     else:
         st.warning("데이터가 없습니다.")
@@ -2732,9 +2741,6 @@ def render_comparison():
 
     # --- IP vs IP 모드 ---
     if comparison_mode == "IP vs IP":
-        # [수정] 기준 IP는 표시만 하고 선택 불가 (또는 disabled)
-        with filter_cols[2]:
-            st.markdown(f"**기준: {selected_ip1}**") 
             
         with filter_cols[3]:
             # 본인 제외
