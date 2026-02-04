@@ -843,46 +843,92 @@ def ip_selector_dialog(current_ip):
 current_page = get_current_page_default("Overview")
 st.session_state["page"] = current_page
 
-# 사이드바용 데이터 로드
+# 1. 데이터 로드
 df_nav = load_data()
 all_ips = sorted(df_nav["IP"].dropna().unique().tolist()) if not df_nav.empty else []
 
-# [수정] 기본 IP 결정 로직 (방영시작일 최신순)
-default_ip = all_ips[0] if all_ips else None
+# 2. 포스터 데이터 로드 (사이드바 썸네일용)
+poster_map = load_poster_map()
 
+# 3. 기본 IP 설정 (방영일 최신순)
+default_ip = all_ips[0] if all_ips else None
 if not df_nav.empty and "방영시작일" in df_nav.columns:
     try:
-        # 날짜 있는 것만 추려서 -> 내림차순 정렬 -> 첫 번째 행의 IP 추출
         latest_series = df_nav.dropna(subset=["방영시작일"]).sort_values("방영시작일", ascending=False)
         if not latest_series.empty:
             default_ip = latest_series.iloc[0]["IP"]
-    except:
-        pass # 에러 나면 그냥 가나다순(all_ips[0]) 유지
+    except: pass
 
+# 4. 세션 초기화
+if "global_ip" not in st.session_state or st.session_state["global_ip"] not in all_ips:
+    if default_ip:
+        st.session_state["global_ip"] = default_ip
+
+current_ip = st.session_state.get("global_ip", "선택 안됨")
+
+# 5. 사이드바 렌더링
 with st.sidebar:
     render_gradient_title("드라마 성과 대시보드", emoji="")
     
-    # [수정] 세션 초기화 시 default_ip(최신작) 사용
-    if "global_ip" not in st.session_state or st.session_state["global_ip"] not in all_ips:
-        if default_ip:
-            st.session_state["global_ip"] = default_ip
+    st.markdown("### 🎯 분석 대상")
+    
+    # [핵심 변경] 드롭다운(Selectbox) 제거 -> 현재 선택된 IP 정보 카드 + 팝업 버튼
+    
+    # 현재 선택된 IP의 포스터 가져오기
+    cur_img = poster_map.get(current_ip, "")
+    
+    # 사이드바용 미니 카드 스타일
+    st.markdown(f"""
+    <style>
+    .sidebar-ip-card {{
+        border: 1px solid #e0e0e0;
+        border-radius: 10px;
+        overflow: hidden;
+        margin-bottom: 12px;
+        background: #fff;
+    }}
+    .sidebar-img {{
+        width: 100%;
+        height: 140px;
+        object-fit: cover;
+        background-color: #f1f3f5;
+    }}
+    .sidebar-info {{
+        padding: 12px;
+        border-top: 1px solid #f0f0f0;
+    }}
+    .sidebar-title {{
+        font-weight: 700;
+        font-size: 15px;
+        color: #333;
+        margin-bottom: 4px;
+    }}
+    .sidebar-badge {{
+        display: inline-block;
+        font-size: 11px;
+        color: #2a61cc;
+        background: #e8f0fe;
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-weight: 600;
+    }}
+    </style>
+    <div class="sidebar-ip-card">
+        {'<img src="'+cur_img+'" class="sidebar-img">' if cur_img else '<div class="sidebar-img" style="display:flex;align-items:center;justify-content:center;color:#ccc;font-size:30px;">🎬</div>'}
+        <div class="sidebar-info">
+            <div class="sidebar-title">{current_ip}</div>
+            <div class="sidebar-badge">선택됨</div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
 
-    if all_ips:
-        selected_global_ip = st.selectbox(
-            "분석할 IP를 선택하세요",
-            all_ips,
-            # 현재 선택된 IP가 목록에 있으면 그 인덱스, 아니면 최신작 인덱스
-            index=all_ips.index(st.session_state["global_ip"]) if st.session_state["global_ip"] in all_ips else all_ips.index(default_ip),
-            key="global_ip_select",
-            label_visibility="collapsed"
-        )
-        st.session_state["global_ip"] = selected_global_ip
-    else:
-        st.warning("데이터가 없습니다.")
+    # [팝업 트리거 버튼]
+    if st.button("🔄 다른 IP 선택하기", use_container_width=True):
+        ip_selector_dialog(current_ip)
 
     st.divider()
 
-    # 네비게이션 메뉴
+    # 네비게이션 메뉴 (기존 유지)
     for key, label in NAV_ITEMS.items():
         is_active = (current_page == key)
         wrapper_cls = "nav-active" if is_active else "nav-inactive"
@@ -901,7 +947,6 @@ with st.sidebar:
             _set_page_query_param(key)
             _rerun()
             
-    st.markdown("<div style='margin-top: 30px;'></div>", unsafe_allow_html=True)
     st.markdown("<div style='margin-top: 30px;'></div>", unsafe_allow_html=True)
     st.markdown(
         "<p class='sidebar-contact' style='font-size:12px; color:gray;'>문의 : 미디어)마케팅팀 데이터인사이트파트</p>",
