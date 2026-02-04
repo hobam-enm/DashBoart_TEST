@@ -18,6 +18,10 @@ import streamlit as st
 from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode, JsCode
 from pymongo import MongoClient
 import extra_streamlit_components as stx
+
+# [추가] 구글 시트 직접 연동용
+import gspread
+from oauth2client.service_account import ServiceAccountCredentials
 #endregion
 
 
@@ -409,7 +413,6 @@ pio.templates.default = 'dashboard_theme'
 def load_data() -> pd.DataFrame:
     """
     MongoDB에서 데이터를 로드합니다.
-    ETL 과정에서 전처리가 완료된 상태이므로 로드 속도가 빠릅니다.
     """
     try:
         # 1. MongoDB 연결
@@ -456,20 +459,58 @@ def load_data() -> pd.DataFrame:
 
     return df
 
+
+# ===== [신규] 구글 시트 포스터 데이터 로드 =====
+@st.cache_data(ttl=600)
+def load_poster_map() -> Dict[str, str]:
+    """
+    구글 시트 '포스터' 탭에서 (IP, 포스터URL) 정보를 읽어와 딕셔너리로 반환합니다.
+    """
+    # 사용자 시트 ID 및 설정
+    SHEET_ID = "1fKVPXGN-R2bsrv018dz8zTmg431ZSBHx1PCTnMpdoWY"
+    TAB_NAME = "포스터"
+
+    try:
+        # st.secrets에 저장된 서비스 계정 정보 로드
+        if "gcp_service_account" not in st.secrets:
+            return {}
+            
+        creds_dict = st.secrets["gcp_service_account"]
+        scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
+        creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
+        client = gspread.authorize(creds)
+
+        # 시트 및 탭 열기
+        sheet = client.open_by_key(SHEET_ID)
+        worksheet = sheet.worksheet(TAB_NAME)
+        
+        # 모든 데이터 가져오기 (헤더 포함)
+        all_records = worksheet.get_all_records()
+        
+        poster_map = {}
+        for row in all_records:
+            # A열: IP명, B열: 포스터URL (헤더명 유연하게 처리)
+            p_ip = str(row.get("IP명", row.get("IP", ""))).strip()
+            p_url = str(row.get("포스터URL", row.get("포스터", row.get("URL", "")))).strip()
+            
+            if p_ip and p_url:
+                poster_map[p_ip] = p_url
+                
+        return poster_map
+
+    except Exception as e:
+        # 에러 발생 시 로그만 남기고 빈 딕셔너리 반환 (대시보드는 멈추지 않게)
+        print(f"포스터 로드 실패: {e}")
+        return {}
+
+
 # ===== 3.2. UI / 포맷팅 헬퍼 함수 =====
 
 def fmt(v, digits=3, intlike=False):
-    """
-    숫자 포맷팅 헬퍼 (None이나 NaN은 '–'로 표시)
-    """
-    if v is None or pd.isna(v):
-        return "–"
+    if v is None or pd.isna(v): return "–"
     return f"{v:,.0f}" if intlike else f"{v:.{digits}f}"
 
 def kpi(col, title, value):
-    """
-    Streamlit 컬럼 내에 KPI 카드를 렌더링합니다. (CSS .kpi-card 필요)
-    """
     with col:
         st.markdown(
             f'<div class="kpi-card"><div class="kpi-title">{title}</div>'
@@ -478,9 +519,6 @@ def kpi(col, title, value):
         )
 
 def render_gradient_title(main_text: str, emoji: str = "🎬"):
-    """
-    사이드바용 그라디언트 타이틀을 렌더링합니다. (CSS .page-title-wrap 필요)
-    """
     st.markdown(
         f"""
         <div class="page-title-wrap">
@@ -494,30 +532,22 @@ def render_gradient_title(main_text: str, emoji: str = "🎬"):
 # ===== 3.3. 페이지 라우팅 / 데이터 헬퍼 함수 =====
 
 def get_current_page_default(default="Overview"):
-    """
-    URL 쿼리 파라미터(?page=...)에서 현재 페이지를 읽어옵니다.
-    """
     try:
         qp = st.query_params
         p = qp.get("page", None)
-        if p is None:
-            return default
+        if p is None: return default
         return p if isinstance(p, str) else p[0]
-    except Exception:
-        # 구버전 호환성
-        return default
+    except Exception: return default
 
 def _set_page_query_param(page_key: str):
-    """
-    URL 쿼리 파라미터에 page 키를 설정합니다.
-    """
-    try:
-        st.query_params["page"] = page_key
-    except Exception:
-        pass
+    try: st.query_params["page"] = page_key
+    except Exception: pass
+
+def _rerun():
+    try: st.rerun()
+    except AttributeError: st.experimental_rerun()
 
 def get_episode_options(df: pd.DataFrame) -> List[str]:
-    """데이터에서 사용 가능한 회차 목록 (문자열)을 추출합니다."""
     valid_options = []
     if "회차_numeric" in df.columns:
         unique_episodes_num = sorted([
@@ -526,7 +556,6 @@ def get_episode_options(df: pd.DataFrame) -> List[str]:
         if unique_episodes_num:
             max_ep_num = unique_episodes_num[-1]
             valid_options = [str(ep) for ep in unique_episodes_num]
-            
             last_ep_str = str(max_ep_num)
             if len(valid_options) > 0 and "(마지막화)" not in valid_options[-1]:
                  valid_options[-1] = f"{last_ep_str} (마지막화)"
@@ -536,76 +565,276 @@ def get_episode_options(df: pd.DataFrame) -> List[str]:
 # ===== 3.4. 통합 데이터 필터링 유틸 =====
 
 def _get_view_data(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    '조회수' metric만 필터링하고, 유튜브 PGC/UGC 규칙을 적용하는 공통 유틸.
-    """
     sub = df[df["metric"] == "조회수"].copy()
-    if sub.empty:
-        return sub
-        
+    if sub.empty: return sub
     if "매체" in sub.columns and "세부속성1" in sub.columns:
         yt_mask = (sub["매체"] == "유튜브")
         attr_mask = sub["세부속성1"].isin(["PGC", "UGC"])
         sub = sub[~yt_mask | (yt_mask & attr_mask)]
-    
     return sub
 
 # ===== 3.5. 집계 계산 유틸 =====
 
 def _episode_col(df: pd.DataFrame) -> str:
-    """데이터프레임에 존재하는 회차 숫자 컬럼명을 반환합니다."""
     return "회차_numeric" if "회차_numeric" in df.columns else ("회차_num" if "회차_num" in df.columns else "회차")
 
 def mean_of_ip_episode_sum(df: pd.DataFrame, metric_name: str, media=None) -> float | None:
     sub = df[(df["metric"] == metric_name)].copy()
-    if media is not None:
-        sub = sub[sub["매체"].isin(media)]
-    if sub.empty:
-        return None
+    if media is not None: sub = sub[sub["매체"].isin(media)]
+    if sub.empty: return None
     ep_col = _episode_col(sub)
     sub = sub.dropna(subset=[ep_col]).copy()
-    
     sub["value"] = pd.to_numeric(sub["value"], errors="coerce").replace(0, np.nan)
     sub = sub.dropna(subset=["value"])
-
     ep_sum = sub.groupby(["IP", ep_col], as_index=False)["value"].sum()
     per_ip_mean = ep_sum.groupby("IP")["value"].mean()
     return float(per_ip_mean.mean()) if not per_ip_mean.empty else None
 
 def mean_of_ip_episode_mean(df: pd.DataFrame, metric_name: str, media=None) -> float | None:
     sub = df[(df["metric"] == metric_name)].copy()
-    if media is not None:
-        sub = sub[sub["매체"].isin(media)]
-    if sub.empty:
-        return None
+    if media is not None: sub = sub[sub["매체"].isin(media)]
+    if sub.empty: return None
     ep_col = _episode_col(sub)
     sub = sub.dropna(subset=[ep_col]).copy()
-    
     sub["value"] = pd.to_numeric(sub["value"], errors="coerce").replace(0, np.nan)
     sub = sub.dropna(subset=["value"])
-
     ep_mean = sub.groupby(["IP", ep_col], as_index=False)["value"].mean()
     per_ip_mean = ep_mean.groupby("IP")["value"].mean()
     return float(per_ip_mean.mean()) if not per_ip_mean.empty else None
 
 def mean_of_ip_sums(df: pd.DataFrame, metric_name: str, media=None) -> float | None:
-    
-    if metric_name == "조회수":
-        sub = _get_view_data(df) 
-    else:
-        sub = df[df["metric"] == metric_name].copy()
-
-    if media is not None:
-        sub = sub[sub["매체"].isin(media)]
-    
-    if sub.empty:
-        return None
-        
+    if metric_name == "조회수": sub = _get_view_data(df) 
+    else: sub = df[df["metric"] == metric_name].copy()
+    if media is not None: sub = sub[sub["매체"].isin(media)]
+    if sub.empty: return None
     sub["value"] = pd.to_numeric(sub["value"], errors="coerce").replace(0, np.nan)
     sub = sub.dropna(subset=["value"])
-
     per_ip_sum = sub.groupby("IP")["value"].sum()
     return float(per_ip_sum.mean()) if not per_ip_sum.empty else None
+
+# ===== [3.6 수정] 히트맵 렌더러 =====
+def render_heatmap(df_index: pd.DataFrame, title: str):
+    """(기존 히트맵 렌더러 - 유지)"""
+    st.markdown(f"###### {title}")
+    if df_index.empty:
+        st.info("데이터 없음")
+        return
+
+    # 스타일링을 위한 AgGrid 설정
+    gb = GridOptionsBuilder.from_dataframe(df_index)
+    gb.configure_grid_options(rowHeight=34, suppressMenuHide=True)
+    gb.configure_default_column(
+        sortable=False, resizable=True, filter=False,
+        cellStyle={'textAlign': 'center'},
+        headerClass='centered-header bold-header'
+    )
+    gb.configure_column("회차", header_name="회차", pinned='left', cellStyle={'textAlign': 'center', 'fontWeight': 'bold'})
+
+    # 0을 기준으로 양수(Red)/음수(Blue) 그라디언트 JS
+    cell_style_js = JsCode("""
+    function(params) {
+        if (params.colDef.field === '회차') return {'textAlign': 'center', 'fontWeight': 'bold'};
+        const val = params.value;
+        if (val === null || val === undefined || val === 999) return {'textAlign': 'center', 'color': '#ccc'};
+        
+        let color = '#333';
+        let bg = '#fff';
+        
+        if (val > 0) {
+            // Red Scale (0 ~ 100%)
+            const opacity = Math.min(Math.abs(val) / 100, 0.8);
+            bg = `rgba(217, 54, 54, ${opacity})`; 
+            if (opacity > 0.4) color = '#fff';
+        } else if (val < 0) {
+            // Blue Scale
+            const opacity = Math.min(Math.abs(val) / 100, 0.8);
+            bg = `rgba(42, 97, 204, ${opacity})`;
+            if (opacity > 0.4) color = '#fff';
+        }
+        return {'textAlign': 'center', 'backgroundColor': bg, 'color': color};
+    }
+    """)
+    
+    # 값 포맷팅 (999 -> -, 그 외 % 표시)
+    val_fmt = JsCode("""
+    function(params) {
+        if (params.value === 999) return '-';
+        if (params.value === undefined || params.value === null) return '';
+        return params.value.toFixed(1) + '%';
+    }
+    """)
+
+    for col in df_index.columns:
+        if col != "회차":
+            gb.configure_column(col, cellStyle=cell_style_js, valueFormatter=val_fmt)
+
+    AgGrid(
+        df_index, gridOptions=gb.build(),
+        height=400, theme="streamlit",
+        fit_columns_on_grid_load=True,
+        allow_unsafe_jscode=True
+    )
+
+
+# ===== 3.7. IP 선택 팝업 (대시보드 직접 연동 버전) =====
+@st.dialog("🎬 분석할 IP를 선택하세요", width="large")
+def ip_selector_dialog(current_ip):
+    st.markdown("""
+    <style>
+    /* 카드 스타일 */
+    .ip-card-container {
+        position: relative;
+        width: 100%;
+        border-radius: 12px;
+        overflow: hidden;
+        margin-bottom: 12px;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        transition: transform 0.2s;
+        background-color: #202124;
+        cursor: pointer;
+    }
+    .ip-card-container:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 10px 15px rgba(0,0,0,0.2);
+    }
+    .poster-box {
+        width: 100%;
+        padding-top: 150%; /* 2:3 비율 */
+        position: relative;
+        background-size: cover;
+        background-position: center;
+        background-color: #eee;
+    }
+    /* 포스터 없을 때 대체 배경 (그라디언트) */
+    .poster-box.no-img {
+        background: linear-gradient(135deg, #f6d365 0%, #fda085 100%);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .poster-overlay {
+        position: absolute;
+        bottom: 0; left: 0; right: 0;
+        background: linear-gradient(to top, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0) 100%);
+        padding: 12px;
+        display: flex;
+        flex-direction: column;
+        justify-content: flex-end;
+        height: 60%;
+    }
+    .ip-card-title {
+        color: white;
+        font-weight: 700;
+        font-size: 16px;
+        margin-bottom: 4px;
+        text-shadow: 0 2px 4px rgba(0,0,0,0.8);
+        word-break: keep-all;
+    }
+    .ip-card-meta {
+        color: #ddd;
+        font-size: 12px;
+        font-weight: 400;
+        text-shadow: 0 1px 2px rgba(0,0,0,0.8);
+    }
+    .selected-border {
+        border: 3px solid #d93636;
+    }
+    .no-img-text {
+        position: absolute;
+        top: 50%; left: 50%;
+        transform: translate(-50%, -50%);
+        font-size: 30px;
+        color: rgba(255,255,255,0.8);
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+    # 1. MongoDB 데이터 로드
+    df = load_data()
+    
+    # 2. 구글 시트 포스터 데이터 로드 (함수 호출)
+    poster_map = load_poster_map()
+    
+    # 3. 데이터 병합 및 정렬
+    if not df.empty:
+        # IP 메타 정보 추출
+        if "방영시작일" in df.columns:
+            df["방영시작일"] = pd.to_datetime(df["방영시작일"], errors="coerce")
+            ip_meta = df.sort_values("방영시작일", ascending=False).drop_duplicates("IP")
+        else:
+            ip_meta = df.drop_duplicates("IP")
+    else:
+        st.warning("데이터가 없습니다.")
+        return
+
+    # 4. 검색창
+    col_search, _ = st.columns([1, 1])
+    with col_search:
+        search_kw = st.text_input("검색", placeholder="IP명 검색...", label_visibility="collapsed")
+    
+    if search_kw:
+        mask = ip_meta["IP"].astype(str).str.contains(search_kw, case=False)
+        ip_meta = ip_meta[mask]
+
+    st.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
+
+    # 5. 카드 그리드 렌더링
+    cols = st.columns(4)
+    
+    for idx, row in ip_meta.iterrows():
+        c = cols[idx % 4]
+        ip_name = row['IP']
+        
+        # [핵심] 구글 시트에서 가져온 poster_url 매핑
+        img_url = poster_map.get(ip_name, "")
+        
+        # 메타 정보 구성
+        prog = str(row.get("편성", "")) if pd.notna(row.get("편성")) else ""
+        date_str = ""
+        if pd.notna(row.get("방영시작일")):
+             date_str = row["방영시작일"].strftime("%y.%m")
+        meta_txt = f"{prog} | {date_str}" if prog and date_str else (prog or date_str)
+        
+        border_cls = "selected-border" if ip_name == current_ip else ""
+        
+        with c:
+            # 이미지 유무에 따른 HTML 분기
+            if img_url:
+                card_html = f"""
+                <div class="ip-card-container {border_cls}">
+                    <div class="poster-box" style="background-image: url('{img_url}');">
+                        <div class="poster-overlay">
+                            <div class="ip-card-title">{ip_name}</div>
+                            <div class="ip-card-meta">{meta_txt}</div>
+                        </div>
+                    </div>
+                </div>
+                """
+            else:
+                # 이미지가 없을 경우 (그라디언트 + 텍스트)
+                card_html = f"""
+                <div class="ip-card-container {border_cls}">
+                    <div class="poster-box no-img">
+                        <div class="no-img-text">🎬</div>
+                        <div class="poster-overlay">
+                            <div class="ip-card-title">{ip_name}</div>
+                            <div class="ip-card-meta">{meta_txt}</div>
+                        </div>
+                    </div>
+                </div>
+                """
+            
+            st.markdown(card_html, unsafe_allow_html=True)
+            
+            btn_label = "✅ 선택" if ip_name == current_ip else "선택"
+            btn_type = "primary" if ip_name == current_ip else "secondary"
+            
+            if st.button(btn_label, key=f"btn_sel_{ip_name}", type=btn_type, use_container_width=True):
+                st.session_state["global_ip"] = ip_name
+                st.rerun()
+
+    if ip_meta.empty:
+        st.info("검색 결과가 없습니다.")
 #endregion
 
 
