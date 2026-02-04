@@ -16,8 +16,8 @@ from plotly import graph_objects as go
 import plotly.io as pio
 import streamlit as st
 from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode, JsCode
-from pymongo import MongoClient  # [수정] gspread 대신 pymongo 사용
-import extra_streamlit_components as stx 
+from pymongo import MongoClient
+import extra_streamlit_components as stx
 #endregion
 
 
@@ -408,12 +408,11 @@ pio.templates.default = 'dashboard_theme'
 @st.cache_data(ttl=600)
 def load_data() -> pd.DataFrame:
     """
-    [수정] Google Sheets 대신 MongoDB에서 데이터를 로드합니다.
-    이미 ETL 과정에서 전처리가 완료된 상태이므로 로드 속도가 빠릅니다.
+    MongoDB에서 데이터를 로드합니다.
+    ETL 과정에서 전처리가 완료된 상태이므로 로드 속도가 빠릅니다.
     """
     try:
         # 1. MongoDB 연결
-        # secrets.toml에 [mongo] 섹션이 정의되어 있어야 합니다.
         uri = st.secrets["mongo"]["uri"]
         db_name = st.secrets["mongo"]["db"]
         col_name = st.secrets["mongo"]["collection"]
@@ -422,8 +421,7 @@ def load_data() -> pd.DataFrame:
         db = client[db_name]
         collection = db[col_name]
 
-        # 2. 데이터 가져오기 (전체 조회)
-        # _id는 DataFrame 변환 시 불필요하므로 제외하고 가져옵니다.
+        # 2. 데이터 가져오기 (전체 조회, _id 제외)
         cursor = collection.find({}, {"_id": 0})
         data = list(cursor)
         
@@ -436,25 +434,23 @@ def load_data() -> pd.DataFrame:
         st.error(f"MongoDB 데이터 로드 중 오류 발생: {e}")
         return pd.DataFrame()
 
-    # --- 3. 데이터 타입 안전장치 (ETL에서 했지만 한번 더 확인) ---
-    # 날짜 컬럼: 몽고DB는 datetime 객체로 저장하므로 바로 사용 가능하나,
-    # Pandas 호환성을 위해 pd.to_datetime으로 한 번 감싸줍니다 (비용 낮음).
+    # --- 3. 데이터 타입 안전장치 ---
+    # 날짜 컬럼 변환
     for col in ["주차시작일", "방영시작일"]:
         if col in df.columns:
             df[col] = pd.to_datetime(df[col], errors="coerce")
 
-    # 숫자 컬럼: 이미 ETL에서 int/float로 변환했으므로 추가 처리 불필요
-    # 단, 결측치(NaN)가 있으면 0으로 채우는 것은 유지
+    # 숫자 컬럼 변환 (결측치 0 처리)
     if "value" in df.columns:
         df["value"] = pd.to_numeric(df["value"], errors="coerce").fillna(0)
 
-    # 문자열 공백 제거 (안전장치)
+    # 문자열 공백 제거
     str_cols = ["IP", "편성", "지표구분", "매체", "데모", "metric", "회차", "주차"]
     existing_cols = [c for c in str_cols if c in df.columns]
     if existing_cols:
         df[existing_cols] = df[existing_cols].astype(str).apply(lambda x: x.str.strip())
 
-    # 회차_numeric: ETL에서 이미 만들어서 넣었으므로 그대로 사용
+    # 회차_numeric 안전장치
     if "회차_numeric" not in df.columns:
         df["회차_numeric"] = pd.NA
 
@@ -463,10 +459,17 @@ def load_data() -> pd.DataFrame:
 # ===== 3.2. UI / 포맷팅 헬퍼 함수 =====
 
 def fmt(v, digits=3, intlike=False):
-    if v is None or pd.isna(v): return "–"
+    """
+    숫자 포맷팅 헬퍼 (None이나 NaN은 '–'로 표시)
+    """
+    if v is None or pd.isna(v):
+        return "–"
     return f"{v:,.0f}" if intlike else f"{v:.{digits}f}"
 
 def kpi(col, title, value):
+    """
+    Streamlit 컬럼 내에 KPI 카드를 렌더링합니다. (CSS .kpi-card 필요)
+    """
     with col:
         st.markdown(
             f'<div class="kpi-card"><div class="kpi-title">{title}</div>'
@@ -475,6 +478,9 @@ def kpi(col, title, value):
         )
 
 def render_gradient_title(main_text: str, emoji: str = "🎬"):
+    """
+    사이드바용 그라디언트 타이틀을 렌더링합니다. (CSS .page-title-wrap 필요)
+    """
     st.markdown(
         f"""
         <div class="page-title-wrap">
@@ -488,24 +494,32 @@ def render_gradient_title(main_text: str, emoji: str = "🎬"):
 # ===== 3.3. 페이지 라우팅 / 데이터 헬퍼 함수 =====
 
 def get_current_page_default(default="Overview"):
+    """
+    URL 쿼리 파라미터(?page=...)에서 현재 페이지를 읽어옵니다.
+    """
     try:
         qp = st.query_params
         p = qp.get("page", None)
-        return p if isinstance(p, str) else (p[0] if p else default)
-    except:
+        if p is None:
+            return default
+        return p if isinstance(p, str) else p[0]
+    except Exception:
+        # 구버전 호환성
         return default
 
 def _set_page_query_param(page_key: str):
+    """
+    URL 쿼리 파라미터에 page 키를 설정합니다.
+    """
     try:
         st.query_params["page"] = page_key
-    except:
+    except Exception:
         pass
 
 def get_episode_options(df: pd.DataFrame) -> List[str]:
-    """데이터에서 사용 가능한 회차 목록 추출"""
+    """데이터에서 사용 가능한 회차 목록 (문자열)을 추출합니다."""
     valid_options = []
     if "회차_numeric" in df.columns:
-        # 몽고DB에서 int로 잘 들어왔겠지만, 안전하게 unique 추출
         unique_episodes_num = sorted([
             int(ep) for ep in df["회차_numeric"].dropna().unique() if ep > 0
         ])
@@ -522,27 +536,36 @@ def get_episode_options(df: pd.DataFrame) -> List[str]:
 # ===== 3.4. 통합 데이터 필터링 유틸 =====
 
 def _get_view_data(df: pd.DataFrame) -> pd.DataFrame:
-    """조회수 metric 필터 및 PGC/UGC 로직 적용"""
+    """
+    '조회수' metric만 필터링하고, 유튜브 PGC/UGC 규칙을 적용하는 공통 유틸.
+    """
     sub = df[df["metric"] == "조회수"].copy()
-    if sub.empty: return sub
+    if sub.empty:
+        return sub
+        
     if "매체" in sub.columns and "세부속성1" in sub.columns:
         yt_mask = (sub["매체"] == "유튜브")
         attr_mask = sub["세부속성1"].isin(["PGC", "UGC"])
         sub = sub[~yt_mask | (yt_mask & attr_mask)]
+    
     return sub
-
-def _episode_col(df: pd.DataFrame) -> str:
-    return "회차_numeric" if "회차_numeric" in df.columns else "회차"
 
 # ===== 3.5. 집계 계산 유틸 =====
 
+def _episode_col(df: pd.DataFrame) -> str:
+    """데이터프레임에 존재하는 회차 숫자 컬럼명을 반환합니다."""
+    return "회차_numeric" if "회차_numeric" in df.columns else ("회차_num" if "회차_num" in df.columns else "회차")
+
 def mean_of_ip_episode_sum(df: pd.DataFrame, metric_name: str, media=None) -> float | None:
     sub = df[(df["metric"] == metric_name)].copy()
-    if media: sub = sub[sub["매체"].isin(media)]
-    if sub.empty: return None
-    
+    if media is not None:
+        sub = sub[sub["매체"].isin(media)]
+    if sub.empty:
+        return None
     ep_col = _episode_col(sub)
-    sub = sub.dropna(subset=[ep_col])
+    sub = sub.dropna(subset=[ep_col]).copy()
+    
+    sub["value"] = pd.to_numeric(sub["value"], errors="coerce").replace(0, np.nan)
     sub = sub.dropna(subset=["value"])
 
     ep_sum = sub.groupby(["IP", ep_col], as_index=False)["value"].sum()
@@ -551,27 +574,38 @@ def mean_of_ip_episode_sum(df: pd.DataFrame, metric_name: str, media=None) -> fl
 
 def mean_of_ip_episode_mean(df: pd.DataFrame, metric_name: str, media=None) -> float | None:
     sub = df[(df["metric"] == metric_name)].copy()
-    if media: sub = sub[sub["매체"].isin(media)]
-    if sub.empty: return None
-
+    if media is not None:
+        sub = sub[sub["매체"].isin(media)]
+    if sub.empty:
+        return None
     ep_col = _episode_col(sub)
-    sub = sub.dropna(subset=[ep_col, "value"])
+    sub = sub.dropna(subset=[ep_col]).copy()
+    
+    sub["value"] = pd.to_numeric(sub["value"], errors="coerce").replace(0, np.nan)
+    sub = sub.dropna(subset=["value"])
 
     ep_mean = sub.groupby(["IP", ep_col], as_index=False)["value"].mean()
     per_ip_mean = ep_mean.groupby("IP")["value"].mean()
     return float(per_ip_mean.mean()) if not per_ip_mean.empty else None
 
 def mean_of_ip_sums(df: pd.DataFrame, metric_name: str, media=None) -> float | None:
-    if metric_name == "조회수": sub = _get_view_data(df)
-    else: sub = df[df["metric"] == metric_name].copy()
     
-    if media: sub = sub[sub["매체"].isin(media)]
-    if sub.empty: return None
+    if metric_name == "조회수":
+        sub = _get_view_data(df) 
+    else:
+        sub = df[df["metric"] == metric_name].copy()
+
+    if media is not None:
+        sub = sub[sub["매체"].isin(media)]
     
+    if sub.empty:
+        return None
+        
+    sub["value"] = pd.to_numeric(sub["value"], errors="coerce").replace(0, np.nan)
     sub = sub.dropna(subset=["value"])
+
     per_ip_sum = sub.groupby("IP")["value"].sum()
     return float(per_ip_sum.mean()) if not per_ip_sum.empty else None
-
 #endregion
 
 
@@ -580,19 +614,39 @@ def mean_of_ip_sums(df: pd.DataFrame, metric_name: str, media=None) -> float | N
 current_page = get_current_page_default("Overview")
 st.session_state["page"] = current_page
 
+# [추가] 사이드바용 데이터 로드 (IP 목록용)
+df_nav = load_data()
+all_ips = sorted(df_nav["IP"].dropna().unique().tolist()) if not df_nav.empty else []
+
 with st.sidebar:
-
     render_gradient_title("드라마 성과 대시보드", emoji="")
-    st.markdown(
-        "<p class='sidebar-contact' style='font-size:12px; color:gray;'>문의 : 미디어)마케팅팀 데이터인사이트파트</p>",
-        unsafe_allow_html=True
-    )
-    st.markdown("<div style='margin-top: 30px;'></div>", unsafe_allow_html=True)
-    st.markdown("<div style='margin-top: 30px;'></div>", unsafe_allow_html=True)
+    
+    # [신규] 전역 IP 필터 (최상단 배치)
+    st.markdown("### 🎯 IP 선택 (Global)")
+    
+    # 세션에 저장된 IP가 없거나 유효하지 않으면 첫 번째 IP로 초기화
+    if "global_ip" not in st.session_state or st.session_state["global_ip"] not in all_ips:
+        if all_ips:
+            st.session_state["global_ip"] = all_ips[0]
 
+    if all_ips:
+        selected_global_ip = st.selectbox(
+            "분석할 IP를 선택하세요",
+            all_ips,
+            index=all_ips.index(st.session_state["global_ip"]) if st.session_state["global_ip"] in all_ips else 0,
+            key="global_ip_select",
+            label_visibility="collapsed"
+        )
+        # 선택 즉시 세션 업데이트
+        st.session_state["global_ip"] = selected_global_ip
+    else:
+        st.warning("데이터가 없습니다.")
+
+    st.divider()
+
+    # 네비게이션 메뉴
     for key, label in NAV_ITEMS.items():
         is_active = (current_page == key)
-        
         wrapper_cls = "nav-active" if is_active else "nav-inactive"
         st.markdown(f'<div class="{wrapper_cls}">', unsafe_allow_html=True)
 
@@ -608,6 +662,13 @@ with st.sidebar:
             st.session_state["page"] = key
             _set_page_query_param(key)
             _rerun()
+            
+    st.markdown("<div style='margin-top: 30px;'></div>", unsafe_allow_html=True)
+    st.markdown("<div style='margin-top: 30px;'></div>", unsafe_allow_html=True)
+    st.markdown(
+        "<p class='sidebar-contact' style='font-size:12px; color:gray;'>문의 : 미디어)마케팅팀 데이터인사이트파트</p>",
+        unsafe_allow_html=True
+    )
 #endregion
 
 
@@ -968,7 +1029,7 @@ def render_overview():
             label_visibility="collapsed"
         )
 
-    # [수정] 연도 필터: '편성연도' 컬럼 사용 (날짜 파싱 X)
+    # 연도 필터: '편성연도' 컬럼 사용
     all_years = []
     if "편성연도" in df.columns:
         unique_vals = df["편성연도"].dropna().unique()
@@ -977,7 +1038,7 @@ def render_overview():
         except:
             all_years = sorted([str(x) for x in unique_vals], reverse=True)
 
-    # [수정] 월 필터: 기존 날짜 컬럼 사용 (연도와 분리)
+    # 월 필터
     if "방영시작일" in df.columns and df["방영시작일"].notna().any():
         date_col_for_month = "방영시작일"
     else:
@@ -1009,11 +1070,9 @@ def render_overview():
     if prog_sel:
         f = f[f["편성"].isin(prog_sel)]
     
-    # [수정] 연도 필터 적용 (값 직접 비교)
     if year_sel and "편성연도" in f.columns:
         f = f[f["편성연도"].isin(year_sel)]
         
-    # [수정] 월 필터 적용 (기존 날짜 컬럼 활용)
     if month_sel and date_col_for_month in f.columns:
         f = f[f[date_col_for_month].dt.month.isin(month_sel)]
 
@@ -1199,22 +1258,26 @@ def render_overview():
 
     df_perf = calculate_overview_performance(f)
 
-    fmt_fixed3 = JsCode("""
-    function(params){
-      if (params.value == null || isNaN(params.value)) return '';
-      return Number(params.value).toFixed(3);
-    }""")
-    fmt_thousands = JsCode("""
-    function(params){
-      if (params.value == null || isNaN(params.value)) return '';
-      return Math.round(params.value).toLocaleString();
-    }""")
-    fmt_rank = JsCode("""
-    function(params){
-      if (params.value == null || isNaN(params.value)) return '';
-      if (params.value == 0) return '–';
-      return Math.round(params.value) + '위';
-    }""")
+    # 포맷터 정의
+    fmt_fixed3 = JsCode("""function(params){ if(params.value==null||isNaN(params.value))return ''; return Number(params.value).toFixed(3); }""")
+    fmt_thousands = JsCode("""function(params){ if(params.value==null||isNaN(params.value))return ''; return Math.round(params.value).toLocaleString(); }""")
+    fmt_rank = JsCode("""function(params){ if(params.value==null||isNaN(params.value))return ''; if(params.value==0) return '–'; return Math.round(params.value)+'위'; }""")
+
+    # [신규] 선택된 IP 행 하이라이트 스타일
+    target_ip = st.session_state.get("global_ip", "")
+    
+    highlight_jscode = JsCode(f"""
+    function(params) {{
+        if (params.data.IP === '{target_ip}') {{
+            return {{
+                'background-color': '#fffde7',  /* 연한 노란색 */
+                'font-weight': 'bold',
+                'border-left': '5px solid #d93636' /* 빨간 강조선 */
+            }};
+        }}
+        return {{}};
+    }}
+    """)
 
     gb = GridOptionsBuilder.from_dataframe(df_perf)
     gb.configure_default_column(
@@ -1222,7 +1285,14 @@ def render_overview():
         cellStyle={'textAlign': 'center'},
         headerClass='centered-header'
     )
-    gb.configure_grid_options(rowHeight=34, suppressMenuHide=True, domLayout='normal')
+    
+    # [핵심] getRowStyle 적용
+    gb.configure_grid_options(
+        rowHeight=34, 
+        suppressMenuHide=True, 
+        domLayout='normal',
+        getRowStyle=highlight_jscode 
+    )
     
     gb.configure_column('IP', header_name='IP', cellStyle={'textAlign':'left'}) 
     gb.configure_column('타깃시청률', valueFormatter=fmt_fixed3, sort='desc')
@@ -1255,12 +1325,18 @@ def render_ip_detail():
     
     df_full = load_data() # [3. 공통 함수]
 
-    # [수정] 컬럼 비율 조정
-    # 순서: 타이틀(3) | IP선택(2) | 방영연도(2) | 편성기준(2)
-    filter_cols = st.columns([3, 2, 2, 2])
+    # [수정] 전역 IP 사용
+    ip_selected = st.session_state.get("global_ip")
+    if not ip_selected or ip_selected not in df_full["IP"].values:
+        st.error("선택된 IP 정보가 없습니다.")
+        return
+
+    # [수정] 컬럼 비율 조정 (IP선택 제거됨) -> 타이틀(5) | 방영연도(2) | 편성기준(2)
+    filter_cols = st.columns([5, 2, 2])
 
     with filter_cols[0]:
-        st.markdown("<div class='page-title'>📈 IP 성과 자세히보기</div>", unsafe_allow_html=True)
+        st.markdown(f"<div class='page-title'>📈 {ip_selected} 성과 상세</div>", unsafe_allow_html=True)
+    
     with st.expander("ℹ️ 지표 기준 안내", expanded=False):
         st.markdown("<div class='gd-guideline'>", unsafe_allow_html=True)
         st.markdown(textwrap.dedent("""
@@ -1275,20 +1351,8 @@ def render_ip_detail():
         """).strip())
         st.markdown("</div>", unsafe_allow_html=True)
 
-    ip_options = sorted(df_full["IP"].dropna().unique().tolist())
-    
-    # [Col 1] IP 선택
-    with filter_cols[1]:
-        ip_selected = st.selectbox(
-            "IP (단일선택)",
-            ip_options,
-            index=0 if ip_options else None,
-            placeholder="IP 선택",
-            label_visibility="collapsed"
-        )
-
     # --- 데이터 전처리 (Default 설정을 위해 위치 이동) ---
-    # [수정] 방영 연도 필터 기준을 '편성연도' 컬럼으로 변경 (날짜 파싱 X)
+    # [수정] 방영 연도 필터 기준을 '편성연도' 컬럼으로 변경
     date_col_for_filter = "편성연도"
 
     target_ip_rows = df_full[df_full["IP"] == ip_selected]
@@ -1299,7 +1363,6 @@ def render_ip_detail():
     
     if not target_ip_rows.empty:
         try:
-            # [수정] 날짜 파싱(.dt.year) 없이 값 그대로 모드 추출
             if date_col_for_filter in target_ip_rows.columns:
                 y_mode = target_ip_rows[date_col_for_filter].dropna().mode()
                 if not y_mode.empty:
@@ -1310,17 +1373,15 @@ def render_ip_detail():
             pass
             
     all_years = []
-    # [수정] '편성연도' 컬럼의 고유값을 그대로 사용
     if date_col_for_filter in df_full.columns:
         unique_vals = df_full[date_col_for_filter].dropna().unique()
         try:
             all_years = sorted(unique_vals, reverse=True)
         except:
-            # 정렬 실패(타입 혼재 등) 시 문자열 변환 후 정렬
             all_years = sorted([str(x) for x in unique_vals], reverse=True)
 
-    # [Col 2] 방영 연도
-    with filter_cols[2]:
+    # [Col 1] 방영 연도
+    with filter_cols[1]:
         selected_years = st.multiselect(
             "방영 연도",
             all_years,
@@ -1329,8 +1390,8 @@ def render_ip_detail():
             label_visibility="collapsed"
         )
 
-    # [Col 3] 동일 편성 여부 (셀렉트박스)
-    with filter_cols[3]:
+    # [Col 2] 동일 편성 여부 (셀렉트박스)
+    with filter_cols[2]:
         comp_type = st.selectbox(
             "편성 기준",
             ["동일 편성", "전체"], 
@@ -1371,12 +1432,10 @@ def render_ip_detail():
 
     # 2. 방영 연도 필터
     if selected_years:
-        # [수정] 날짜 파싱(.dt.year) 없이 컬럼 값 그대로 비교
         base_raw = base_raw[base_raw[date_col_for_filter].isin(selected_years)]
         
         if len(selected_years) <= 3:
             years_str = ",".join(map(str, sorted(selected_years)))
-            # [수정] 데이터 값 자체("24년")를 사용하므로 "년" 접미사 제거
             group_name_parts.append(f"{years_str}")
         else:
             try:
@@ -1542,7 +1601,6 @@ def render_ip_detail():
         pct = (val / base_val) * 100
         return "#d93636" if pct > 100 else ("#2a61cc" if pct < 100 else "#444")
 
-    # [수정] 순위 표시에 '총 N개 중' 및 '1위 왕관' 추가
     def sublines_html(prog_label: str, rank_tuple: tuple, val, base_val):
         rnk, total = rank_tuple if rank_tuple else (None, 0)
         
@@ -1669,11 +1727,10 @@ def render_ip_detail():
             fig_tving = go.Figure()
             for m in stack_order:
                 if m in pvt.columns:
-                    # [수정] 계열별 레이블(text) 제거
                     fig_tving.add_trace(go.Bar(
                         name=m, x=pvt.index, y=pvt[m],
                         marker_color=colors[m],
-                        text=None, # 레이블 제거
+                        text=None,
                         hovertemplate=f"<b>%{{x}}</b><br>{m}: %{{y:,.0f}}<extra></extra>"
                     ))
             
@@ -1681,7 +1738,6 @@ def render_ip_detail():
             max_val = total_vals.max()
             total_txt = [fmt_live_kor(v) for v in total_vals]
             
-            # 총합 레이블만 유지
             fig_tving.add_trace(go.Scatter(
                 x=pvt.index, y=total_vals, mode='text',
                 text=total_txt, textposition='top center',
@@ -1956,7 +2012,6 @@ def render_ip_detail():
     # === JS 렌더러 (▲/▾ + 행별 그라디언트) ===
 
     # DiffRenderer: 전 회차 대비 ▲/▾ 표시
-    # [수정] DiffRenderer: 주석 스타일 변경(//) 및 특수문자 HTML Entity 사용
     diff_renderer = JsCode("""
     class DiffRenderer {
       init(params) {
@@ -2070,7 +2125,6 @@ def render_ip_detail():
         gb.configure_grid_options(
             rowHeight=34,
             suppressMenuHide=True,
-            # domLayout는 사용 안 함 (height를 직접 계산해서 지정)
         )
 
         gb.configure_default_column(
@@ -2096,11 +2150,10 @@ def render_ip_detail():
                 cellStyle=cell_style_renderer,
             )
 
-        # 🔹 행 수에 따라 height 동적 계산
         rows = len(df_numeric)
         base_row_height = 34
         header_height = 34
-        max_visible_rows = 17   # 12화까지는 스크롤 없이 한 번에 보이도록
+        max_visible_rows = 17 
 
         if rows <= max_visible_rows:
             height = base_row_height * rows + header_height + 24
@@ -2114,7 +2167,7 @@ def render_ip_detail():
             height=height,
             fit_columns_on_grid_load=True,
             update_mode=GridUpdateMode.NO_UPDATE,
-            allow_unsafe_jscode=True,  # JS 사용
+            allow_unsafe_jscode=True,  
         )
 
     tv_numeric = _build_demo_table_numeric(f, ["TV"])
@@ -2124,9 +2177,6 @@ def render_ip_detail():
         f, ["TVING LIVE", "TVING QUICK", "TVING VOD"]
     )
     _render_aggrid_table(tving_numeric, "▶︎ TVING 합산 시청자수")
-
-
-
 #endregion
 
 
@@ -2634,24 +2684,28 @@ def render_comparison():
     if "회차_numeric" not in df_all.columns:
         df_all["회차_numeric"] = df_all["회차"].str.extract(r"(\d+)", expand=False).astype(float)
 
-    # [핵심] 백분위 계산시에는 아직 필터값이 없으므로 일단 전체 로드 후, 아래에서 재계산 호출
-    # (초기값은 전체로 둠)
     kpi_percentiles = get_kpi_data_for_all_ips(df_all, max_ep=None)
-
     ip_options = sorted(df_all["IP"].dropna().unique().tolist())
-    selected_ip1 = None
+    
+    # [수정] 전역 IP 가져오기 (기준 IP)
+    global_ip = st.session_state.get("global_ip")
+    if not global_ip: st.error("IP 선택 필요"); return
+    
+    # 기준 IP 변수 고정
+    selected_ip1 = global_ip
     selected_ip2 = None
 
     current_mode = st.session_state.get("comp_mode_page4", "IP vs 그룹 평균")
     
+    # 컬럼 비율 조정 (기준 IP 선택박스 제거 → 텍스트 표시 or 비활성 박스)
     if current_mode == "IP vs IP":
         filter_cols = st.columns([3, 2, 2, 2, 3])
     else:
         filter_cols = st.columns([3, 2, 2, 2, 2, 1]) 
     
-    # --- 헤더 및 모드 선택 ---
     with filter_cols[0]:
-        st.markdown("## ⚖️ 성과 비교분석")
+        st.markdown(f"## ⚖️ {selected_ip1} <span style='font-size:18px;color:#666'>vs ...</span>", unsafe_allow_html=True)
+        
     with st.expander("ℹ️ 지표 기준 안내", expanded=False):
         st.markdown("<div class='gd-guideline'>", unsafe_allow_html=True)
         st.markdown(textwrap.dedent("""
@@ -2678,56 +2732,46 @@ def render_comparison():
 
     # --- IP vs IP 모드 ---
     if comparison_mode == "IP vs IP":
+        # [수정] 기준 IP는 표시만 하고 선택 불가 (또는 disabled)
         with filter_cols[2]:
-            selected_ip1 = st.selectbox(
-                "기준 IP", ip_options, index=0 if ip_options else None, 
-                label_visibility="collapsed"
-            )
+            st.markdown(f"**기준: {selected_ip1}**") 
+            
         with filter_cols[3]:
+            # 본인 제외
             ip_options_2 = [ip for ip in ip_options if ip != selected_ip1]
             selected_ip2 = st.selectbox(
                 "비교 IP", ip_options_2, 
-                index=1 if len(ip_options_2) > 1 else (0 if len(ip_options_2) > 0 else None), 
+                index=0 if ip_options_2 else None, 
                 label_visibility="collapsed"
             )
         
-        target_rows = df_all[df_all["IP"] == selected_ip1] if selected_ip1 else pd.DataFrame()
+        target_rows = df_all[df_all["IP"] == selected_ip1]
         ep_opts = ["전체"] + get_episode_options(target_rows)
         
         with filter_cols[4]:
-            selected_max_ep = st.selectbox(
-                "회차 범위 (누적)", ep_opts, index=0,
-                label_visibility="collapsed"
-            )
+            selected_max_ep = st.selectbox("회차 범위", ep_opts, index=0, label_visibility="collapsed")
         
-        use_same_prog = False
-        selected_years = []
+        use_same_prog = False; selected_years = []
 
     # --- IP vs 그룹 평균 모드 ---
     else: 
-        base_ip_info_rows = df_all[df_all["IP"] == selected_ip1];
+        # [수정] 기준 IP 정보 자동 로드
+        base_ip_info_rows = df_all[df_all["IP"] == selected_ip1]
         
-        # [수정] '편성연도' 컬럼 사용
+        # 편성연도 자동 추출
         all_years = []
         if "편성연도" in df_all.columns:
             unique_vals = df_all["편성연도"].dropna().unique()
-            try:
-                all_years = sorted(unique_vals, reverse=True)
-            except:
-                all_years = sorted([str(x) for x in unique_vals], reverse=True)
+            try: all_years = sorted(unique_vals, reverse=True)
+            except: all_years = sorted([str(x) for x in unique_vals], reverse=True)
 
-        # Default selection
         default_year_list = []
         if "편성연도" in base_ip_info_rows.columns:
             y_mode = base_ip_info_rows["편성연도"].dropna().mode()
-            if not y_mode.empty:
-                default_year_list = [y_mode.iloc[0]]
+            if not y_mode.empty: default_year_list = [y_mode.iloc[0]]
 
         with filter_cols[2]:
-            selected_ip1 = st.selectbox(
-                "기준 IP", ip_options, index=0 if ip_options else None, 
-                label_visibility="collapsed"
-            )
+             st.markdown(f"**기준: {selected_ip1}**")
 
         with filter_cols[3]:
             comp_type = st.selectbox(
@@ -2742,14 +2786,11 @@ def render_comparison():
                 key="comp_year_page4", placeholder="연도 선택", label_visibility="collapsed"
             )
         
-        target_rows = df_all[df_all["IP"] == selected_ip1] if selected_ip1 else pd.DataFrame()
+        target_rows = df_all[df_all["IP"] == selected_ip1]
         ep_opts = ["전체"] + get_episode_options(target_rows)
 
         with filter_cols[5]:
-            selected_max_ep = st.selectbox(
-                "회차 범위", ep_opts, index=0,
-                label_visibility="collapsed"
-            )
+            selected_max_ep = st.selectbox("회차 범위", ep_opts, index=0, label_visibility="collapsed")
 
     st.divider()
 
@@ -2889,8 +2930,7 @@ def render_comparison():
 
 #region [ 10. 페이지 4: 성장스코어-방영성과 ]
 # =====================================================
-# [수정] 2025-11-19: 비교 그룹(동일 편성) 필터 추가 및 레이아웃 조정
-# [개선] 계산 로직 캐싱(_calc_growth_grades_cached) 적용하여 성능 최적화
+# [수정] 전역 IP 사용, IP 선택박스 제거
 
 # ---------- 설정 상수 ----------
 EP_CHOICES = [2, 4, 6, 8, 10, 12, 14, 16]
@@ -3056,21 +3096,24 @@ def render_growth_score():
 
     # ---------- 헤더(타이틀/선택/필터) ----------
     _ep_display = st.session_state.get("growth_ep_cutoff", 4)
-    head = st.columns([4, 2, 2, 2])
+    
+    # [수정] 전역 IP 사용
+    selected_ip = st.session_state.get("global_ip")
+    if not selected_ip or selected_ip not in all_ip_list:
+        st.error("IP 선택 필요"); return
+
+    head = st.columns([5, 2, 2])
     
     with head[0]:
         st.markdown(
-            f"## 🚀 성장스코어-방영지표 <span style='font-size:20px;color:#6b7b93'>(~{_ep_display}회 기준)</span>",
+            f"## 🚀 {selected_ip} 성장스코어 <span style='font-size:20px;color:#6b7b93'>(~{_ep_display}회)</span>",
             unsafe_allow_html=True
         )
     
     with head[1]:
-        selected_ip = st.selectbox("IP 선택", all_ip_list, index=0, key="growth_ip_select", label_visibility="collapsed")
-
-    with head[2]:
         comp_group_mode = st.selectbox("비교 그룹", ["전체 비교", "동일 편성만"], index=0, key="growth_comp_mode", label_visibility="collapsed")
 
-    with head[3]:
+    with head[2]:
         ep_cutoff = st.selectbox("회차 기준", EP_CHOICES, index=1, key="growth_ep_cutoff", label_visibility="collapsed")
 
     with st.expander("ℹ️ 지표 기준 안내", expanded=False):
@@ -3354,16 +3397,19 @@ def render_growth_score_digital():
 
     # ---------- 헤더(타이틀/선택) ----------
     _ep_display = st.session_state.get("growth_d_ep_cutoff", 4)
-    head = st.columns([5, 3, 2])
+    
+    # [수정] 전역 IP 사용
+    selected_ip = st.session_state.get("global_ip")
+    if not selected_ip or selected_ip not in ips:
+        st.error("IP 선택 필요"); return
+
+    head = st.columns([7, 2])
     with head[0]:
         st.markdown(
-            f"## 🛰️ 성장스코어-디지털 <span style='font-size:20px;color:#6b7b93'>(~{_ep_display}회 기준)</span>",
+            f"## 🛰️ {selected_ip} 디지털 성장 <span style='font-size:20px;color:#6b7b93'>(~{_ep_display}회)</span>",
             unsafe_allow_html=True
         )
     with head[1]:
-        selected_ip = st.selectbox("IP 선택", ips, index=0,
-                                   key="growth_d_ip_select", label_visibility="collapsed")
-    with head[2]:
         ep_cutoff = st.selectbox("회차 기준", EP_CHOICES, index=1,
                                  key="growth_d_ep_cutoff", label_visibility="collapsed")
 
@@ -3701,8 +3747,8 @@ def render_growth_score_digital():
           if (v.startsWith('S')) { bg='rgba(0,91,187,0.14)'; color='#003d80'; }
           else if (v.startsWith('A')) { bg='rgba(0,91,187,0.08)'; color='#004a99'; }
           else if (v.startsWith('B')) { bg='rgba(0,0,0,0.03)'; color='#333'; fw='600'; }
-          else if (v.startsWith('C')) { bg='rgba(42,97,204,0.08)'; color:'#2a61cc'; }
-          else if (v.startsWith('D')) { bg='rgba(42,97,204,0.14)'; color:'#1a44a3'; }
+          else if (v.startsWith('C')) { bg='rgba(42,97,204,0.08)'; color='#2a61cc'; }
+          else if (v.startsWith('D')) { bg='rgba(42,97,204,0.14)'; color='#1a44a3'; }
           return {'background-color':bg,'color':color,'font-weight':fw,'text-align':'center'};
         }
         return {'text-align':'center'};
