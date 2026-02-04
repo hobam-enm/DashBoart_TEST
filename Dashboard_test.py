@@ -2192,6 +2192,7 @@ def render_ip_detail():
 #region [ 9. 페이지 3: IP간 비교분석 (통합) ]
 # =====================================================
 # [수정] 성과 포지셔닝(레이더차트)에 회차 필터 연동 (백분위 재계산 로직 추가)
+# [수정] 2025-11-13: '기준 IP' 텍스트 표시 제거 및 레이아웃 최적화
 
 # ===== 10.0. 포맷팅 헬퍼 (페이지 4 전용) =====
 def _fmt_kor_large(v):
@@ -2211,7 +2212,6 @@ def _fmt_kor_large(v):
         return f"{int(val)}"
 
 # ===== 10.1. [페이지 4] KPI 백분위 계산 (캐싱) =====
-# [수정] max_ep 파라미터 추가 -> 필터 적용된 데이터로 전체 IP 백분위 재산출
 @st.cache_data(ttl=600)
 def get_kpi_data_for_all_ips(df_all: pd.DataFrame, max_ep: float = None) -> pd.DataFrame:
     """
@@ -2220,7 +2220,7 @@ def get_kpi_data_for_all_ips(df_all: pd.DataFrame, max_ep: float = None) -> pd.D
     """
     df = df_all.copy()
     
-    # 1. 회차 필터링 (전체 유니버스 축소)
+    # 1. 회차 필터링
     if "회차_numeric" not in df.columns:
         df["회차_numeric"] = df["회차"].str.extract(r"(\d+)", expand=False).astype(float)
     
@@ -2260,8 +2260,7 @@ def get_kpi_data_for_all_ips(df_all: pd.DataFrame, max_ep: float = None) -> pd.D
     else:
         kpi_live = pd.Series(dtype=float, name="TVING LIVE")
 
-    # 디지털 조회수 / 언급량 (총합)
-    # 주의: _get_view_data는 global scope 함수이므로 df를 넘김
+    # 디지털 조회수 / 언급량
     view_sub = _get_view_data(df) 
     if not view_sub.empty:
         kpi_view = view_sub.groupby("IP")["value"].sum().rename("디지털 조회수")
@@ -2284,26 +2283,19 @@ def get_kpi_data_for_all_ips(df_all: pd.DataFrame, max_ep: float = None) -> pd.D
 
 # ===== 10.2. [페이지 4] 단일 IP/그룹 KPI 계산 =====
 def get_agg_kpis_for_ip_page4(df_ip: pd.DataFrame) -> Dict[str, float | None]:
-    """
-    단일 IP 또는 IP 그룹에 대한 주요 KPI 절대값 계산
-    """
     kpis = {}
     kpis["T시청률"] = mean_of_ip_episode_mean(df_ip, "T시청률")
     kpis["H시청률"] = mean_of_ip_episode_mean(df_ip, "H시청률")
-    
     kpis["TVING VOD"] = mean_of_ip_episode_sum(df_ip, "시청인구", ["TVING VOD", "TVING QUICK"])
     kpis["TVING LIVE"] = mean_of_ip_episode_sum(df_ip, "시청인구", ["TVING LIVE"])
-    
     kpis["디지털 조회수"] = mean_of_ip_sums(df_ip, "조회수")
     kpis["디지털 언급량"] = mean_of_ip_sums(df_ip, "언급량")
     kpis["화제성 점수"] = mean_of_ip_episode_mean(df_ip, "F_Score")
-
     return kpis
 
 
 # ===== 10.3. [페이지 4] KPI 카드 렌더링 (상단) =====
 def _render_kpi_row_ip_vs_group(kpis_ip, kpis_group, ranks, group_name):
-    
     def _calc_delta(ip_val, group_val): 
         ip_val = ip_val or 0
         group_val = group_val or 0
@@ -2329,9 +2321,7 @@ def _render_kpi_row_ip_vs_group(kpis_ip, kpis_group, ranks, group_name):
         <div class="kpi-card" style="padding: 14px 10px;">
             <div class="kpi-title">{title}</div>
             <div class="kpi-value" style="font-size: 22px; margin-bottom: 4px;">{val_str}</div>
-            <div style="line-height: 1.2;">
-                {delta_html}{rank_html}
-            </div>
+            <div style="line-height: 1.2;">{delta_html}{rank_html}</div>
         </div>
         """
 
@@ -2392,14 +2382,7 @@ def _render_kpi_row_ip_vs_ip(kpis1, kpis2, ip1, ip2):
 
 
 # ===== 10.4. [페이지 4] 통합 그래프 섹션 =====
-def _render_unified_charts(
-    df_target: pd.DataFrame, 
-    df_comp: pd.DataFrame, 
-    target_name: str, 
-    comp_name: str,
-    kpi_percentiles: pd.DataFrame,
-    comp_color: str = "#aaaaaa"
-):
+def _render_unified_charts(df_target, df_comp, target_name, comp_name, kpi_percentiles, comp_color="#aaaaaa"):
     st.divider()
 
     # --- 2. 성과 포지셔닝 (Radar) & 시청률 비교 (Line) ---
@@ -2501,10 +2484,8 @@ def _render_unified_charts(
         sub["연령"] = sub["데모"].apply(_to_decade_label)
         sub = sub[sub["성별"].isin(["남","여"]) & (sub["연령"]!="기타")]
         sub["label"] = sub.apply(lambda r: f"{r['연령']}{'남성' if r['성별']=='남' else '여성'}", axis=1)
-        
         if "회차_numeric" not in sub.columns:
              sub["회차_numeric"] = sub["회차"].str.extract(r"(\d+)", expand=False).astype(float)
-        
         agg = sub.groupby(["IP","회차_numeric","label"])["value"].sum().reset_index()
         return agg.groupby("label")["value"].mean()
 
@@ -2561,32 +2542,26 @@ def _render_unified_charts(
 
     def _get_pie_data(df_src, metric):
         if metric == "조회수":
-            sub = _get_view_data(df_src) # [3. 공통 함수]
+            sub = _get_view_data(df_src)
         else:
             sub = df_src[df_src["metric"] == metric].copy()
         
         if sub.empty: return pd.DataFrame(columns=["매체", "val"])
-        
         per_ip_media = sub.groupby(["IP", "매체"])["value"].sum().reset_index()
         avg_per_media = per_ip_media.groupby("매체")["value"].mean().reset_index().rename(columns={"value":"val"})
-        
         return avg_per_media
 
     def _draw_scaled_donuts_fixed_color(df_t, df_c, title, t_name, c_name):
         from plotly.subplots import make_subplots
-        
         all_media = set(df_t["매체"].unique()) | set(df_c["매체"].unique())
         sorted_media = sorted(list(all_media))
-        
         base_colors = ['#5c6bc0', '#7e57c2', '#26a69a', '#66bb6a', '#ffa726', '#ef5350', '#8d6e63', '#78909c']
         color_map = {m: base_colors[i % len(base_colors)] for i, m in enumerate(sorted_media)}
-        
         df_t["color"] = df_t["매체"].map(color_map)
         df_c["color"] = df_c["매체"].map(color_map)
 
         fig = make_subplots(rows=1, cols=2, specs=[[{'type':'domain'}, {'type':'domain'}]],
                             subplot_titles=[f"{t_name}", f"{c_name}"])
-        
         sum_t = df_t["val"].sum() if not df_t.empty else 0
         sum_c = df_c["val"].sum() if not df_c.empty else 0
         
@@ -2595,21 +2570,15 @@ def _render_unified_charts(
                 labels=df_t["매체"], values=df_t["val"], 
                 name=t_name, scalegroup='one', hole=0.4,
                 title=f"Total<br>{_fmt_kor_large(sum_t)}", title_font=dict(size=14),
-                marker=dict(colors=df_t["color"]), 
-                domain=dict(column=0),
-                sort=False 
+                marker=dict(colors=df_t["color"]), domain=dict(column=0), sort=False 
             ), 1, 1)
-        
         if not df_c.empty:
             fig.add_trace(go.Pie(
                 labels=df_c["매체"], values=df_c["val"], 
                 name=c_name, scalegroup='one', hole=0.4,
                 title=f"Total<br>{_fmt_kor_large(sum_c)}", title_font=dict(size=14),
-                marker=dict(colors=df_c["color"]), 
-                domain=dict(column=1),
-                sort=False
+                marker=dict(colors=df_c["color"]), domain=dict(column=1), sort=False
             ), 1, 2)
-        
         fig.update_layout(height=320, margin=dict(t=30, b=10, l=10, r=10),
                           legend=dict(orientation="h", y=-0.15, x=0.5, xanchor="center"))
         return fig
@@ -2618,9 +2587,7 @@ def _render_unified_charts(
         st.markdown("###### 👀 디지털 조회수 비교")
         pie_t = _get_pie_data(df_target, "조회수")
         pie_c = _get_pie_data(df_comp,   "조회수")
-        
-        if pie_t.empty and pie_c.empty:
-            st.info("데이터 없음")
+        if pie_t.empty and pie_c.empty: st.info("데이터 없음")
         else:
             fig_pie = _draw_scaled_donuts_fixed_color(pie_t, pie_c, "조회수", target_name, comp_name)
             st.plotly_chart(fig_pie, use_container_width=True)
@@ -2629,9 +2596,7 @@ def _render_unified_charts(
         st.markdown("###### 💬 디지털 언급량 비교")
         pie_t = _get_pie_data(df_target, "언급량")
         pie_c = _get_pie_data(df_comp,   "언급량")
-        
-        if pie_t.empty and pie_c.empty:
-            st.info("데이터 없음")
+        if pie_t.empty and pie_c.empty: st.info("데이터 없음")
         else:
             fig_pie = _draw_scaled_donuts_fixed_color(pie_t, pie_c, "언급량", target_name, comp_name)
             st.plotly_chart(fig_pie, use_container_width=True)
@@ -2668,13 +2633,10 @@ def _render_unified_charts(
         for col in DEMO_COLS_ORDER: 
             base_col = col + '_base'
             comp_col = col + '_comp'
-
             df_merged[base_col] = pd.to_numeric(df_merged.get(base_col), errors='coerce').fillna(0.0)
             df_merged[comp_col] = pd.to_numeric(df_merged.get(comp_col), errors='coerce').fillna(0.0)
-
             base_values = df_merged[base_col].values
             comp_values = df_merged[comp_col].values
-
             index_values = np.where(
                 comp_values != 0,
                 ((base_values - comp_values) / comp_values) * 100,
@@ -2683,34 +2645,34 @@ def _render_unified_charts(
             df_index[col] = index_values
 
         table_title = f"{media_label} 연령대별 시청자수 차이 ({target_name} vs {comp_name})"
-        render_heatmap(df_index, table_title) # [6. 공통 함수]
+        render_heatmap(df_index, table_title)
 
 
 # ===== 10.5. [페이지 4] 메인 렌더링 함수 =====
 def render_comparison():
-    df_all = load_data() # [3. 공통 함수]
-    
+    df_all = load_data() 
     if "회차_numeric" not in df_all.columns:
         df_all["회차_numeric"] = df_all["회차"].str.extract(r"(\d+)", expand=False).astype(float)
 
     kpi_percentiles = get_kpi_data_for_all_ips(df_all, max_ep=None)
     ip_options = sorted(df_all["IP"].dropna().unique().tolist())
     
-    # [수정] 전역 IP 가져오기 (기준 IP)
+    # 전역 IP 가져오기 (기준 IP)
     global_ip = st.session_state.get("global_ip")
     if not global_ip: st.error("IP 선택 필요"); return
     
-    # 기준 IP 변수 고정
     selected_ip1 = global_ip
     selected_ip2 = None
 
     current_mode = st.session_state.get("comp_mode_page4", "IP vs 그룹 평균")
     
-    # 컬럼 비율 조정 (기준 IP 선택박스 제거 → 텍스트 표시 or 비활성 박스)
+    # [수정] 레이아웃 재배치 (기준 IP 텍스트 삭제)
     if current_mode == "IP vs IP":
-        filter_cols = st.columns([3, 2, 2, 2, 3])
+        # 타이틀(4) | 모드선택(3) | 비교IP(3) | 회차(2)
+        filter_cols = st.columns([4, 3, 3, 2])
     else:
-        filter_cols = st.columns([3, 2, 2, 2, 2, 1]) 
+        # 타이틀(4) | 모드선택(3) | 편성(2) | 연도(2) | 회차(1)
+        filter_cols = st.columns([4, 3, 2, 2, 1])
     
     with filter_cols[0]:
         st.markdown(f"## ⚖️ {selected_ip1} <span style='font-size:18px;color:#666'>vs ...</span>", unsafe_allow_html=True)
@@ -2741,9 +2703,8 @@ def render_comparison():
 
     # --- IP vs IP 모드 ---
     if comparison_mode == "IP vs IP":
-            
-        with filter_cols[3]:
-            # 본인 제외
+        # [수정] 기준 IP 표시 삭제됨
+        with filter_cols[2]:
             ip_options_2 = [ip for ip in ip_options if ip != selected_ip1]
             selected_ip2 = st.selectbox(
                 "비교 IP", ip_options_2, 
@@ -2754,17 +2715,16 @@ def render_comparison():
         target_rows = df_all[df_all["IP"] == selected_ip1]
         ep_opts = ["전체"] + get_episode_options(target_rows)
         
-        with filter_cols[4]:
+        with filter_cols[3]:
             selected_max_ep = st.selectbox("회차 범위", ep_opts, index=0, label_visibility="collapsed")
         
         use_same_prog = False; selected_years = []
 
     # --- IP vs 그룹 평균 모드 ---
     else: 
-        # [수정] 기준 IP 정보 자동 로드
+        # 기준 IP 정보 자동 로드
         base_ip_info_rows = df_all[df_all["IP"] == selected_ip1]
         
-        # 편성연도 자동 추출
         all_years = []
         if "편성연도" in df_all.columns:
             unique_vals = df_all["편성연도"].dropna().unique()
@@ -2776,17 +2736,15 @@ def render_comparison():
             y_mode = base_ip_info_rows["편성연도"].dropna().mode()
             if not y_mode.empty: default_year_list = [y_mode.iloc[0]]
 
+        # [수정] 기준 IP 표시 삭제됨
         with filter_cols[2]:
-             st.markdown(f"**기준: {selected_ip1}**")
-
-        with filter_cols[3]:
             comp_type = st.selectbox(
                 "동일 편성 기준", ["동일 편성", "전체"], index=0,
                 key="comp_prog_page4", label_visibility="collapsed"
             )
             use_same_prog = (comp_type == "동일 편성")
 
-        with filter_cols[4]:
+        with filter_cols[3]:
             selected_years = st.multiselect(
                 "방영 연도", all_years, default=default_year_list,
                 key="comp_year_page4", placeholder="연도 선택", label_visibility="collapsed"
@@ -2795,39 +2753,32 @@ def render_comparison():
         target_rows = df_all[df_all["IP"] == selected_ip1]
         ep_opts = ["전체"] + get_episode_options(target_rows)
 
-        with filter_cols[5]:
+        with filter_cols[4]:
             selected_max_ep = st.selectbox("회차 범위", ep_opts, index=0, label_visibility="collapsed")
 
     st.divider()
 
-    # --- 데이터 준비 및 필터링 ---
+    # --- 데이터 준비 및 필터링 (이하 로직 기존과 동일) ---
     if not selected_ip1:
         st.info("기준 IP를 선택해주세요.")
         return
 
-    # [핵심] 회차 필터 숫자 추출 및 백분위 재계산
     ep_limit = None
     if selected_max_ep != "전체":
-        try:
-            ep_limit = float(re.findall(r'\d+', str(selected_max_ep))[0])
-        except:
-            ep_limit = None
+        try: ep_limit = float(re.findall(r'\d+', str(selected_max_ep))[0])
+        except: ep_limit = None
             
-    # 필터된 회차 기준으로 전체 IP 백분위 다시 가져오기
     kpi_percentiles = get_kpi_data_for_all_ips(df_all, max_ep=ep_limit)
 
-    # 기준 IP 데이터 필터링
     df_target = df_all[df_all["IP"] == selected_ip1].copy()
     if ep_limit is not None:
         df_target = df_target[df_target["회차_numeric"] <= ep_limit]
     
     kpis_target = get_agg_kpis_for_ip_page4(df_target)
 
-    # 비교 그룹 데이터 준비
     if comparison_mode == "IP vs 그룹 평균":
         group_name_parts = []
         df_comp = df_all.copy()
-        
         ip_prog = df_target["편성"].dropna().mode().iloc[0] if not df_target["편성"].dropna().empty else None
         
         if use_same_prog: 
@@ -2837,70 +2788,48 @@ def render_comparison():
             else: st.warning("편성 정보 없음 (제외)")
         
         if selected_years:
-            # [수정] 값 직접 비교
             df_comp = df_comp[df_comp["편성연도"].isin(selected_years)]
-
             if len(selected_years) <= 3:
                 years_str = ",".join(map(str, sorted(selected_years)))
-                group_name_parts.append(f"{years_str}") # '년' 제거 (데이터에 포함됨)
+                group_name_parts.append(f"{years_str}")
             else:
-                try:
-                    group_name_parts.append(f"{min(selected_years)}~{max(selected_years)}")
-                except:
-                    group_name_parts.append("선택연도")
+                try: group_name_parts.append(f"{min(selected_years)}~{max(selected_years)}")
+                except: group_name_parts.append("선택연도")
         
         if not group_name_parts: group_name_parts.append("전체")
         comp_name = " & ".join(group_name_parts) + " 평균"
 
-        # 비교 그룹도 회차 필터 적용
         if ep_limit is not None:
              df_comp = df_comp[df_comp["회차_numeric"] <= ep_limit]
 
         kpis_comp = get_agg_kpis_for_ip_page4(df_comp)
         
-        # [추가] 그룹 내 순위 계산 로직
         ranks = {}
-        
         def _calc_rank_in_group(df_g, target_val, metric_key, higher_good=True):
-            # 1. 그룹 내 모든 IP별 KPI 계산
             if df_g.empty: return (None, 0)
-            
             if metric_key in ["T시청률", "H시청률", "화제성 점수"]:
                 agg = df_g[df_g["metric"] == (metric_key if metric_key != "화제성 점수" else "F_Score")]
                 if agg.empty: return (None, 0)
                 ep_agg = agg.groupby(["IP", "회차_numeric"])["value"].mean().reset_index()
                 ip_series = ep_agg.groupby("IP")["value"].mean()
-                
             elif metric_key in ["TVING VOD", "TVING LIVE"]:
                 media_target = ["TVING LIVE"] if metric_key == "TVING LIVE" else ["TVING VOD", "TVING QUICK"]
                 agg = df_g[(df_g["metric"] == "시청인구") & (df_g["매체"].isin(media_target))]
                 if agg.empty: return (None, 0)
                 ep_agg = agg.groupby(["IP", "회차_numeric"])["value"].sum().reset_index()
                 ip_series = ep_agg.groupby("IP")["value"].mean()
-                
             elif metric_key in ["디지털 조회수", "디지털 언급량"]:
-                if metric_key == "디지털 조회수":
-                    agg = _get_view_data(df_g)
-                else:
-                    agg = df_g[df_g["metric"] == "언급량"]
+                if metric_key == "디지털 조회수": agg = _get_view_data(df_g)
+                else: agg = df_g[df_g["metric"] == "언급량"]
                 if agg.empty: return (None, 0)
                 ip_series = agg.groupby("IP")["value"].sum()
-            else:
-                return (None, 0)
+            else: return (None, 0)
 
-            if target_val is not None:
-                ip_series[selected_ip1] = target_val
-            
+            if target_val is not None: ip_series[selected_ip1] = target_val
             if ip_series.empty: return (None, 0)
-            
             ranked = ip_series.rank(method='min', ascending=not higher_good)
-            
-            try:
-                my_rank = int(ranked[selected_ip1])
-                total_cnt = len(ip_series)
-                return (my_rank, total_cnt)
-            except:
-                return (None, len(ip_series))
+            try: return (int(ranked[selected_ip1]), len(ip_series))
+            except: return (None, len(ip_series))
 
         keys_map = {
             "T시청률": "T시청률", "H시청률": "H시청률", 
@@ -2908,7 +2837,6 @@ def render_comparison():
             "디지털 조회수": "디지털 조회수", "디지털 언급량": "디지털 언급량",
             "화제성 점수": "화제성 점수"
         }
-        
         for k in keys_map:
             val = kpis_target.get(k)
             ranks[k] = _calc_rank_in_group(df_comp, val, k)
@@ -2917,18 +2845,11 @@ def render_comparison():
         _render_unified_charts(df_target, df_comp, selected_ip1, comp_name, kpi_percentiles, comp_color="#aaaaaa")
 
     else: # IP vs IP
-        if not selected_ip2:
-            st.warning("비교할 IP를 선택해주세요.")
-            return
-            
+        if not selected_ip2: st.warning("비교할 IP를 선택해주세요."); return
         df_comp = df_all[df_all["IP"] == selected_ip2].copy()
-
-        if ep_limit is not None:
-             df_comp = df_comp[df_comp["회차_numeric"] <= ep_limit]
-
+        if ep_limit is not None: df_comp = df_comp[df_comp["회차_numeric"] <= ep_limit]
         kpis_comp = get_agg_kpis_for_ip_page4(df_comp)
         comp_name = selected_ip2
-        
         _render_kpi_row_ip_vs_ip(kpis_target, kpis_comp, selected_ip1, selected_ip2)
         _render_unified_charts(df_target, df_comp, selected_ip1, comp_name, kpi_percentiles, comp_color="#aaaaaa")
 #endregion
