@@ -2674,7 +2674,7 @@ def render_comparison():
         filter_cols = st.columns([4, 3, 2, 2, 1])
     
     with filter_cols[0]:
-        st.markdown(f"## ⚖️ {selected_ip1} <span style='font-size:18px;color:#666'>vs ...</span>", unsafe_allow_html=True)
+        st.markdown(f"<div class='page-title'>⚖️ {selected_ip1} <span style='font-size:18px;color:#666'>vs ...</span></div>", unsafe_allow_html=True)
         
     with st.expander("ℹ️ 지표 기준 안내", expanded=False):
         st.markdown("<div class='gd-guideline'>", unsafe_allow_html=True)
@@ -3023,7 +3023,7 @@ def render_growth_score():
     _ep_display = st.session_state.get("growth_ep_cutoff", 4)
     with head[0]:
         st.markdown(
-            f"## 🚀 {selected_ip} 성장스코어 <span style='font-size:20px;color:#6b7b93'>(~{_ep_display}회)</span>",
+            f"<div class='page-title'>🚀 {selected_ip} 성장스코어 <span style='font-size:20px;color:#6b7b93'>(~{_ep_display}회)</span></div>",
             unsafe_allow_html=True
         )
 
