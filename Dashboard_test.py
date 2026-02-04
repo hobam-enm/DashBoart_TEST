@@ -1959,6 +1959,107 @@ def render_ip_detail():
             else: st.info("데이터 없음")
         else: st.info("데이터 없음")
 
+    # [추가] ⚡ 본방 실시간 지표 (12H) - 토글형 차트
+    st.markdown("#### ⚡ 본방 실시간 반응 (12H)")
+    
+    # 1. 지표 정의 및 선택 (라디오 버튼)
+    # (Display Name, Actual Metric Name in DB)
+    metrics_12h_map = {
+        "조회수": "12H조회수",
+        "댓글수": "12H댓글수",
+        "네이버톡": "12H네이버톡",
+        "언급량": "12H언급량"
+    }
+    
+    # 레이아웃: 좌측(설명/토글) - 우측(차트) 구조가 아니라, 상단 토글 - 하단 차트로 시원하게 배치
+    c_12h_sel, c_12h_dummy = st.columns([4, 6])
+    with c_12h_sel:
+        sel_12h_display = st.radio(
+            "분석 지표 선택", 
+            options=list(metrics_12h_map.keys()),
+            index=0,
+            horizontal=True,
+            label_visibility="collapsed",
+            key="radio_12h_metric"
+        )
+    
+    target_metric_12h = metrics_12h_map[sel_12h_display]
+
+    # 2. 데이터 필터링
+    # f는 상단에서 이미 정의된 '선택된 IP'의 DataFrame입니다.
+    sub_12h = f[f["metric"] == target_metric_12h].copy()
+    
+    # 회차 정렬을 위한 전처리
+    if "회차_num" not in sub_12h.columns:
+        if "회차_numeric" in sub_12h.columns:
+            sub_12h["회차_num"] = pd.to_numeric(sub_12h["회차_numeric"], errors="coerce")
+        else:
+            sub_12h["회차_num"] = pd.to_numeric(sub_12h["회차"].str.extract(r"(\d+)", expand=False), errors="coerce")
+            
+    sub_12h = sub_12h.dropna(subset=["회차_num"]).sort_values("회차_num")
+    sub_12h["value"] = pd.to_numeric(sub_12h["value"], errors="coerce").fillna(0)
+
+    # 3. 차트 그리기
+    if not sub_12h.empty:
+        # 텍스트 포맷팅 (큰 숫자는 억/만, 작은 숫자는 콤마)
+        def _fmt_12h_val(x):
+            if x >= 10000: return fmt_kor(x) # 기존 포맷터 재활용
+            return f"{int(x):,}"
+
+        sub_12h["text_label"] = sub_12h["value"].apply(_fmt_12h_val)
+        
+        # 색상 지정 (지표별로 약간 다른 톤을 주면 더 예쁨)
+        color_map_12h = {
+            "12H조회수": "#ef5350",   # Red (YouTube 느낌)
+            "12H댓글수": "#ffa726",   # Orange
+            "12H네이버톡": "#66bb6a", # Green (Naver)
+            "12H언급량": "#42a5f5"    # Blue
+        }
+        line_color = color_map_12h.get(target_metric_12h, "#5c6bc0")
+
+        fig_12h = go.Figure()
+        
+        # 선+마커 차트
+        fig_12h.add_trace(go.Scatter(
+            x=sub_12h["회차"], 
+            y=sub_12h["value"],
+            mode="lines+markers+text",
+            name=sel_12h_display,
+            text=sub_12h["text_label"],
+            textposition="top center",
+            textfont=dict(size=11, color="#333"),
+            line=dict(color=line_color, width=3),
+            marker=dict(size=8, color=line_color, line=dict(width=2, color='white')),
+            hovertemplate="<b>%{x}</b><br>" + f"{sel_12h_display}: " + "%{text}<extra></extra>"
+        ))
+
+        # 레이아웃 설정
+        y_max = sub_12h["value"].max()
+        fig_12h.update_layout(
+            height=320, # 기존 차트들과 높이 통일
+            margin=dict(l=20, r=20, t=30, b=20),
+            showlegend=False,
+            yaxis=dict(
+                showgrid=True, 
+                gridcolor='#f0f0f0', 
+                range=[0, y_max * 1.25], # 텍스트 잘림 방지 여유 공간
+                fixedrange=True,
+                visible=False # Y축 숫자 숨김 (그래프 위 텍스트로 대체)
+            ),
+            xaxis=dict(
+                showgrid=False,
+                fixedrange=True,
+                type='category', # 회차를 카테고리로 취급하여 간격 일정하게
+                categoryorder='array',
+                categoryarray=sub_12h["회차"].tolist()
+            )
+        )
+        
+        st.plotly_chart(fig_12h, use_container_width=True, config={"displayModeBar": False})
+        
+    else:
+        st.info(f"'{sel_12h_display}' 데이터가 없습니다.")
+
     st.divider()
 
     # === [Row5] 데모분석 상세 표 (AgGrid) ===
