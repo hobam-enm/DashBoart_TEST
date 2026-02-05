@@ -452,16 +452,14 @@ def load_data() -> pd.DataFrame:
     # 회차_numeric 안전장치
     if "회차_numeric" not in df.columns:
         df["회차_numeric"] = pd.NA
-
-    # --- 4. 표준 컬럼(2차 리팩토링): 결과값 불변, 추가 컬럼만 생성 ---
-    # metric_norm: 페이지/계산에서 지표명 비교를 안정화하기 위한 정규화 컬럼
+    # 표준 컬럼: 지표명 정규화(metric_norm)
     if "metric" in df.columns and "metric_norm" not in df.columns:
         def _normalize_metric_for_load(s):
             s2 = re.sub(r"[^A-Za-z0-9가-힣]+", "", str(s)).lower()
             return s2
         df["metric_norm"] = df["metric"].apply(_normalize_metric_for_load)
-
-    # ep_num: 회차 숫자 표준 컬럼 (기존 회차_numeric을 그대로 사용)
+    # 표준 컬럼: 회차 숫자(ep_num) (회차_numeric 기반)
+    # 사용)
     if "ep_num" not in df.columns:
         df["ep_num"] = pd.to_numeric(df["회차_numeric"], errors="coerce") if "회차_numeric" in df.columns else pd.NA
 
@@ -567,21 +565,34 @@ def _episode_col(df: pd.DataFrame) -> str:
     """데이터프레임에 존재하는 회차 숫자 컬럼명을 반환합니다."""
     return "회차_numeric" if "회차_numeric" in df.columns else ("회차_num" if "회차_num" in df.columns else "회차")
 
-def mean_of_ip_episode_sum(df: pd.DataFrame, metric_name: str, media=None) -> float | None:
+
+def _mean_of_ip_episode_agg(df: pd.DataFrame, metric_name: str, media=None, episode_agg: str = "sum") -> float | None:
+    """IP별 (회차 단위 집계 -> IP별 평균 -> 전체 평균) 값을 계산한다.
+    episode_agg: 'sum' or 'mean'
+    """
     sub = df[(df["metric"] == metric_name)].copy()
     if media is not None:
         sub = sub[sub["매체"].isin(media)]
     if sub.empty:
         return None
+
     ep_col = _episode_col(sub)
     sub = sub.dropna(subset=[ep_col]).copy()
-    
+
     sub["value"] = pd.to_numeric(sub["value"], errors="coerce").replace(0, np.nan)
     sub = sub.dropna(subset=["value"])
 
-    ep_sum = sub.groupby(["IP", ep_col], as_index=False)["value"].sum()
-    per_ip_mean = ep_sum.groupby("IP")["value"].mean()
+    if episode_agg == "mean":
+        ep_level = sub.groupby(["IP", ep_col], as_index=False)["value"].mean()
+    else:
+        ep_level = sub.groupby(["IP", ep_col], as_index=False)["value"].sum()
+
+    per_ip_mean = ep_level.groupby("IP")["value"].mean()
     return float(per_ip_mean.mean()) if not per_ip_mean.empty else None
+
+
+def mean_of_ip_episode_sum(df: pd.DataFrame, metric_name: str, media=None) -> float | None:
+    return _mean_of_ip_episode_agg(df, metric_name, media=media, episode_agg="sum")
 
 def mean_of_ip_episode_mean(df: pd.DataFrame, metric_name: str, media=None) -> float | None:
     sub = df[(df["metric"] == metric_name)].copy()
