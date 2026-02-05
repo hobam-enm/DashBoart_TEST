@@ -1379,19 +1379,22 @@ def render_ip_detail():
         sub["value"] = pd.to_numeric(sub["value"], errors="coerce").replace(0, np.nan)
         
         ep_col = _episode_col(sub)
-        # N_W순위 등 회차가 굳이 중요하지 않은 metric도 있을 수 있으나 구조상 유지
+        # 회차 숫자 컬럼은 _episode_col() 기준으로 처리 (컬럼명 고정 금지)
         sub = sub.dropna(subset=[ep_col, "value"])
         if sub.empty: return pd.Series(dtype=float)
         
         if mode == "mean":
             ep_mean = sub.groupby(["IP", ep_col], as_index=False)["value"].mean()
             s = ep_mean.groupby("IP")["value"].mean()
-        elif mode == "sum": s = sub.groupby("IP")["value"].sum()
+        elif mode == "sum":
+            s = sub.groupby("IP")["value"].sum()
         elif mode == "ep_sum_mean":
             ep_sum = sub.groupby(["IP", ep_col], as_index=False)["value"].sum()
             s = ep_sum.groupby("IP")["value"].mean()
-        elif mode == "min": s = sub.groupby("IP")["value"].min()
-        else: s = sub.groupby("IP")["value"].mean()
+        elif mode == "min":
+            s = sub.groupby("IP")["value"].min()
+        else:
+            s = sub.groupby("IP")["value"].mean()
         return pd.to_numeric(s, errors="coerce").dropna()
 
     def _min_of_ip_metric(df_src: pd.DataFrame, metric_name: str) -> float | None:
@@ -1606,24 +1609,56 @@ def render_ip_detail():
 
     with cA:
         st.markdown("<div class='sec-title'>📈 시청률</div>", unsafe_allow_html=True)
-        rsub = f[f["metric"].isin(["T시청률", "H시청률"])].dropna(subset=["회차", "회차_num"]).copy()
-        rsub = rsub.sort_values("회차_num")
+
+        rsub = f[f["metric"].isin(["T시청률", "H시청률"])].copy()
         if not rsub.empty:
-            ep_order = rsub[["회차", "회차_num"]].drop_duplicates().sort_values("회차_num")["회차"].tolist()
-            t_series = rsub[rsub["metric"] == "T시청률"].groupby("회차", as_index=False)["value"].mean()
-            h_series = rsub[rsub["metric"] == "H시청률"].groupby("회차", as_index=False)["value"].mean()
+            rsub["value"] = pd.to_numeric(rsub["value"], errors="coerce")
+            ep_col = _episode_col(rsub)
+
+            # ✅ 컬럼명 고정(회차_num) 제거: 존재하는 회차 숫자 컬럼으로만 필터/정렬
+            need_cols = [ep_col, "value"]
+            rsub = rsub.dropna(subset=need_cols).copy()
+            rsub = rsub.sort_values(ep_col)
+
+        if not rsub.empty:
+            # x 라벨: "회차"가 있으면 그걸 쓰고, 없으면 ep_col 숫자를 문자열로 사용
+            if "회차" in rsub.columns:
+                ep_order = (
+                    rsub[["회차", ep_col]]
+                    .drop_duplicates()
+                    .sort_values(ep_col)["회차"]
+                    .astype(str)
+                    .tolist()
+                )
+                x_key = "회차"
+            else:
+                ep_order = (
+                    rsub[[ep_col]]
+                    .drop_duplicates()
+                    .sort_values(ep_col)[ep_col]
+                    .astype(int, errors="ignore")
+                    .astype(str)
+                    .tolist()
+                )
+                # 임시 x 컬럼 생성
+                rsub = rsub.copy()
+                rsub["__x"] = rsub[ep_col].astype(int, errors="ignore").astype(str)
+                x_key = "__x"
+
+            t_series = rsub[rsub["metric"] == "T시청률"].groupby(x_key, as_index=False)["value"].mean()
+            h_series = rsub[rsub["metric"] == "H시청률"].groupby(x_key, as_index=False)["value"].mean()
 
             fig_rate = go.Figure()
             fig_rate.add_trace(go.Scatter(
                 x=ep_order,
-                y=t_series.set_index("회차").reindex(ep_order)["value"].fillna(0).values,
+                y=t_series.set_index(x_key).reindex(ep_order)["value"].fillna(0).values,
                 mode="lines+markers",
                 name="타깃시청률",
                 hovertemplate="<b>%{x}</b><br>타깃: %{y:.3f}%<extra></extra>"
             ))
             fig_rate.add_trace(go.Scatter(
                 x=ep_order,
-                y=h_series.set_index("회차").reindex(ep_order)["value"].fillna(0).values,
+                y=h_series.set_index(x_key).reindex(ep_order)["value"].fillna(0).values,
                 mode="lines+markers",
                 name="가구시청률",
                 hovertemplate="<b>%{x}</b><br>가구: %{y:.3f}%<extra></extra>"
@@ -1644,32 +1679,65 @@ def render_ip_detail():
         # [수정] Wavve 데이터가 있으면 TVING 시청자수 그래프에 포함 (기본은 숨김: legendonly)
         t_keep = ["TVING LIVE", "TVING QUICK", "TVING VOD"]
 
-        tsub = f[(f["metric"] == "시청인구") & (f["매체"].isin(t_keep))].dropna(subset=["회차", "회차_num"]).copy()
-        tsub = tsub.sort_values("회차_num")
+        tsub = f[(f["metric"] == "시청인구") & (f["매체"].isin(t_keep))].copy()
+        wsub = f[(f["metric"] == "시청자수") & (f["매체"] == "웨이브")].copy()
 
-        wsub = f[(f["metric"] == "시청자수") & (f["매체"] == "웨이브")].dropna(subset=["회차", "회차_num"]).copy()
-        wsub = wsub.sort_values("회차_num")
+        # ✅ 컬럼명 고정(회차_num) 제거: 존재하는 회차 숫자 컬럼으로만 필터/정렬
+        ep_col_t = _episode_col(tsub) if not tsub.empty else None
+        ep_col_w = _episode_col(wsub) if not wsub.empty else None
+
+        if not tsub.empty and ep_col_t in tsub.columns:
+            tsub["value"] = pd.to_numeric(tsub["value"], errors="coerce")
+            tsub = tsub.dropna(subset=[ep_col_t, "value"]).copy()
+            tsub = tsub.sort_values(ep_col_t)
+
+        if not wsub.empty and ep_col_w in wsub.columns:
+            wsub["value"] = pd.to_numeric(wsub["value"], errors="coerce")
+            wsub = wsub.dropna(subset=[ep_col_w, "value"]).copy()
+            wsub = wsub.sort_values(ep_col_w)
 
         has_wavve = (not wsub.empty)
 
         chart_title = "📱 TVING & Wavve 시청자수" if has_wavve else "📱 TVING 시청자수"
         st.markdown(f"<div class='sec-title'>{chart_title}</div>", unsafe_allow_html=True)
 
-        if not tsub.empty or has_wavve:
+        if (not tsub.empty) or has_wavve:
             combined = pd.DataFrame()
+
+            # x 라벨 정책: 우선 "회차"가 있으면 사용, 없으면 ep_col 숫자를 문자열로
+            def _attach_x(df_in: pd.DataFrame) -> pd.DataFrame:
+                if df_in.empty:
+                    return df_in
+                df2 = df_in.copy()
+                ep_col_local = _episode_col(df2)
+                if "회차" in df2.columns:
+                    df2["__x"] = df2["회차"].astype(str)
+                    df2["__ep"] = df2[ep_col_local]
+                else:
+                    df2["__x"] = df2[ep_col_local].astype(int, errors="ignore").astype(str)
+                    df2["__ep"] = df2[ep_col_local]
+                return df2
 
             if not tsub.empty:
                 media_map = {"TVING LIVE": "LIVE", "TVING QUICK": "당일 VOD", "TVING VOD": "주간 VOD"}
-                tsub["매체_표기"] = tsub["매체"].map(media_map)
-                combined = pd.concat([combined, tsub[["회차", "회차_num", "매체_표기", "value"]]])
+                tsub2 = _attach_x(tsub)
+                tsub2["매체_표기"] = tsub2["매체"].map(media_map)
+                combined = pd.concat([combined, tsub2[["__x", "__ep", "매체_표기", "value"]]], ignore_index=True)
 
             if has_wavve:
-                wsub["매체_표기"] = "Wavve"
-                combined = pd.concat([combined, wsub[["회차", "회차_num", "매체_표기", "value"]]])
+                wsub2 = _attach_x(wsub)
+                wsub2["매체_표기"] = "Wavve"
+                combined = pd.concat([combined, wsub2[["__x", "__ep", "매체_표기", "value"]]], ignore_index=True)
 
-            pvt = combined.pivot_table(index="회차", columns="매체_표기", values="value", aggfunc="sum").fillna(0)
+            pvt = combined.pivot_table(index="__x", columns="매체_표기", values="value", aggfunc="sum").fillna(0)
 
-            ep_order = combined[["회차", "회차_num"]].drop_duplicates().sort_values("회차_num")["회차"].tolist()
+            ep_order = (
+                combined[["__x", "__ep"]]
+                .drop_duplicates()
+                .sort_values("__ep")["__x"]
+                .astype(str)
+                .tolist()
+            )
             pvt = pvt.reindex(ep_order)
 
             fig_ott = go.Figure()
@@ -1873,6 +1941,7 @@ def render_ip_detail():
         f, ["TVING LIVE", "TVING QUICK", "TVING VOD"]
     )
     _render_aggrid_table(tving_numeric, "▶︎ TVING 합산 시청자수")
+
 #endregion
 
 
