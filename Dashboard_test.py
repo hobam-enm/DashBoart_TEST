@@ -349,7 +349,7 @@ NAV_ITEMS = {
     "Overview": "Overview",
     "IP 성과": "IP 성과 자세히보기",
     "비교분석": "성과 비교분석", 
-    "성장스코어": "성장스코어", # 통합된 탭
+    "성장스코어": "성장스코어", 
 }
 
 # ===== 데모 컬럼 순서 (페이지 2, 3에서 공통 사용) =====
@@ -396,10 +396,6 @@ pio.templates.default = 'dashboard_theme'
 #endregion
 #region [ 4. 데이터 로드 / 전처리 ]
 def load_data() -> pd.DataFrame:
-    """
-    MongoDB에서 데이터를 로드합니다.
-    ETL 과정에서 전처리가 완료된 상태이므로 로드 속도가 빠릅니다.
-    """
     try:
         # 1. MongoDB 연결
         uri = st.secrets["mongo"]["uri"]
