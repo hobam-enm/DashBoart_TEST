@@ -453,6 +453,18 @@ def load_data() -> pd.DataFrame:
     if "회차_numeric" not in df.columns:
         df["회차_numeric"] = pd.NA
 
+    # --- 4. 표준 컬럼(2차 리팩토링): 결과값 불변, 추가 컬럼만 생성 ---
+    # metric_norm: 페이지/계산에서 지표명 비교를 안정화하기 위한 정규화 컬럼
+    if "metric" in df.columns and "metric_norm" not in df.columns:
+        def _normalize_metric_for_load(s):
+            s2 = re.sub(r"[^A-Za-z0-9가-힣]+", "", str(s)).lower()
+            return s2
+        df["metric_norm"] = df["metric"].apply(_normalize_metric_for_load)
+
+    # ep_num: 회차 숫자 표준 컬럼 (기존 회차_numeric을 그대로 사용)
+    if "ep_num" not in df.columns:
+        df["ep_num"] = pd.to_numeric(df["회차_numeric"], errors="coerce") if "회차_numeric" in df.columns else pd.NA
+
     return df
 
 # ===== 3.2. UI / 포맷팅 헬퍼 함수 =====
@@ -682,66 +694,10 @@ with st.sidebar:
 
 #region [ 5. 공통 집계 유틸: KPI 계산 ]
 # =====================================================
-
-def _episode_col(df: pd.DataFrame) -> str:
-    """데이터프레임에 존재하는 회차 숫자 컬럼명을 반환합니다."""
-    return "회차_numeric" if "회차_numeric" in df.columns else ("회차_num" if "회차_num" in df.columns else "회차")
-
-def mean_of_ip_episode_sum(df: pd.DataFrame, metric_name: str, media=None) -> float | None:
-    sub = df[(df["metric"] == metric_name)].copy()
-    if media is not None:
-        sub = sub[sub["매체"].isin(media)]
-    if sub.empty:
-        return None
-    ep_col = _episode_col(sub)
-    sub = sub.dropna(subset=[ep_col]).copy()
-    
-    sub["value"] = pd.to_numeric(sub["value"], errors="coerce").replace(0, np.nan)
-    sub = sub.dropna(subset=["value"])
-
-    ep_sum = sub.groupby(["IP", ep_col], as_index=False)["value"].sum()
-    per_ip_mean = ep_sum.groupby("IP")["value"].mean()
-    return float(per_ip_mean.mean()) if not per_ip_mean.empty else None
-
-
-def mean_of_ip_episode_mean(df: pd.DataFrame, metric_name: str, media=None) -> float | None:
-    sub = df[(df["metric"] == metric_name)].copy()
-    if media is not None:
-        sub = sub[sub["매체"].isin(media)]
-    if sub.empty:
-        return None
-    ep_col = _episode_col(sub)
-    sub = sub.dropna(subset=[ep_col]).copy()
-    
-    sub["value"] = pd.to_numeric(sub["value"], errors="coerce").replace(0, np.nan)
-    sub = sub.dropna(subset=["value"])
-
-    ep_mean = sub.groupby(["IP", ep_col], as_index=False)["value"].mean()
-    per_ip_mean = ep_mean.groupby("IP")["value"].mean()
-    return float(per_ip_mean.mean()) if not per_ip_mean.empty else None
-
-
-def mean_of_ip_sums(df: pd.DataFrame, metric_name: str, media=None) -> float | None:
-    
-    if metric_name == "조회수":
-        sub = _get_view_data(df) 
-    else:
-        sub = df[df["metric"] == metric_name].copy()
-
-    if media is not None:
-        sub = sub[sub["매체"].isin(media)]
-    
-    if sub.empty:
-        return None
-        
-    sub["value"] = pd.to_numeric(sub["value"], errors="coerce").replace(0, np.nan)
-    sub = sub.dropna(subset=["value"])
-
-    per_ip_sum = sub.groupby("IP")["value"].sum()
-    return float(per_ip_sum.mean()) if not per_ip_sum.empty else None
-
-
+# NOTE: 집계 유틸은 상단의 '3.5. 집계 계산 유틸' 섹션에 단일 정의로 유지합니다.
+#       (중복 정의 방지: 결과값/동작 동일 유지)
 #endregion
+
 
 
 #region [ 6. 공통 집계 유틸: 데모  ]
