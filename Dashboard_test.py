@@ -1919,9 +1919,13 @@ def render_ip_detail():
         _render_pyramid_local(cI, "", vod_demo, height=260)
 
     # === [Row3] 디지털&화제성 ===
-    cC, cD, cE, cF = st.columns(4)
     digital_colors = ['#5c6bc0', '#7e57c2', '#26a69a', '#66bb6a', '#ffa726', '#ef5350']
-    
+
+    # ----------------------------
+    # Row3-1: 디지털 (2열)
+    # ----------------------------
+    cC, cD = st.columns(2)
+
     with cC:
         st.markdown("<div class='sec-title'>💻 디지털 조회수</div>", unsafe_allow_html=True)
         dview = _get_view_data(f) 
@@ -2001,6 +2005,11 @@ def render_ip_detail():
         else:
             st.info("표시할 언급량 데이터가 없습니다.")
 
+    # ----------------------------
+    # Row3-2: 화제성/OTT (2열)
+    # ----------------------------
+    cE, cF = st.columns(2)
+
     with cE:
         st.markdown("<div class='sec-title'>🔥 화제성 점수 & 순위</div>", unsafe_allow_html=True)
         fdx = _metric_filter(f, "F_Total").copy(); fs = _metric_filter(f, "F_score").copy()
@@ -2013,21 +2022,28 @@ def render_ip_detail():
         if not fs.empty:
             fs["val"] = pd.to_numeric(fs["value"], errors="coerce")
             fs_agg = fs.dropna(subset=[key_col]).groupby(key_col, as_index=False)["val"].mean()
-        else: fs_agg = pd.DataFrame(columns=[key_col, "val"])
+        else:
+            fs_agg = pd.DataFrame(columns=[key_col, "val"])
             
         if not fdx.empty:
             fdx["rank"] = pd.to_numeric(fdx["value"], errors="coerce")
             fdx_agg = fdx.dropna(subset=[key_col]).groupby(key_col, as_index=False)["rank"].min()
-        else: fdx_agg = pd.DataFrame(columns=[key_col, "rank"])
+        else:
+            fdx_agg = pd.DataFrame(columns=[key_col, "rank"])
             
         if not fs_agg.empty:
             merged = pd.merge(fs_agg, fdx_agg, on=key_col, how="left")
-            if use_category: merged = merged.set_index(key_col).reindex(order).dropna(subset=["val"]).reset_index()
-            else: merged = merged.sort_values(key_col)
+            if use_category:
+                merged = merged.set_index(key_col).reindex(order).dropna(subset=["val"]).reset_index()
+            else:
+                merged = merged.sort_values(key_col)
             
             if not merged.empty:
                 x_vals = merged[key_col].tolist(); y_vals = merged["val"].tolist()
-                labels = [f"{int(r['rank'])}위<br>/{int(r['val']):,}점" if pd.notna(r['rank']) else f"{int(r['val']):,}점" for _, r in merged.iterrows()]
+                labels = [
+                    f"{int(r['rank'])}위<br>/{int(r['val']):,}점" if pd.notna(r['rank']) else f"{int(r['val']):,}점"
+                    for _, r in merged.iterrows()
+                ]
                 
                 fig_comb = go.Figure()
                 fig_comb.add_trace(go.Scatter(
@@ -2035,12 +2051,17 @@ def render_ip_detail():
                     text=labels, textposition="top center", textfont=dict(size=11, color="#333"),
                     line=dict(color='#ec407a', width=3), marker=dict(size=7, color='#ec407a')
                 ))
-                if y_vals: fig_comb.update_yaxes(range=[0, max(y_vals) * 1.25], title=None, fixedrange=True)
-                if use_category: fig_comb.update_xaxes(categoryorder="array", categoryarray=x_vals, fixedrange=True)
+                if y_vals:
+                    fig_comb.update_yaxes(range=[0, max(y_vals) * 1.25], title=None, fixedrange=True)
+                if use_category:
+                    fig_comb.update_xaxes(categoryorder="array", categoryarray=x_vals, fixedrange=True)
                 fig_comb.update_layout(legend_title=None, height=chart_h, margin=dict(l=8, r=8, t=20, b=8))
                 st.plotly_chart(fig_comb, use_container_width=True, config=common_cfg)
-            else: st.info("데이터 없음")
-        else: st.info("데이터 없음")
+            else:
+                st.info("데이터 없음")
+        else:
+            st.info("데이터 없음")
+
     with cF:
         st.markdown("<div class='sec-title'>🍿 넷플릭스 주간 순위 추이</div>", unsafe_allow_html=True)
         n_df = _metric_filter(f, "N_W순위").copy()
@@ -2078,7 +2099,6 @@ def render_ip_detail():
             st.plotly_chart(fig_nf, use_container_width=True, config=common_cfg)
         else:
             st.markdown("<div style='height: 20px;'></div>", unsafe_allow_html=True)
-
 
     st.divider()
 
