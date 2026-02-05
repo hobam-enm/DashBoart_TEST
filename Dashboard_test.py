@@ -1356,6 +1356,7 @@ def render_ip_detail():
         - **디지털 조회** `누적 회차총합`: 방영주간 월~일 발생 총합 / 유튜브,인스타그램,틱톡,네이버TV,페이스북
         - **디지털 언급량** `누적 회차총합`: 방영주차(월~일) 내 총합 / 커뮤니티,트위터,블로그                            
         - **화제성 점수** `누적 회차평균`: 방영기간 주차별 화제성 점수의 평균 (펀덱스)
+        - **넷플릭스 순위** `최고 순위`: 방영 기간 중 기록한 주간 최고 순위 (N_W순위 기준)
         """).strip())
         st.markdown("</div>", unsafe_allow_html=True)
 
@@ -1525,10 +1526,13 @@ def render_ip_detail():
         else: sub = _metric_filter(base_df, metric_name).copy()
         if media is not None: sub = sub[sub["매체"].isin(media)]
         if sub.empty: return pd.Series(dtype=float)
-        ep_col = _episode_col(sub)
-        sub = sub.dropna(subset=[ep_col])
+        
+        # [수정] N_W순위 등 값이 0이거나 NaN이면 제외 (유효값만 계산)
         sub["value"] = pd.to_numeric(sub["value"], errors="coerce").replace(0, np.nan)
-        sub = sub.dropna(subset=["value"])
+        
+        ep_col = _episode_col(sub)
+        # N_W순위 등 회차가 굳이 중요하지 않은 metric도 있을 수 있으나 구조상 유지
+        sub = sub.dropna(subset=[ep_col, "value"])
         if sub.empty: return pd.Series(dtype=float)
         
         if mode == "mean":
@@ -1544,6 +1548,8 @@ def render_ip_detail():
 
     def _min_of_ip_metric(df_src: pd.DataFrame, metric_name: str) -> float | None:
         sub = _metric_filter(df_src, metric_name).copy()
+        sub["value"] = pd.to_numeric(sub["value"], errors="coerce").replace(0, np.nan)
+        sub = sub.dropna(subset=["value"])
         if sub.empty: return None
         s = pd.to_numeric(sub["value"], errors="coerce").dropna()
         return float(s.min()) if not s.empty else None
@@ -1572,6 +1578,8 @@ def render_ip_detail():
     val_view = mean_of_ip_sums(f, "조회수")
     val_topic_min = _min_of_ip_metric(f, "F_Total")
     val_topic_avg = _mean_like_rating(f, "F_score")
+    # [추가] 넷플릭스 주간 최고 순위 (최솟값, 0제외)
+    val_netflix_best = _min_of_ip_metric(f, "N_W순위")
 
     base_T = mean_of_ip_episode_mean(base, "T시청률")
     base_H = mean_of_ip_episode_mean(base, "H시청률")
@@ -1583,6 +1591,9 @@ def render_ip_detail():
     base_topic_min_series = _series_ip_metric(base, "F_Total", mode="min")
     base_topic_min = float(base_topic_min_series.mean()) if not base_topic_min_series.empty else None
     base_topic_avg = _mean_like_rating(base, "F_score")
+    # [추가] 그룹 넷플릭스 최고 순위 평균
+    base_netflix_series = _series_ip_metric(base, "N_W순위", mode="min")
+    base_netflix_best = float(base_netflix_series.mean()) if not base_netflix_series.empty else None
 
     # --- Ranking ---
     def _rank_within_program(base_df, metric_name, ip_name, value, mode="mean", media=None, low_is_good=False):
@@ -1602,6 +1613,8 @@ def render_ip_detail():
     rk_view  = _rank_within_program(base, "조회수",   ip_selected, val_view,  mode="sum",        media=None)
     rk_fmin  = _rank_within_program(base, "F_Total",  ip_selected, val_topic_min, mode="min",   media=None, low_is_good=True)
     rk_fscr  = _rank_within_program(base, "F_score",  ip_selected, val_topic_avg, mode="mean",  media=None, low_is_good=False)
+    # [추가] 넷플릭스 순위 랭킹 (낮을수록 좋음)
+    rk_netflix = _rank_within_program(base, "N_W순위", ip_selected, val_netflix_best, mode="min", media=None, low_is_good=True)
 
     # --- KPI Render Helpers ---
     def _pct_color(val, base_val):
@@ -1672,13 +1685,18 @@ def render_ip_detail():
             unsafe_allow_html=True
         )
     kpi_with_rank(c9, "🔥 화제성 점수", val_topic_avg, base_topic_avg, rk_fscr, prog_label, intlike=True)
+    
     with c10:
-        # 더미 카드 (레이아웃 맞춤용, 투명 처리)
-        st.markdown(
-            f"<div class='kpi-card' style='opacity:0; pointer-events:none;'><div class='kpi-title'>-</div>"
-            f"<div class='kpi-value'>-</div>{sublines_dummy()}</div>",
-            unsafe_allow_html=True
-        )
+        # [수정] 넷플릭스 주간 최고 순위 (납품 여부 체크)
+        if val_netflix_best and val_netflix_best > 0:
+            kpi_with_rank(c10, "🍿 넷플릭스 최고순위", val_netflix_best, base_netflix_best, rk_netflix, prog_label, intlike=True, value_suffix="위")
+        else:
+            # 납품작 아님 -> 미방영 표시
+            st.markdown(
+                f"<div class='kpi-card'><div class='kpi-title'>🍿 넷플릭스 최고순위</div>"
+                f"<div class='kpi-value' style='color:#ccc; font-size:20px;'>미방영</div>{sublines_dummy()}</div>",
+                unsafe_allow_html=True
+            )
 
     st.divider()
 
@@ -1835,8 +1853,9 @@ def render_ip_detail():
         vod_demo = f[(f["매체"].isin(["TVING VOD", "TVING QUICK"])) & (f["metric"] == "시청인구") & f["데모"].notna()].copy()
         _render_pyramid_local(cI, "", vod_demo, height=260)
 
-    # === [Row3] 디지털&화제성 ===
-    cC, cD, cE = st.columns(3)
+    # === [Row3] 디지털 조회수 / 언급량 (2분할) ===
+    # [수정] 3분할(조회,언급,화제) -> 2분할(조회,언급)
+    cC, cD = st.columns(2)
     digital_colors = ['#5c6bc0', '#7e57c2', '#26a69a', '#66bb6a', '#ffa726', '#ef5350']
     
     with cC:
@@ -1918,6 +1937,10 @@ def render_ip_detail():
         else:
             st.info("표시할 언급량 데이터가 없습니다.")
 
+    # === [Row4] 화제성 & 넷플릭스 (2분할) ===
+    # [수정] 화제성을 Row4로 이동하고 우측에 넷플릭스 그래프 추가
+    cE, cF = st.columns(2)
+    
     with cE:
         st.markdown("<div class='sec-title'>🔥 화제성 점수 & 순위</div>", unsafe_allow_html=True)
         fdx = _metric_filter(f, "F_Total").copy(); fs = _metric_filter(f, "F_score").copy()
@@ -1958,6 +1981,53 @@ def render_ip_detail():
                 st.plotly_chart(fig_comb, use_container_width=True, config=common_cfg)
             else: st.info("데이터 없음")
         else: st.info("데이터 없음")
+
+    # [수정] 넷플릭스 주간 순위 그래프 추가
+    with cF:
+        st.markdown("<div class='sec-title'>🍿 넷플릭스 주간 순위 추이</div>", unsafe_allow_html=True)
+        # N_W순위 데이터 필터링 (0은 제외)
+        n_df = _metric_filter(f, "N_W순위").copy()
+        n_df["val"] = pd.to_numeric(n_df["value"], errors="coerce").replace(0, np.nan)
+        n_df = n_df.dropna(subset=["val"])
+
+        if not n_df.empty:
+            if has_week_col and f["주차"].notna().any():
+                # 주차별 최소 순위 (1위가 최고)
+                n_agg = n_df.groupby("주차", as_index=False)["val"].min()
+                # 주차 정렬
+                all_weeks = (f[["주차", "주차_num"]].dropna().drop_duplicates().sort_values("주차_num")["주차"].tolist())
+                n_agg = n_agg.set_index("주차").reindex(all_weeks).dropna().reset_index()
+                x_vals = n_agg["주차"]
+                use_cat = True
+            else:
+                n_agg = n_df.groupby("주차시작일", as_index=False)["val"].min().sort_values("주차시작일")
+                x_vals = n_agg["주차시작일"]
+                use_cat = False
+            
+            y_vals = n_agg["val"]
+            labels = [f"{int(v)}위" for v in y_vals]
+
+            fig_nf = go.Figure()
+            fig_nf.add_trace(go.Scatter(
+                x=x_vals, y=y_vals, mode="lines+markers+text", name="넷플릭스 순위",
+                text=labels, textposition="top center",
+                line=dict(color='#E50914', width=3), # Netflix Red
+                marker=dict(size=7, color='#E50914')
+            ))
+            
+            # Y축 반전 (1위가 위로 가도록)
+            # 범위 설정: 1위 ~ max+buffer. autorange="reversed" 사용
+            fig_nf.update_yaxes(autorange="reversed", title=None, fixedrange=True, zeroline=False)
+            
+            if use_cat:
+                fig_nf.update_xaxes(categoryorder="array", categoryarray=all_weeks, fixedrange=True)
+            
+            fig_nf.update_layout(legend_title=None, height=chart_h, margin=dict(l=8, r=8, t=20, b=8))
+            st.plotly_chart(fig_nf, use_container_width=True, config=common_cfg)
+
+        else:
+            st.info("넷플릭스 방영 기록이 없거나 데이터가 없습니다.")
+
     st.divider()
 
     # === [Row5] 데모분석 상세 표 (AgGrid) ===
@@ -2035,12 +2105,12 @@ def render_ip_detail():
         const rawVal = (params.value === null || params.value === undefined) ? 0 : params.value;
         const val = Number(rawVal) || 0;
 
-        // 1. 숫자 포맷팅
+        # 1. 숫자 포맷팅
         let displayVal = (colId === "회차")
           ? (params.value || "")
           : Math.round(val).toLocaleString();
 
-        // 2. 화살표 로직
+        # 2. 화살표 로직
         let arrow = "";
         if (colId !== "회차" && api && typeof api.getDisplayedRowAtIndex === "function" && rowIndex > 0) {
           const prev = api.getDisplayedRowAtIndex(rowIndex - 1);
@@ -2048,10 +2118,10 @@ def render_ip_detail():
             const pv = Number(prev.data[colId] || 0);
 
             if (val > pv) {
-              // 상승: 작은 삼각형(Red) -> HTML Entity 사용
+              # 상승: 작은 삼각형(Red) -> HTML Entity 사용
               arrow = '<span style="margin-left:4px;">(<span style="color:#d93636;">&#9652;</span>)</span>';
             } else if (val < pv) {
-              // 하락: 작은 역삼각형(Blue) -> HTML Entity 사용
+              # 하락: 작은 역삼각형(Blue) -> HTML Entity 사용
               arrow = '<span style="margin-left:4px;">(<span style="color:#2a61cc;">&#9662;</span>)</span>';
             }
           }
