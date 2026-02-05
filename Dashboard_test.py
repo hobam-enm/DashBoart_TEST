@@ -1,8 +1,8 @@
 # 📊 Overview / IP 성과 대시보드 — v2.0 
 
 
-#region [ 1. 라이브러리 임포트 ]
 # =====================================================
+#region [ 1. 라이브러리 임포트 ]
 import re
 from typing import List, Dict, Any, Optional 
 import time, uuid
@@ -21,19 +21,18 @@ import extra_streamlit_components as stx
 #endregion
 
 
-#region [ 1-0. 페이지 설정  ]
 # =====================================================
+#region [ 2. 페이지 설정 ]
 st.set_page_config(
     page_title="Drama Dashboard",
     layout="wide",
     initial_sidebar_state="expanded"
 )
-#endregion
 
 
-#region [ 1-1. 입장게이트 - 쿠키 인증 ]#region [ 1-1. 입장게이트 - 쿠키 인증 (세션 보완) ]
 # =====================================================
-# [수정] _rerun 함수 복구
+#endregion
+#region [ 3. 인증/쿠키 게이트 ]
 def _rerun():
     if hasattr(st, "rerun"):
         st.rerun()
@@ -44,7 +43,6 @@ def _rerun():
 COOKIE_NAME = "dmb_auth_token"
 COOKIE_EXPIRY_DAYS = 1
 
-# [수정] 캐시 제거 (위젯 오류 방지)
 def get_cookie_manager():
     return stx.CookieManager(key="dmb_cookie_manager")
 
@@ -66,7 +64,6 @@ def check_password_with_cookie() -> bool:
     cookies = cookie_manager.get_all()
     current_token = cookies.get(COOKIE_NAME)
     
-    # 3. [핵심 수정] 인증 검사 (쿠키 OR 세션스테이트 둘 중 하나라도 통과면 OK)
     # 쿠키가 있거나, 방금 로그인을 성공해서 세션에 기록이 남아있다면 통과
     is_cookie_valid = (current_token == hashed_secret)
     is_session_valid = st.session_state.get("auth_success", False)
@@ -103,10 +100,8 @@ def check_password_with_cookie() -> bool:
 
 if not check_password_with_cookie():
     st.stop()
-#endregion
 
 
-#region [ 2. 공통 스타일 통합 ]
 # =====================================================
 
 st.markdown("""
@@ -193,7 +188,6 @@ section[data-testid="stSidebar"] .stButton > button {
     box-sizing: border-box;
     text-align: left;
     
-    padding: 16px 20px !important;  /* [수정] 높이 축소 */
     margin: 0 !important;
     
     border-radius: 0px !important;
@@ -245,7 +239,6 @@ section[data-testid="stSidebar"] .stSelectbox, section[data-testid="stSidebar"] 
 }
 .page-title-emoji { font-size: 26px; line-height: 1; }
 .page-title-main {
-    font-size: 26px; /* [수정] 폰트 크기 확대 */
     font-weight: 800; 
     letter-spacing: -0.5px;
     line-height: 1.2;
@@ -347,14 +340,11 @@ h1, h2, h3 { color: #111827; font-weight: 800; letter-spacing: -0.02em; }
 
 </style>
 """, unsafe_allow_html=True)
-#endregion
 
 
-#region [ 2.1. 기본 설정 및 공통 상수 ]
 # =====================================================
 
 # ===== 네비게이션 아이템 정의 =====
-# [수정] 성장스코어 탭 통합 (방영지표/디지털 -> 성장스코어)
 NAV_ITEMS = {
     "Overview": "Overview",
     "IP 성과": "IP 성과 자세히보기",
@@ -397,14 +387,14 @@ dashboard_theme = go.Layout(
 pio.templates['dashboard_theme'] = go.layout.Template(layout=dashboard_theme)
 pio.templates.default = 'dashboard_theme'
 # =====================================================
-#endregion
 
 
-#region [ 3. 공통 함수: 데이터 로드 / 유틸리티 ]
 # =====================================================
 
 # ===== 3.1. 데이터 로드 (MongoDB) =====
 @st.cache_data(ttl=600)
+#endregion
+#region [ 4. 데이터 로드 / 전처리 ]
 def load_data() -> pd.DataFrame:
     """
     MongoDB에서 데이터를 로드합니다.
@@ -475,6 +465,8 @@ def fmt(v, digits=3, intlike=False):
         return "–"
     return f"{v:,.0f}" if intlike else f"{v:.{digits}f}"
 
+#endregion
+#region [ 5. 공통 유틸 / 컴포넌트 / 집계 ]
 def kpi(col, title, value):
     """
     Streamlit 컬럼 내에 KPI 카드를 렌더링합니다. (CSS .kpi-card 필요)
@@ -595,44 +587,29 @@ def mean_of_ip_episode_sum(df: pd.DataFrame, metric_name: str, media=None) -> fl
     return _mean_of_ip_episode_agg(df, metric_name, media=media, episode_agg="sum")
 
 def mean_of_ip_episode_mean(df: pd.DataFrame, metric_name: str, media=None) -> float | None:
-    sub = df[(df["metric"] == metric_name)].copy()
-    if media is not None:
-        sub = sub[sub["매체"].isin(media)]
+    return _mean_of_ip_episode_agg(df, metric_name, media=media, episode_agg="mean")
+
+def _mean_of_ip_sums_from_subset(sub: pd.DataFrame) -> float | None:
     if sub.empty:
         return None
-    ep_col = _episode_col(sub)
-    sub = sub.dropna(subset=[ep_col]).copy()
-    
+    sub = sub.copy()
     sub["value"] = pd.to_numeric(sub["value"], errors="coerce").replace(0, np.nan)
     sub = sub.dropna(subset=["value"])
+    per_ip_sum = sub.groupby("IP")["value"].sum()
+    return float(per_ip_sum.mean()) if not per_ip_sum.empty else None
 
-    ep_mean = sub.groupby(["IP", ep_col], as_index=False)["value"].mean()
-    per_ip_mean = ep_mean.groupby("IP")["value"].mean()
-    return float(per_ip_mean.mean()) if not per_ip_mean.empty else None
 
 def mean_of_ip_sums(df: pd.DataFrame, metric_name: str, media=None) -> float | None:
-    
     if metric_name == "조회수":
-        sub = _get_view_data(df) 
+        sub = _get_view_data(df)
     else:
         sub = df[df["metric"] == metric_name].copy()
 
     if media is not None:
         sub = sub[sub["매체"].isin(media)]
-    
-    if sub.empty:
-        return None
-        
-    sub["value"] = pd.to_numeric(sub["value"], errors="coerce").replace(0, np.nan)
-    sub = sub.dropna(subset=["value"])
 
-    per_ip_sum = sub.groupby("IP")["value"].sum()
-    return float(per_ip_sum.mean()) if not per_ip_sum.empty else None
-#endregion
+    return _mean_of_ip_sums_from_subset(sub)
 
-
-#region [ 4. 사이드바 네비게이션 ]
-# =====================================================
 current_page = get_current_page_default("Overview")
 st.session_state["page"] = current_page
 
@@ -640,7 +617,6 @@ st.session_state["page"] = current_page
 df_nav = load_data()
 all_ips = sorted(df_nav["IP"].dropna().unique().tolist()) if not df_nav.empty else []
 
-# [수정] 기본 IP 결정 로직 (방영시작일 최신순)
 default_ip = all_ips[0] if all_ips else None
 
 if not df_nav.empty and "방영시작일" in df_nav.columns:
@@ -655,7 +631,6 @@ if not df_nav.empty and "방영시작일" in df_nav.columns:
 with st.sidebar:
     render_gradient_title("드라마 성과 대시보드", emoji="")
     
-    # [수정] 세션 초기화 시 default_ip(최신작) 사용
     if "global_ip" not in st.session_state or st.session_state["global_ip"] not in all_ips:
         if default_ip:
             st.session_state["global_ip"] = default_ip
@@ -700,18 +675,14 @@ with st.sidebar:
         "<p class='sidebar-contact' style='font-size:12px; color:gray;'>문의 : 미디어)마케팅팀 데이터인사이트파트</p>",
         unsafe_allow_html=True
     )
-#endregion
 
 
-#region [ 5. 공통 집계 유틸: KPI 계산 ]
 # =====================================================
 # NOTE: 집계 유틸은 상단의 '3.5. 집계 계산 유틸' 섹션에 단일 정의로 유지합니다.
 #       (중복 정의 방지: 결과값/동작 동일 유지)
-#endregion
 
 
 
-#region [ 6. 공통 집계 유틸: 데모  ]
 # =====================================================
 
 # ===== 6.1. 데모 문자열 파싱 유틸 =====
@@ -862,7 +833,6 @@ def render_gender_pyramid(container, title: str, df_src: pd.DataFrame, height: i
 def get_avg_demo_pop_by_episode(df_src: pd.DataFrame, medias: List[str], max_ep: float = None) -> pd.DataFrame:
     """
     여러 IP가 포함된 df_src에서, 회차별/데모별 *평균* 시청자수(시청인구)를 계산합니다.
-    [수정] max_ep 파라미터 추가: 지정된 회차까지만 필터링하여 계산
     """
     # 1. 매체 및 지표 필터링
     sub = df_src[
@@ -967,11 +937,11 @@ def render_heatmap(df_plot: pd.DataFrame, title: str):
     c_heatmap, = st.columns(1)
     with c_heatmap:
         st.plotly_chart(fig, use_container_width=True)
-#endregion
 
 
-#region [ 7. 페이지 1: Overview ]
 # =====================================================
+#endregion
+#region [ 6. 페이지 렌더러 ]
 def render_overview():
     df = load_data() 
   
@@ -1291,22 +1261,18 @@ def render_overview():
         update_mode=GridUpdateMode.NO_UPDATE,
         allow_unsafe_jscode=True
     )
-#endregion
 
 
-#region [ 8. 페이지 2: IP 성과 자세히보기 ]
 # =====================================================
 def render_ip_detail():
     
     df_full = load_data() # [3. 공통 함수]
 
-    # [수정] 전역 IP 사용
     ip_selected = st.session_state.get("global_ip")
     if not ip_selected or ip_selected not in df_full["IP"].values:
         st.error("선택된 IP 정보가 없습니다.")
         return
 
-    # [수정] 컬럼 비율 조정 (IP선택 제거됨) -> 타이틀(5) | 방영연도(2) | 편성기준(2)
     filter_cols = st.columns([5, 2, 2])
 
     with filter_cols[0]:
@@ -1327,7 +1293,6 @@ def render_ip_detail():
         st.markdown("</div>", unsafe_allow_html=True)
 
     # --- 데이터 전처리 (Default 설정을 위해 위치 이동) ---
-    # [수정] 방영 연도 필터 기준을 '편성연도' 컬럼으로 변경
     date_col_for_filter = "편성연도"
 
     target_ip_rows = df_full[df_full["IP"] == ip_selected]
@@ -1671,12 +1636,10 @@ def render_ip_detail():
         )
     kpi_with_rank(c9, "🔥 화제성 점수", val_topic_avg, base_topic_avg, rk_fscr, prog_label, intlike=True)
     with c10:
-        # [수정] 마지막 5번째 슬롯: Wavve 우선 -> Netflix -> 없으면 빈칸 (미방영 텍스트 X)
         if val_wavve is not None and not pd.isna(val_wavve):
             kpi_with_rank(c10, "🌊 웨이브 VOD UV", val_wavve, base_wavve, rk_wavve, prog_label, intlike=True)
 
         elif val_netflix_best is not None and not pd.isna(val_netflix_best) and val_netflix_best > 0:
-            # [수정] 넷플릭스: 그룹 비교 정보 제거하고 값만 표시
             main_val = f"{int(val_netflix_best)}위"
             st.markdown(
                 f"<div class='kpi-card'><div class='kpi-title'>🍿 넷플릭스 최고순위</div>"
@@ -2293,13 +2256,9 @@ def render_ip_detail():
         f, ["TVING LIVE", "TVING QUICK", "TVING VOD"]
     )
     _render_aggrid_table(tving_numeric, "▶︎ TVING 합산 시청자수")
-#endregion
 
 
-#region [ 9. 페이지 3: IP간 비교분석 (통합) ]
 # =====================================================
-# [수정] 성과 포지셔닝(레이더차트)에 회차 필터 연동 (백분위 재계산 로직 추가)
-# [수정] 2025-11-13: '기준 IP' 텍스트 표시 제거 및 레이아웃 최적화
 
 # ===== 10.0. 포맷팅 헬퍼 (페이지 4 전용) =====
 def _fmt_kor_large(v):
@@ -2773,7 +2732,6 @@ def render_comparison():
 
     current_mode = st.session_state.get("comp_mode_page4", "IP vs 그룹 평균")
     
-    # [수정] 레이아웃 재배치 (기준 IP 텍스트 삭제)
     if current_mode == "IP vs IP":
         # 타이틀(4) | 모드선택(3) | 비교IP(3) | 회차(2)
         filter_cols = st.columns([4, 3, 3, 2])
@@ -2810,7 +2768,6 @@ def render_comparison():
 
     # --- IP vs IP 모드 ---
     if comparison_mode == "IP vs IP":
-        # [수정] 기준 IP 표시 삭제됨
         with filter_cols[2]:
             ip_options_2 = [ip for ip in ip_options if ip != selected_ip1]
             selected_ip2 = st.selectbox(
@@ -2843,7 +2800,6 @@ def render_comparison():
             y_mode = base_ip_info_rows["편성연도"].dropna().mode()
             if not y_mode.empty: default_year_list = [y_mode.iloc[0]]
 
-        # [수정] 기준 IP 표시 삭제됨
         with filter_cols[2]:
             comp_type = st.selectbox(
                 "동일 편성 기준", ["동일 편성", "전체"], index=0,
@@ -2959,12 +2915,9 @@ def render_comparison():
         comp_name = selected_ip2
         _render_kpi_row_ip_vs_ip(kpis_target, kpis_comp, selected_ip1, selected_ip2)
         _render_unified_charts(df_target, df_comp, selected_ip1, comp_name, kpi_percentiles, comp_color="#aaaaaa")
-#endregion
 
 
-#region [ 10. 페이지 5: 성장스코어 (통합) ]
 # =====================================================
-# [수정] 방영지표 및 디지털 탭 통합 (토글 형태)
 
 # ---------- [공통] 설정 상수 ----------
 EP_CHOICES = [2, 4, 6, 8, 10, 12, 14, 16]
@@ -3465,12 +3418,11 @@ def render_growth_score():
         st.markdown("#### 📋 IP전체-디지털")
         AgGrid(table_view.fillna("–"), gridOptions=gb.build(), theme="streamlit", height=420, fit_columns_on_grid_load=True, update_mode=GridUpdateMode.NO_UPDATE, allow_unsafe_jscode=True)
 
-#endregion
 
 
-#region [ 12. 메인 라우터 ]
 # =====================================================
-# [수정] 통합된 성장스코어 페이지 라우팅 적용
+#endregion
+#region [ 7. 라우터 / 엔트리 ]
 if st.session_state["page"] == "Overview":
     render_overview() # [ 7. 페이지 1 ]
 elif st.session_state["page"] == "IP 성과":
@@ -3481,5 +3433,4 @@ elif st.session_state["page"] == "성장스코어":
     render_growth_score() # [ 10. 페이지 5 (통합됨) ]
 else:
     render_overview() # 기본값으로 Overview 렌더링
-    
-#endregion
+    #endregion
