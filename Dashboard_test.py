@@ -3453,7 +3453,7 @@ def render_growth_score():
         AgGrid(table_view.fillna("–"), gridOptions=gb.build(), theme="streamlit", height=420, fit_columns_on_grid_load=True, update_mode=GridUpdateMode.NO_UPDATE, allow_unsafe_jscode=True)
 
 # =====================================================
-# [수정] 7. 사전지표 분석 페이지 렌더러 (v2.5 - 주차 동적 필터링 및 레이아웃 수정)
+# [수정] 7. 사전지표 분석 페이지 렌더러 (v2.3 - 시사지표 박스 제거)
 def render_pre_launch_analysis():
     df_all = load_data()
     
@@ -3461,8 +3461,6 @@ def render_pre_launch_analysis():
     C_TARGET = "#283593"  # Target (Deep Indigo)
     C_PREV   = "#78909C"  # Previous (Blue Grey)
     C_GROUP  = "#EEEEEE"  # Group (Light Grey)
-    C_RADAR_T = "rgba(40, 53, 147, 0.6)" # Radar Target Fill
-    C_RADAR_G = "rgba(200, 200, 200, 0.4)" # Radar Group Fill
     
     # --- 2. 분석 대상 지표 설정 ---
     SISA_MAP = {
@@ -3476,9 +3474,8 @@ def render_pre_launch_analysis():
     }
     METRICS_SISA = list(SISA_MAP.keys())
     
-    # 전체 기간 정의
-    FULL_WEEKS_DIGITAL = ["W-6", "W-5", "W-4", "W-3", "W-2", "W-1"]
-    FULL_WEEKS_MPI = ["W-6", "W-5", "W-4", "W-3", "W-2", "W-1", "W+1", "W+2"]
+    WEEKS_DIGITAL = ["W-6", "W-5", "W-4", "W-3", "W-2", "W-1"]
+    WEEKS_MPI = ["W-6", "W-5", "W-4", "W-3", "W-2", "W-1", "W+1", "W+2"]
 
     # --- 3. 사이드바 / 헤더 ---
     global_ip = st.session_state.get("global_ip")
@@ -3494,10 +3491,9 @@ def render_pre_launch_analysis():
         st.markdown("<div class='gd-guideline'>", unsafe_allow_html=True)
         st.markdown(textwrap.dedent("""
             **사전지표 안내**
-            - **분석 기준 (NEW)**: 타겟 IP의 데이터가 존재하는 최신 주차까지만 잘라서 비교합니다. (예: 내 작품이 W-4까지 있으면, 그룹 평균도 W-6~W-4 누적치로 비교)
-            - **요약 포지셔닝**: 동적 주차 기준, 전체 드라마 중 내 작품의 상대적 위치(백분위 점수)
-            - **MPI**: 초기 인지/선호/시청의향 (W-6 ~ W+2)
-            - **사전 디지털**: W-6 ~ W-1 누적 합계
+            - **시사지표**: 사전 시사를 통해 수집된 항목별 평가 점수 (5점 만점)
+            - **MPI**: 초기 인지/선호/시청의향 조사 결과
+            - **사전 디지털 반응**: 방영 6주 전 ~ 1주 전의 주차별 총합
         """).strip())
         st.markdown("</div>", unsafe_allow_html=True)
 
@@ -3528,7 +3524,7 @@ def render_pre_launch_analysis():
         df_group = df_group[df_group["편성연도"].isin(sel_years)]
     if comp_prog_opt == "동일 편성" and default_prog:
         df_group = df_group[df_group["편성"] == default_prog]
-    df_group_excl = df_group[df_group["IP"] != global_ip]
+    df_group = df_group[df_group["IP"] != global_ip]
 
     prev_ip_name = get_previous_work_ip(df_all, global_ip)
     df_prev = pd.DataFrame()
@@ -3539,156 +3535,11 @@ def render_pre_launch_analysis():
     
     group_label = "그룹 평균"
 
-    # [핵심] 주차 동적 필터링 로직 (Apple-to-Apple 비교용)
-    def _get_valid_weeks(target_df, full_weeks):
-        # 타겟 데이터에 존재하는 주차만 추출
-        if "주차" not in target_df.columns: return full_weeks
-        exist_weeks = target_df["주차"].unique().tolist()
-        
-        # 전체 주차 리스트 순서대로 인덱스 확인
-        max_idx = -1
-        for w in exist_weeks:
-            if w in full_weeks:
-                idx = full_weeks.index(w)
-                if idx > max_idx: max_idx = idx
-        
-        # 타겟 데이터가 하나도 매칭 안되면 전체 반환 (데이터 없음 표시용)
-        if max_idx == -1: return full_weeks
-        
-        # 매칭된 최대 주차까지만 슬라이싱 (예: W-4까지)
-        return full_weeks[:max_idx+1]
-
-    # 타겟 IP 기준 유효 주차 산출
-    valid_weeks_digital = _get_valid_weeks(df_target[df_target["metric"].isin(["조회수","언급량"])], FULL_WEEKS_DIGITAL)
-    valid_weeks_mpi = _get_valid_weeks(df_target[df_target["metric"].str.contains("MPI")], FULL_WEEKS_MPI)
-
     st.divider()
 
     # --- 6. 시각화 헬퍼 함수 ---
-    
-    # (A) [수정] 요약 방사형 그래프 (동적 주차 반영)
-    def _draw_summary_radar():
-        radar_metrics = {
-            "시사지표": {"type": "sisa", "metrics": METRICS_SISA},
-            "MPI 인지": {"type": "mpi", "metric": "MPI_인지"},
-            "MPI 선호": {"type": "mpi", "metric": "MPI_선호"},
-            "MPI 시청의향": {"type": "mpi", "metric": "MPI_시청의향"},
-            "디지털 조회": {"type": "digital", "metric": "조회수"},
-            "디지털 언급": {"type": "digital", "metric": "언급량"},
-        }
 
-        # 1. 시사지표 (기간 개념 없음, 단순 평균)
-        sisa_df = df_all[df_all["metric"].isin(METRICS_SISA)].copy()
-        sisa_df["val"] = pd.to_numeric(sisa_df["value"], errors="coerce")
-        sisa_scores = sisa_df.groupby("IP")["val"].mean()
-        
-        # 2. MPI (동적 주차 필터 적용)
-        mpi_df = df_all[df_all["metric"].str.contains("MPI")].copy()
-        if "주차" in mpi_df.columns:
-            mpi_df = mpi_df[mpi_df["주차"].isin(valid_weeks_mpi)] # <--- [적용]
-        mpi_df["val"] = pd.to_numeric(mpi_df["value"], errors="coerce")
-        # IP별 평균 (누적 기간 평균)
-        mpi_scores_agg = mpi_df.groupby(["IP", "metric"])["val"].mean().reset_index()
-        
-        # 3. 디지털 (동적 주차 필터 적용)
-        dig_df = df_all[df_all["metric"].isin(["조회수", "언급량"])].copy()
-        # 조회수 필터링
-        if "조회수" in dig_df["metric"].values:
-             dig_df = _get_view_data(dig_df)
-        
-        if "주차" in dig_df.columns:
-            dig_df = dig_df[dig_df["주차"].isin(valid_weeks_digital)] # <--- [적용]
-        
-        dig_df["val"] = pd.to_numeric(dig_df["value"], errors="coerce").fillna(0)
-        # IP별 합계 (누적 기간 합계)
-        dig_scores_agg = dig_df.groupby(["IP", "metric"])["val"].sum().reset_index()
-
-        def _get_percentile(target_val, all_vals):
-            if pd.isna(target_val): return 0
-            all_vals_clean = all_vals.dropna()
-            if all_vals_clean.empty: return 0
-            return (all_vals_clean < target_val).mean() * 100
-
-        target_vals = []
-        group_vals = []
-        labels = []
-
-        for label, info in radar_metrics.items():
-            # (1) 분포 데이터 생성
-            if info["type"] == "sisa":
-                dist = sisa_scores
-            elif info["type"] == "mpi":
-                sub = mpi_scores_agg[mpi_scores_agg["metric"] == info["metric"]]
-                dist = sub.set_index("IP")["val"]
-            elif info["type"] == "digital":
-                sub = dig_scores_agg[dig_scores_agg["metric"] == info["metric"]]
-                dist = sub.set_index("IP")["val"]
-            
-            # (2) 내 점수
-            my_val = dist.get(global_ip, np.nan)
-            if pd.isna(my_val): my_val = 0 # 데이터 없으면 0 처리
-            my_pct = _get_percentile(my_val, dist)
-            
-            # (3) 그룹 평균 점수
-            grp_ips = df_group_excl["IP"].unique()
-            # 그룹 IP들의 값만 추출하여 평균 계산
-            grp_subset = dist[dist.index.isin(grp_ips)]
-            if grp_subset.empty:
-                grp_val_avg = 0
-            else:
-                grp_val_avg = grp_subset.mean()
-            
-            grp_pct = _get_percentile(grp_val_avg, dist)
-
-            target_vals.append(my_pct)
-            group_vals.append(grp_pct)
-            labels.append(label)
-
-        # 그래프 그리기
-        fig = go.Figure()
-        
-        # Group
-        fig.add_trace(go.Scatterpolar(
-            r=group_vals + [group_vals[0]],
-            theta=labels + [labels[0]],
-            fill='toself', name=group_label,
-            line=dict(color="#999999", width=1),
-            fillcolor=C_RADAR_G
-        ))
-        
-        # Target
-        fig.add_trace(go.Scatterpolar(
-            r=target_vals + [target_vals[0]],
-            theta=labels + [labels[0]],
-            fill='toself', name=global_ip,
-            line=dict(color=C_TARGET, width=2),
-            fillcolor=C_RADAR_T
-        ))
-
-        fig.update_layout(
-            polar=dict(
-                radialaxis=dict(visible=True, range=[0, 100], ticksuffix="점", tickfont=dict(size=10, color="#888")),
-                bgcolor='rgba(0,0,0,0)'
-            ),
-            showlegend=True,
-            height=300, # 높이 약간 축소
-            margin=dict(t=20, b=20, l=40, r=40),
-            legend=dict(orientation="h", yanchor="bottom", y=1.05, xanchor="center", x=0.5),
-            paper_bgcolor='rgba(0,0,0,0)',
-        )
-        
-        # [수정] 레이아웃 변경: 2컬럼 중 왼쪽만 사용 (50% 너비)
-        st.markdown("###### 🧭 사전지표 요약 (Positioning Map)")
-        c_radar, c_empty = st.columns(2)
-        with c_radar:
-            # 주차 정보 표시
-            max_dig = valid_weeks_digital[-1] if valid_weeks_digital else "-"
-            max_mpi = valid_weeks_mpi[-1] if valid_weeks_mpi else "-"
-            st.caption(f"※ 비교 기준: 디지털(~{max_dig}), MPI(~{max_mpi}) 누적")
-            st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
-
-
-    # (B) 시사지표 (Bar)
+    # (A) 시사지표 (Bar)
     def _draw_sisa_bar(metric_list):
         def _get_metric_mean(df, m_list):
             if df.empty: return {m: 0 for m in m_list}
@@ -3698,7 +3549,7 @@ def render_pre_launch_analysis():
             return grp.to_dict()
 
         val_target = _get_metric_mean(df_target, metric_list)
-        val_group  = _get_metric_mean(df_group_excl,  metric_list)
+        val_group  = _get_metric_mean(df_group,  metric_list)
         val_prev   = _get_metric_mean(df_prev,   metric_list)
 
         data = []
@@ -3709,7 +3560,10 @@ def render_pre_launch_analysis():
             data.append({"지표": display_name, "구분": global_ip,    "값": val_target.get(m, 0), "color": C_TARGET})
         
         plot_df = pd.DataFrame(data)
+        
+        # [수정] 박스(.kpi-card) 제거: div 태그 삭제
         st.markdown("###### 📊 시사지표 상세")
+
         if plot_df["값"].sum() == 0:
             st.info("시사지표 데이터가 없습니다.")
             return
@@ -3724,15 +3578,19 @@ def render_pre_launch_analysis():
             hovertemplate='%{x}<br>%{data.name}: %{y:.1f}<extra></extra>'
         )
         fig.update_layout(
-            height=300, margin=dict(t=20, b=10, l=10, r=10),
+            height=320, margin=dict(t=20, b=10, l=10, r=10),
             xaxis_title=None, yaxis_title=None,
-            paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
+            
+            # [수정] 배경 완전 투명화
+            paper_bgcolor='rgba(0,0,0,0)',
+            plot_bgcolor='rgba(0,0,0,0)',
+            
             yaxis=dict(range=[0, 5.5], fixedrange=True, showgrid=True, gridcolor='#f0f0f0'),
             legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1, title=None)
         )
         st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
 
-    # (C) 트렌드 차트 (Line)
+    # (B) 트렌드 차트 (Line)
     def _fmt_view_detail(x):
         if pd.isna(x) or x == 0: return "0"
         v = int(x)
@@ -3750,8 +3608,10 @@ def render_pre_launch_analysis():
     def _draw_trend_line_chart(metric_name, title, target_weeks):
         def _fetch_trend_data(df_src, m_name):
             if df_src.empty: return pd.Series(dtype=float)
-            if m_name == "조회수": sub = _get_view_data(df_src)
-            else: sub = df_src[df_src["metric"] == m_name].copy()
+            if m_name == "조회수":
+                sub = _get_view_data(df_src)
+            else:
+                sub = df_src[df_src["metric"] == m_name].copy()
 
             if "주차" in sub.columns:
                 sub = sub[sub["주차"].isin(target_weeks)]
@@ -3759,11 +3619,12 @@ def render_pre_launch_analysis():
             sub["val"] = pd.to_numeric(sub["value"], errors="coerce")
             ip_weekly_sum = sub.groupby(["IP", "주차"])["val"].sum().reset_index()
             grp = ip_weekly_sum.groupby("주차")["val"].mean()
+            
             sorter = {k: v for v, k in enumerate(target_weeks)}
             return grp.sort_index(key=lambda x: x.map(sorter))
 
         s_target = _fetch_trend_data(df_target, metric_name)
-        s_group  = _fetch_trend_data(df_group_excl,  metric_name) 
+        s_group  = _fetch_trend_data(df_group,  metric_name)
         s_prev   = _fetch_trend_data(df_prev,   metric_name)
 
         if s_target.empty and s_group.empty and s_prev.empty:
@@ -3771,25 +3632,50 @@ def render_pre_launch_analysis():
             return
 
         fig = go.Figure()
-        
+
         if metric_name == "조회수":
             custom_target = [_fmt_view_detail(v) for v in s_target.values]
             custom_group  = [_fmt_view_detail(v) for v in s_group.values]
             custom_prev   = [_fmt_view_detail(v) for v in s_prev.values]
             hover_template = "%{x}<br>%{data.name}: %{customdata}<extra></extra>"
-            text_vals = [f"{int(v/10000)}만" if v > 10000 else f"{int(v)}" for v in s_target.values]
         elif metric_name == "언급량":
             custom_target, custom_group, custom_prev = None, None, None
             hover_template = "%{x}<br>%{data.name}: %{y:,.0f}<extra></extra>"
-            text_vals = [f"{v:,.0f}" for v in s_target.values]
         else:
             custom_target, custom_group, custom_prev = None, None, None
             hover_template = "%{x}<br>%{data.name}: %{y:.1f}<extra></extra>"
+
+        fig.add_trace(go.Scatter(
+            x=s_group.index, y=s_group.values, mode='lines',
+            name=group_label, 
+            line=dict(color=C_GROUP, width=2),
+            hovertemplate=hover_template, customdata=custom_group
+        ))
+        
+        fig.add_trace(go.Scatter(
+            x=s_prev.index, y=s_prev.values, mode='lines+markers',
+            name=prev_label, 
+            line=dict(color=C_PREV, width=2, dash='dot'),
+            marker=dict(size=6),
+            hovertemplate=hover_template, customdata=custom_prev
+        ))
+
+        if metric_name == "조회수":
+            text_vals = [f"{int(v/10000)}만" if v > 10000 else f"{int(v)}" for v in s_target.values]
+        elif metric_name == "언급량":
+            text_vals = [f"{v:,.0f}" for v in s_target.values]
+        else:
             text_vals = [f"{v:.1f}" for v in s_target.values]
 
-        fig.add_trace(go.Scatter(x=s_group.index, y=s_group.values, mode='lines', name=group_label, line=dict(color=C_GROUP, width=2), hovertemplate=hover_template, customdata=custom_group))
-        fig.add_trace(go.Scatter(x=s_prev.index, y=s_prev.values, mode='lines+markers', name=prev_label, line=dict(color=C_PREV, width=2, dash='dot'), marker=dict(size=6), hovertemplate=hover_template, customdata=custom_prev))
-        fig.add_trace(go.Scatter(x=s_target.index, y=s_target.values, mode='lines+markers+text', name=global_ip, line=dict(color=C_TARGET, width=3), marker=dict(size=8, color=C_TARGET), text=text_vals, textposition="top center", textfont=dict(size=12, color=C_TARGET, weight="bold"), hovertemplate=hover_template, customdata=custom_target))
+        fig.add_trace(go.Scatter(
+            x=s_target.index, y=s_target.values, mode='lines+markers+text',
+            name=global_ip, 
+            line=dict(color=C_TARGET, width=3),
+            marker=dict(size=8, color=C_TARGET),
+            text=text_vals, textposition="top center",
+            textfont=dict(size=12, color=C_TARGET, weight="bold"),
+            hovertemplate=hover_template, customdata=custom_target
+        ))
 
         fig.update_layout(
             title=dict(text=f"📈 {title}", font=dict(size=15)),
@@ -3797,42 +3683,31 @@ def render_pre_launch_analysis():
             legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
             xaxis=dict(categoryorder="array", categoryarray=target_weeks, showgrid=False),
             yaxis=dict(showgrid=True, gridcolor='#f0f0f0', zeroline=False, showticklabels=False),
-            paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
+            plot_bgcolor='rgba(0,0,0,0)',
             hovermode="x unified"
         )
         st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
 
     # --- 7. 화면 배치 ---
-    
-    # [Row 1] 요약 그래프 (Radar) - 1/2 Width
-    _draw_summary_radar()
-    
-    st.markdown("---")
-
-    # [Row 2] MPI 추이
-    st.markdown("###### 🧠 MPI 추이")
-    c_m1, c_m2, c_m3 = st.columns(3)
-    # [수정] MPI도 유효 주차까지만 Line Chart 그림
-    with c_m1: _draw_trend_line_chart("MPI_인지", "인지도", valid_weeks_mpi)
-    with c_m2: _draw_trend_line_chart("MPI_선호", "선호도", valid_weeks_mpi)
-    with c_m3: _draw_trend_line_chart("MPI_시청의향", "시청의향", valid_weeks_mpi)
-    
-    st.markdown("---")
-    
-    # [Row 3] 시사지표 (Bar)
     _draw_sisa_bar(METRICS_SISA)
     
     st.markdown("---")
+    
+    st.markdown("###### 🧠 MPI 추이")
+    c_m1, c_m2, c_m3 = st.columns(3)
+    with c_m1: _draw_trend_line_chart("MPI_인지", "인지도", WEEKS_MPI)
+    with c_m2: _draw_trend_line_chart("MPI_선호", "선호도", WEEKS_MPI)
+    with c_m3: _draw_trend_line_chart("MPI_시청의향", "시청의향", WEEKS_MPI)
 
-    # [Row 4] 디지털 반응
-    st.markdown("###### 💻 사전 디지털 반응")
+    st.markdown("---")
+
+    st.markdown("###### 💻 사전 디지털 반응 (W-6 ~ W-1)")
     c_d1, c_d2 = st.columns(2)
-    # [수정] 디지털도 유효 주차까지만 Line Chart 그림
-    with c_d1: _draw_trend_line_chart("조회수", "조회수 합계", valid_weeks_digital)
-    with c_d2: _draw_trend_line_chart("언급량", "언급량 합계", valid_weeks_digital)
+    with c_d1: _draw_trend_line_chart("조회수", "조회수 합계", WEEKS_DIGITAL)
+    with c_d2: _draw_trend_line_chart("언급량", "언급량 합계", WEEKS_DIGITAL)
+    
 # =====================================================
 #endregion
-
 #region [ 7. 라우터 / 엔트리 ]
 if st.session_state["page"] == "Overview":
     render_overview() # [ 7. 페이지 1 ]
