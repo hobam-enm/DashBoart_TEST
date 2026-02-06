@@ -239,6 +239,7 @@ section[data-testid="stSidebar"] .stSelectbox, section[data-testid="stSidebar"] 
 }
 .page-title-emoji { font-size: 26px; line-height: 1; }
 .page-title-main {
+    font-size: 24px;
     font-weight: 800; 
     letter-spacing: -0.5px;
     line-height: 1.2;
