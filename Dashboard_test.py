@@ -349,6 +349,7 @@ h1, h2, h3 { color: #111827; font-weight: 800; letter-spacing: -0.02em; }
 NAV_ITEMS = {
     "Overview": "Overview",
     "IP 성과": "IP 성과 자세히보기",
+    "사전지표": "사전지표 분석",
     "비교분석": "성과 비교분석", 
     "성장스코어": "성장스코어", 
 }
@@ -940,6 +941,37 @@ def render_heatmap(df_plot: pd.DataFrame, title: str):
     with c_heatmap:
         st.plotly_chart(fig, use_container_width=True)
 
+# =====================================================
+# [추가] 동일 편성 전작 찾기 유틸
+def get_previous_work_ip(df_full: pd.DataFrame, target_ip: str) -> str | None:
+    """
+    동일 편성 내에서, 타겟 IP보다 '방영시작일'이 바로 앞선 작품을 찾습니다.
+    """
+    if df_full.empty or "방영시작" not in df_full.columns: # 컬럼명 "방영시작" 체크
+        return None
+    
+    # 타겟 IP 정보
+    target_rows = df_full[df_full["IP"] == target_ip]
+    if target_rows.empty: return None
+    
+    # 타겟의 편성 및 방영시작일
+    target_prog = target_rows["편성"].dropna().iloc[0] if not target_rows["편성"].dropna().empty else None
+    target_start = target_rows["방영시작"].dropna().iloc[0] if not target_rows["방영시작"].dropna().empty else None
+    
+    if not target_prog or pd.isna(target_start): return None
+    
+    # 동일 편성 && 방영일이 타겟보다 이전인 작품들
+    candidates = df_full[
+        (df_full["편성"] == target_prog) & 
+        (df_full["방영시작"] < target_start) & 
+        (df_full["IP"] != target_ip)
+    ].copy()
+    
+    if candidates.empty: return None
+    
+    # 그 중에서 가장 최신(방영시작일이 가장 큰) 작품
+    prev_work = candidates.sort_values("방영시작", ascending=False).iloc[0]["IP"]
+    return prev_work
 
 # =====================================================
 #endregion
@@ -3420,6 +3452,225 @@ def render_growth_score():
         st.markdown("#### 📋 IP전체-디지털")
         AgGrid(table_view.fillna("–"), gridOptions=gb.build(), theme="streamlit", height=420, fit_columns_on_grid_load=True, update_mode=GridUpdateMode.NO_UPDATE, allow_unsafe_jscode=True)
 
+# =====================================================
+# [추가] 7. 사전지표 분석 페이지 렌더러
+def render_pre_launch_analysis():
+    df_all = load_data()
+    
+    # --- 1. 사전 설정 (지표 리스트) ---
+    # (1) Scalar Metrics (IP별 1개의 값으로 비교 - Bar Chart)
+    METRICS_SISA = [
+        "시사지표_개연성", "시사지표_공감", "시사지표_대사", 
+        "시사지표_연출", "시사지표_장르", "시사지표_전개", "시사지표_캐릭터"
+    ]
+    METRICS_MPI = [
+        "MPI_선호", "MPI_시청의향", "MPI_인지"
+    ]
+    
+    # (2) Weekly Trend Metrics (W-6 ~ W-1 추이 비교 - Line Chart)
+    # 실제 데이터의 '주차' 컬럼 값이 "W-6", "D-4주" 등으로 되어있을 수 있으므로
+    # 필요시 주차 필터링 로직 확인 필요. 여기선 '주차_num' 기준 -6 ~ -1 로 가정하거나 문자열 필터 사용.
+    METRICS_TREND = ["조회수", "언급량"]
+    PRE_WEEKS_ALLOWED = ["W-6", "W-5", "W-4", "W-3", "W-2", "W-1"] # 데이터의 실제 포맷에 맞게 수정 필요
+    
+    # --- 2. 사이드바 / 헤더 설정 ---
+    global_ip = st.session_state.get("global_ip")
+    if not global_ip or global_ip not in df_all["IP"].unique():
+        st.error("좌측 사이드바에서 분석할 IP를 먼저 선택해주세요.")
+        return
+
+    filter_cols = st.columns([4, 2, 2])
+    with filter_cols[0]:
+        st.markdown(f"<div class='page-title'>🌱 {global_ip} 사전지표 분석</div>", unsafe_allow_html=True)
+
+    with st.expander("ℹ️ 지표 기준 안내 (작성 예시)", expanded=False):
+        st.markdown("<div class='gd-guideline'>", unsafe_allow_html=True)
+        # [요청사항] 사용자가 직접 내용을 채워넣을 수 있도록 임의 텍스트 배치
+        st.markdown(textwrap.dedent("""
+            **사전지표 안내**
+            - **시사지표**: 사전 시사를 통해 수집된 항목별 평가 점수입니다. (개연성, 연출 등)
+            - **MPI**: Marketing Power Index, 초기 인지 및 선호도 조사 결과입니다.
+            - **사전 디지털 반응**: 방영 6주 전(W-6)부터 1주 전(W-1)까지의 조회수 및 언급량 추이입니다.
+            - **비교 기준**: 선택된 연도/편성 그룹의 평균 및 동일 편성 직전 작품과 비교합니다.
+        """).strip())
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    # --- 3. 필터링 (IP 성과 자세히보기와 동일 구성) ---
+    # Default 연도/편성 추출 로직 재사용
+    target_row = df_all[df_all["IP"] == global_ip]
+    default_year = []
+    default_prog = None
+    
+    if not target_row.empty:
+        if "편성연도" in target_row.columns:
+            ymode = target_row["편성연도"].dropna().mode()
+            if not ymode.empty: default_year = [ymode.iloc[0]]
+        default_prog = target_row["편성"].dropna().mode().iloc[0] if not target_row["편성"].dropna().empty else None
+
+    all_years = sorted(df_all["편성연도"].dropna().unique().astype(str), reverse=True) if "편성연도" in df_all.columns else []
+    
+    with filter_cols[1]:
+        sel_years = st.multiselect("비교군 연도", all_years, default=default_year, placeholder="연도 선택", label_visibility="collapsed")
+    
+    with filter_cols[2]:
+        # 편성 필터는 보통 비교군 정의용 (Target IP의 편성은 고정)
+        # 여기서는 비교군을 '동일 편성'으로 한정할지, '전체'로 할지 선택
+        comp_prog_opt = st.selectbox("비교군 편성 기준", ["동일 편성", "전체"], index=0, label_visibility="collapsed")
+
+    # --- 4. 데이터셋 준비 ---
+    # (A) Target Data
+    df_target = df_all[df_all["IP"] == global_ip].copy()
+
+    # (B) Group Data (Filter Applied)
+    df_group = df_all.copy()
+    if sel_years:
+        df_group = df_group[df_group["편성연도"].isin(sel_years)]
+    if comp_prog_opt == "동일 편성" and default_prog:
+        df_group = df_group[df_group["편성"] == default_prog]
+    # 그룹에서 타겟 IP는 제외 (순수 비교를 위해)
+    df_group = df_group[df_group["IP"] != global_ip]
+
+    # (C) Previous Work Data (동일 편성 전작)
+    prev_ip_name = get_previous_work_ip(df_all, global_ip)
+    df_prev = pd.DataFrame()
+    prev_label = "전작(정보없음)"
+    if prev_ip_name:
+        df_prev = df_all[df_all["IP"] == prev_ip_name].copy()
+        prev_label = f"전작({prev_ip_name})"
+    
+    group_label = "그룹 평균"
+
+    st.divider()
+
+    # --- 5. 차트 그리기 헬퍼 ---
+    # 색상 팔레트
+    COL_TARGET = "#d93636"  # Red
+    COL_GROUP  = "#9ca3af"  # Grey
+    COL_PREV   = "#2a61cc"  # Blue
+
+    def _draw_bar_comparison(metric_list, title):
+        """MPI, 시사지표 등 스칼라 값 비교 (Bar Chart)"""
+        # 데이터 집계 함수
+        def _get_metric_mean(df, m_list):
+            if df.empty: return {m: 0 for m in m_list}
+            # metric 컬럼이 m_list에 있는 행만 필터
+            sub = df[df["metric"].isin(m_list)]
+            # 값 평균 (IP가 하나면 그 값, 그룹이면 평균)
+            sub["val"] = pd.to_numeric(sub["value"], errors="coerce")
+            grp = sub.groupby("metric")["val"].mean()
+            return grp.to_dict()
+
+        val_target = _get_metric_mean(df_target, metric_list)
+        val_group  = _get_metric_mean(df_group,  metric_list)
+        val_prev   = _get_metric_mean(df_prev,   metric_list)
+
+        # DataFrame 변환
+        data = []
+        for m in metric_list:
+            # 표시 이름에서 접두사 제거 (MPI_선호 -> 선호)
+            short_name = m.split("_")[-1]
+            data.append({"지표": short_name, "구분": global_ip,    "값": val_target.get(m, 0), "color": COL_TARGET})
+            data.append({"지표": short_name, "구분": prev_label,  "값": val_prev.get(m, 0),   "color": COL_PREV})
+            data.append({"지표": short_name, "구분": group_label, "값": val_group.get(m, 0),  "color": COL_GROUP})
+        
+        plot_df = pd.DataFrame(data)
+        
+        if plot_df["값"].sum() == 0:
+            st.info(f"{title} 데이터가 없습니다.")
+            return
+
+        fig = px.bar(
+            plot_df, x="지표", y="값", color="구분", barmode="group",
+            color_discrete_map={global_ip: COL_TARGET, prev_label: COL_PREV, group_label: COL_GROUP},
+            text="값", title=f"📊 {title}"
+        )
+        fig.update_traces(texttemplate='%{text:.1f}', textposition='outside')
+        fig.update_layout(
+            height=320, margin=dict(t=40, b=10), 
+            xaxis_title=None, yaxis_title=None,
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1, title=None)
+        )
+        st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+
+    def _draw_trend_line(metric_name, title):
+        """조회수, 언급량 W-6~W-1 추이 비교 (Line Chart)"""
+        # W-6 ~ W-1 필터링 헬퍼
+        def _get_weekly_series(df, m_name):
+            if df.empty: return pd.Series(dtype=float)
+            
+            # 1. Metric 필터
+            if m_name == "조회수":
+                sub = _get_view_data(df) # 기존 유틸 재사용
+            else:
+                sub = df[df["metric"] == m_name].copy()
+            
+            # 2. Week 필터 (주차 컬럼이 PRE_WEEKS_ALLOWED에 포함되거나, 주차_num이 -6~-1인 경우)
+            # 여기서는 데이터의 '주차' 컬럼이 문자열(W-1 등)이라고 가정하고 필터링합니다.
+            # 만약 데이터가 'D-nn' 형식이거나 숫자로만 되어있다면 로직 수정이 필요합니다.
+            if "주차" in sub.columns:
+                sub = sub[sub["주차"].isin(PRE_WEEKS_ALLOWED)]
+            
+            # 3. 집계 (주차별 평균)
+            sub["val"] = pd.to_numeric(sub["value"], errors="coerce")
+            # 그룹인 경우 IP별 합산 후 -> 주차별 IP평균을 구하는 것이 정확하나, 여기선 단순 주차별 평균
+            grp = sub.groupby("주차")["val"].mean()
+            
+            # 정렬 (W-6 -> W-1 순서 보장)
+            # 파이썬 리스트 index 기반 정렬
+            sorter = {k: v for v, k in enumerate(PRE_WEEKS_ALLOWED)}
+            return grp.sort_index(key=lambda x: x.map(sorter))
+
+        s_target = _get_weekly_series(df_target, metric_name)
+        s_group  = _get_weekly_series(df_group,  metric_name)
+        s_prev   = _get_weekly_series(df_prev,   metric_name)
+
+        if s_target.empty and s_group.empty and s_prev.empty:
+            st.info(f"{title} (W-6 ~ W-1) 데이터가 없습니다.")
+            return
+
+        fig = go.Figure()
+        # Target
+        fig.add_trace(go.Scatter(
+            x=s_target.index, y=s_target.values, mode='lines+markers+text',
+            name=global_ip, line=dict(color=COL_TARGET, width=3),
+            text=[f"{v:,.0f}" for v in s_target.values], textposition="top center"
+        ))
+        # Previous
+        fig.add_trace(go.Scatter(
+            x=s_prev.index, y=s_prev.values, mode='lines+markers',
+            name=prev_label, line=dict(color=COL_PREV, width=2, dash='dot')
+        ))
+        # Group
+        fig.add_trace(go.Scatter(
+            x=s_group.index, y=s_group.values, mode='lines+markers',
+            name=group_label, line=dict(color=COL_GROUP, width=2, dash='dash')
+        ))
+
+        fig.update_layout(
+            title=f"📈 {title} 추이 (W-6 ~ W-1)",
+            height=350, margin=dict(t=40, b=20),
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+            xaxis=dict(categoryorder="array", categoryarray=PRE_WEEKS_ALLOWED)
+        )
+        st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+
+    # --- 6. 레이아웃 배치 ---
+    
+    # Row 1: 시사지표 & MPI (Bar Chart)
+    c1, c2 = st.columns(2)
+    with c1:
+        _draw_bar_comparison(METRICS_SISA, "시사지표 상세")
+    with c2:
+        _draw_bar_comparison(METRICS_MPI, "MPI (초기 인지/선호)")
+
+    st.markdown("<div style='height: 30px;'></div>", unsafe_allow_html=True)
+    
+    # Row 2: 조회수 & 언급량 (Line Chart, W-6 ~ W-1)
+    c3, c4 = st.columns(2)
+    with c3:
+        _draw_trend_line("조회수", "사전 디지털 조회수")
+    with c4:
+        _draw_trend_line("언급량", "사전 디지털 언급량")
 
 
 # =====================================================
@@ -3429,6 +3680,8 @@ if st.session_state["page"] == "Overview":
     render_overview() # [ 7. 페이지 1 ]
 elif st.session_state["page"] == "IP 성과":
     render_ip_detail() # [ 8. 페이지 2 ]
+elif st.session_state["page"] == "사전지표": 
+    render_pre_launch_analysis()
 elif st.session_state["page"] == "비교분석":
     render_comparison() # [ 10. 페이지 4 ]
 elif st.session_state["page"] == "성장스코어":
