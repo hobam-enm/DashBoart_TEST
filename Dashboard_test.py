@@ -3710,73 +3710,80 @@ def render_pre_launch_analysis():
 
     st.divider()
 
-    # --- 8. [신규] 전체 IP 사전지표 종합 테이블 (AgGrid) ---
+    # --- 8. [수정] 전체 IP 사전지표 종합 테이블 (AgGrid) ---
     st.markdown("#### 📋 전체 IP 사전지표 종합 현황")
     
-    # 1) 데이터 집계 함수
+    # 1) 데이터 집계 함수 수정
     def calculate_pre_performance(df):
         all_unique_ips = df["IP"].unique()
-        if len(all_unique_ips) == 0: return pd.DataFrame()
+        if len(all_unique_ips) == 0: return pd.DataFrame(), []
 
-        # 사전 주차 정의 (W-6 ~ W-1)
-        target_weeks = ["W-6", "W-5", "W-4", "W-3", "W-2", "W-1"]
+        # (1) 디지털 합계 (기존 동일: W-6 ~ W-1)
+        target_weeks_dig = ["W-6", "W-5", "W-4", "W-3", "W-2", "W-1"]
         
-        # (1) 디지털 합계 (조회수/언급량)
-        # 조회수: _get_view_data 유틸 활용 후 필터링
         v_sub = _get_view_data(df)
-        v_sub = v_sub[v_sub["주차"].isin(target_weeks)]
-        # value가 문자열일 수 있으므로 변환
+        v_sub = v_sub[v_sub["주차"].isin(target_weeks_dig)]
         v_sub["val"] = pd.to_numeric(v_sub["value"], errors="coerce").fillna(0)
         view_sum = v_sub.groupby("IP")["val"].sum()
 
-        b_sub = df[(df["metric"] == "언급량") & (df["주차"].isin(target_weeks))].copy()
+        b_sub = df[(df["metric"] == "언급량") & (df["주차"].isin(target_weeks_dig))].copy()
         b_sub["val"] = pd.to_numeric(b_sub["value"], errors="coerce").fillna(0)
         buzz_sum = b_sub.groupby("IP")["val"].sum()
 
-        # (2) MPI (평균값 사용)
-        def _get_metric_avg(m_name):
-            sub = df[df["metric"] == m_name].copy()
-            sub["val"] = pd.to_numeric(sub["value"], errors="coerce")
-            return sub.groupby("IP")["val"].mean()
+        # (2) [변경] 시사지표 합산
+        # SISA_MAP에 있는 모든 지표의 값을 더함
+        sisa_keys = list(SISA_MAP.keys())
+        s_sub = df[df["metric"].isin(sisa_keys)].copy()
+        s_sub["val"] = pd.to_numeric(s_sub["value"], errors="coerce").fillna(0)
+        # IP별 총합 (7개 항목 합산)
+        sisa_total = s_sub.groupby("IP")["val"].sum()
 
-        mpi_awar = _get_metric_avg("MPI_인지")
-        mpi_pref = _get_metric_avg("MPI_선호")
-        mpi_int  = _get_metric_avg("MPI_시청의향")
+        # (3) [변경] MPI 인지도 주차별 (Pivot)
+        # MPI_인지 지표만 필터링
+        m_sub = df[df["metric"] == "MPI_인지"].copy()
+        m_sub["val"] = pd.to_numeric(m_sub["value"], errors="coerce")
+        
+        # 주차별 피벗 (IP x 주차)
+        mpi_pivot = m_sub.pivot_table(index="IP", columns="주차", values="val", aggfunc="mean")
+        
+        # 표시할 주차 순서 정의 (데이터에 있는 것만 교집합으로 추림)
+        desired_mpi_weeks = ["W-6", "W-5", "W-4", "W-3", "W-2", "W-1", "W+1", "W+2"]
+        available_cols = [c for c in desired_mpi_weeks if c in mpi_pivot.columns]
+        mpi_pivot = mpi_pivot[available_cols] # 순서 정렬 및 컬럼 필터링
+        
+        # 컬럼명 변경 (ex: W-1 -> MPI_W-1)
+        mpi_pivot.columns = [f"MPI_{c}" for c in mpi_pivot.columns]
 
-        # (3) 시사지표 (항목별)
-        # SISA_MAP에 정의된 키들을 순회하며 집계
-        sisa_data = {}
-        for m_key, m_label in SISA_MAP.items():
-            sisa_data[m_label] = _get_metric_avg(m_key)
-
-        # 2) 데이터프레임 병합
-        res = pd.DataFrame({
+        # 4) 전체 병합
+        base_df = pd.DataFrame({
+            "시사합계": sisa_total,
             "사전조회수": view_sum,
-            "사전언급량": buzz_sum,
-            "MPI_인지": mpi_awar,
-            "MPI_선호": mpi_pref,
-            "MPI_의향": mpi_int,
-            **sisa_data
-        }).reindex(all_unique_ips).fillna(0) # 없는 값은 0 처리
+            "사전언급량": buzz_sum
+        })
+        
+        # MPI 컬럼들을 합침
+        merged = base_df.join(mpi_pivot, how="outer").reindex(all_unique_ips).fillna(0)
+        
+        # MPI 컬럼 리스트 반환 (AgGrid 설정용)
+        mpi_cols = list(mpi_pivot.columns)
+        
+        return merged.reset_index().rename(columns={"index": "IP"}), mpi_cols
 
-        return res.reset_index().rename(columns={"index": "IP"})
+    # 2) 테이블 데이터 생성
+    df_pre_perf, mpi_columns = calculate_pre_performance(df_all)
 
-    # 2) 테이블 생성
-    df_pre_perf = calculate_pre_performance(df_all)
-
-    # 3) AgGrid 설정 (Overview 스타일 적용)
-    # 포맷터 정의 (천단위 콤마, 소수점)
+    # 3) AgGrid 설정
     fmt_thousands = JsCode("""function(params){ if(params.value==null||isNaN(params.value))return '-'; return Math.round(params.value).toLocaleString(); }""")
     fmt_fixed1 = JsCode("""function(params){ if(params.value==null||isNaN(params.value)||params.value==0)return '-'; return Number(params.value).toFixed(1); }""")
 
-    # 선택된 IP 하이라이트 스타일
+    # 하이라이트 스타일
     highlight_jscode = JsCode(f"""
     function(params) {{
         if (params.data.IP === '{global_ip}') {{
             return {{
-                'background-color': '#fffde7',  /* 연한 노란색 */
+                'background-color': '#fffde7',
                 'font-weight': 'bold',
-                'border-left': '5px solid #d93636' /* 빨간 강조선 */
+                'border-left': '5px solid #d93636'
             }};
         }}
         return {{}};
@@ -3790,7 +3797,6 @@ def render_pre_launch_analysis():
         headerClass='centered-header'
     )
     
-    # getRowStyle 적용
     gb.configure_grid_options(
         rowHeight=34, 
         suppressMenuHide=True, 
@@ -3798,21 +3804,23 @@ def render_pre_launch_analysis():
         getRowStyle=highlight_jscode 
     )
 
-    # 컬럼별 정의
-    gb.configure_column('IP', header_name='IP', cellStyle={'textAlign':'left'}, pinned='left', width=150)
+    # [컬럼 정의 및 순서 설정]
+    # 1. IP
+    gb.configure_column('IP', header_name='IP', cellStyle={'textAlign':'left'}, pinned='left', width=140)
     
-    # 디지털
-    gb.configure_column('사전조회수', header_name='사전 조회수(Sum)', valueFormatter=fmt_thousands, width=130)
-    gb.configure_column('사전언급량', header_name='사전 언급량(Sum)', valueFormatter=fmt_thousands, width=130)
+    # 2. 시사지표 (합계)
+    gb.configure_column('시사합계', header_name='시사지표(합)', valueFormatter=fmt_fixed1, width=100)
     
-    # MPI (소수점 1자리)
-    gb.configure_column('MPI_인지', header_name='MPI 인지', valueFormatter=fmt_fixed1, width=100)
-    gb.configure_column('MPI_선호', header_name='MPI 선호', valueFormatter=fmt_fixed1, width=100)
-    gb.configure_column('MPI_의향', header_name='MPI 의향', valueFormatter=fmt_fixed1, width=100)
+    # 3. MPI 인지도 (주차별 동적 컬럼)
+    #    데이터프레임에 존재하는 MPI 컬럼만 추가
+    for col in mpi_columns:
+        # 헤더에서 "MPI_" 접두어 제거하고 "W-n"만 표시
+        header_display = col.replace("MPI_", "")
+        gb.configure_column(col, header_name=header_display, valueFormatter=fmt_fixed1, width=70)
 
-    # 시사지표 (SISA_MAP의 Value값들을 컬럼으로 가짐)
-    for m_label in SISA_MAP.values():
-        gb.configure_column(m_label, header_name=m_label.replace("시사지표_", ""), valueFormatter=fmt_fixed1, width=110)
+    # 4. 사전 디지털
+    gb.configure_column('사전조회수', header_name='사전 조회수', valueFormatter=fmt_thousands, width=110)
+    gb.configure_column('사전언급량', header_name='사전 언급량', valueFormatter=fmt_thousands, width=110)
 
     grid_options = gb.build()
 
@@ -3820,8 +3828,8 @@ def render_pre_launch_analysis():
         df_pre_perf,
         gridOptions=grid_options,
         theme="streamlit",
-        height=400, # 행이 많을 수 있으므로 높이 확보
-        fit_columns_on_grid_load=False, # 컬럼이 많으므로 가로 스크롤 허용
+        height=400,
+        fit_columns_on_grid_load=True, # [중요] 가로폭 자동 맞춤 시도
         update_mode=GridUpdateMode.NO_UPDATE,
         allow_unsafe_jscode=True
     )
