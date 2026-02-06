@@ -626,18 +626,22 @@ if not df_nav.empty and "방영시작일" in df_nav.columns:
         pass # 에러 나면 그냥 가나다순(all_ips[0]) 유지
 
 with st.sidebar:
-    render_gradient_title("드라마 성과 대시보드", emoji="")
+    render_gradient_title("드라마 성과 대시보드", emoji="") # (폰트 키운 버전 적용됨)
     
-    if "global_ip" not in st.session_state or st.session_state["global_ip"] not in all_ips:
-        if default_ip:
-            st.session_state["global_ip"] = default_ip
+    # 1. 세션 상태 초기화 (없으면 None으로 설정)
+    if "global_ip" not in st.session_state:
+        st.session_state["global_ip"] = None
 
     if all_ips:
+        # 2. 현재 선택된 IP의 인덱스 찾기 (없거나 None이면 idx는 None)
+        current_ip = st.session_state.get("global_ip")
+        idx = all_ips.index(current_ip) if current_ip in all_ips else None
+
         selected_global_ip = st.selectbox(
             "분석할 IP를 선택하세요",
             all_ips,
-            # 현재 선택된 IP가 목록에 있으면 그 인덱스, 아니면 최신작 인덱스
-            index=all_ips.index(st.session_state["global_ip"]) if st.session_state["global_ip"] in all_ips else all_ips.index(default_ip),
+            index=idx,                       # None이면 placeholder가 보임
+            placeholder="IP를 선택해주세요",   # 디폴트 안내 문구
             key="global_ip_select",
             label_visibility="collapsed"
         )
