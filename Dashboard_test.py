@@ -3706,6 +3706,125 @@ def render_pre_launch_analysis():
     c_d1, c_d2 = st.columns(2)
     with c_d1: _draw_trend_line_chart("조회수", "조회수 합계", WEEKS_DIGITAL)
     with c_d2: _draw_trend_line_chart("언급량", "언급량 합계", WEEKS_DIGITAL)
+
+
+    st.divider()
+
+    # --- 8. [신규] 전체 IP 사전지표 종합 테이블 (AgGrid) ---
+    st.markdown("#### 📋 전체 IP 사전지표 종합 현황")
+    
+    # 1) 데이터 집계 함수
+    def calculate_pre_performance(df):
+        all_unique_ips = df["IP"].unique()
+        if len(all_unique_ips) == 0: return pd.DataFrame()
+
+        # 사전 주차 정의 (W-6 ~ W-1)
+        target_weeks = ["W-6", "W-5", "W-4", "W-3", "W-2", "W-1"]
+        
+        # (1) 디지털 합계 (조회수/언급량)
+        # 조회수: _get_view_data 유틸 활용 후 필터링
+        v_sub = _get_view_data(df)
+        v_sub = v_sub[v_sub["주차"].isin(target_weeks)]
+        # value가 문자열일 수 있으므로 변환
+        v_sub["val"] = pd.to_numeric(v_sub["value"], errors="coerce").fillna(0)
+        view_sum = v_sub.groupby("IP")["val"].sum()
+
+        b_sub = df[(df["metric"] == "언급량") & (df["주차"].isin(target_weeks))].copy()
+        b_sub["val"] = pd.to_numeric(b_sub["value"], errors="coerce").fillna(0)
+        buzz_sum = b_sub.groupby("IP")["val"].sum()
+
+        # (2) MPI (평균값 사용)
+        def _get_metric_avg(m_name):
+            sub = df[df["metric"] == m_name].copy()
+            sub["val"] = pd.to_numeric(sub["value"], errors="coerce")
+            return sub.groupby("IP")["val"].mean()
+
+        mpi_awar = _get_metric_avg("MPI_인지")
+        mpi_pref = _get_metric_avg("MPI_선호")
+        mpi_int  = _get_metric_avg("MPI_시청의향")
+
+        # (3) 시사지표 (항목별)
+        # SISA_MAP에 정의된 키들을 순회하며 집계
+        sisa_data = {}
+        for m_key, m_label in SISA_MAP.items():
+            sisa_data[m_label] = _get_metric_avg(m_key)
+
+        # 2) 데이터프레임 병합
+        res = pd.DataFrame({
+            "사전조회수": view_sum,
+            "사전언급량": buzz_sum,
+            "MPI_인지": mpi_awar,
+            "MPI_선호": mpi_pref,
+            "MPI_의향": mpi_int,
+            **sisa_data
+        }).reindex(all_unique_ips).fillna(0) # 없는 값은 0 처리
+
+        return res.reset_index().rename(columns={"index": "IP"})
+
+    # 2) 테이블 생성
+    df_pre_perf = calculate_pre_performance(df_all)
+
+    # 3) AgGrid 설정 (Overview 스타일 적용)
+    # 포맷터 정의 (천단위 콤마, 소수점)
+    fmt_thousands = JsCode("""function(params){ if(params.value==null||isNaN(params.value))return '-'; return Math.round(params.value).toLocaleString(); }""")
+    fmt_fixed1 = JsCode("""function(params){ if(params.value==null||isNaN(params.value)||params.value==0)return '-'; return Number(params.value).toFixed(1); }""")
+
+    # 선택된 IP 하이라이트 스타일
+    highlight_jscode = JsCode(f"""
+    function(params) {{
+        if (params.data.IP === '{global_ip}') {{
+            return {{
+                'background-color': '#fffde7',  /* 연한 노란색 */
+                'font-weight': 'bold',
+                'border-left': '5px solid #d93636' /* 빨간 강조선 */
+            }};
+        }}
+        return {{}};
+    }}
+    """)
+
+    gb = GridOptionsBuilder.from_dataframe(df_pre_perf)
+    gb.configure_default_column(
+        sortable=True, resizable=True, filter=False,
+        cellStyle={'textAlign': 'center'},
+        headerClass='centered-header'
+    )
+    
+    # getRowStyle 적용
+    gb.configure_grid_options(
+        rowHeight=34, 
+        suppressMenuHide=True, 
+        domLayout='normal',
+        getRowStyle=highlight_jscode 
+    )
+
+    # 컬럼별 정의
+    gb.configure_column('IP', header_name='IP', cellStyle={'textAlign':'left'}, pinned='left', width=150)
+    
+    # 디지털
+    gb.configure_column('사전조회수', header_name='사전 조회수(Sum)', valueFormatter=fmt_thousands, width=130)
+    gb.configure_column('사전언급량', header_name='사전 언급량(Sum)', valueFormatter=fmt_thousands, width=130)
+    
+    # MPI (소수점 1자리)
+    gb.configure_column('MPI_인지', header_name='MPI 인지', valueFormatter=fmt_fixed1, width=100)
+    gb.configure_column('MPI_선호', header_name='MPI 선호', valueFormatter=fmt_fixed1, width=100)
+    gb.configure_column('MPI_의향', header_name='MPI 의향', valueFormatter=fmt_fixed1, width=100)
+
+    # 시사지표 (SISA_MAP의 Value값들을 컬럼으로 가짐)
+    for m_label in SISA_MAP.values():
+        gb.configure_column(m_label, header_name=m_label.replace("시사지표_", ""), valueFormatter=fmt_fixed1, width=110)
+
+    grid_options = gb.build()
+
+    AgGrid(
+        df_pre_perf,
+        gridOptions=grid_options,
+        theme="streamlit",
+        height=400, # 행이 많을 수 있으므로 높이 확보
+        fit_columns_on_grid_load=False, # 컬럼이 많으므로 가로 스크롤 허용
+        update_mode=GridUpdateMode.NO_UPDATE,
+        allow_unsafe_jscode=True
+    )
     
 # =====================================================
 #endregion
