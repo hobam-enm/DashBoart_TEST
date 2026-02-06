@@ -3752,7 +3752,7 @@ def render_pre_launch_analysis():
         mpi_pivot = mpi_pivot[available_cols] # 순서 정렬 및 컬럼 필터링
         
         # 컬럼명 변경 (ex: W-1 -> MPI_W-1)
-        mpi_pivot.columns = [f"MPI_{c}" for c in mpi_pivot.columns]
+        mpi_pivot.columns = [f"MPI인지도_{c}" for c in mpi_pivot.columns]
 
         # 4) 전체 병합
         base_df = pd.DataFrame({
