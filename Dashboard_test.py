@@ -3453,13 +3453,14 @@ def render_growth_score():
         AgGrid(table_view.fillna("–"), gridOptions=gb.build(), theme="streamlit", height=420, fit_columns_on_grid_load=True, update_mode=GridUpdateMode.NO_UPDATE, allow_unsafe_jscode=True)
 
 # =====================================================
-# [수정] 7. 사전지표 분석 페이지 렌더러 (v2.0)
+# [수정] 7. 사전지표 분석 페이지 렌더러 (v2.1 - 집계방식 SUM 수정)
 def render_pre_launch_analysis():
     df_all = load_data()
     
-    C_TARGET = "#283593"  # Deep Indigo (Main)
-    C_PREV   = "#78909C"  # Blue Grey (Sub)
-    C_GROUP  = "#EEEEEE"  # Very Light Grey (Base)
+    # --- 1. 색상 및 스타일 정의 ---
+    C_TARGET = "#283593"  # Target (Deep Indigo)
+    C_PREV   = "#78909C"  # Previous (Blue Grey)
+    C_GROUP  = "#EEEEEE"  # Group (Light Grey)
     
     # --- 2. 분석 대상 지표 설정 ---
     METRICS_SISA = [
@@ -3467,12 +3468,9 @@ def render_pre_launch_analysis():
         "시사지표_연출", "시사지표_장르", "시사지표_전개", "시사지표_캐릭터"
     ]
     
-    # (2) Trend Chart: 디지털 (W-6 ~ W-1)
+    # [설정] 디지털/MPI 분석 기간
     WEEKS_DIGITAL = ["W-6", "W-5", "W-4", "W-3", "W-2", "W-1"]
-    
-    # (3) Trend Chart: MPI (W-6 ~ W+2)
-    WEEKS_MPI = ["W-6", "W-5", "W-4", "W-3", "W-2", "W-1", "W+1", "W+2"] 
-    # (데이터에 W0이나 방영주차가 있다면 리스트에 추가 필요)
+    WEEKS_MPI = ["W-6", "W-5", "W-4", "W-3", "W-2", "W-1", "W+1", "W+2"]
 
     # --- 3. 사이드바 / 헤더 ---
     global_ip = st.session_state.get("global_ip")
@@ -3488,14 +3486,15 @@ def render_pre_launch_analysis():
         st.markdown("<div class='gd-guideline'>", unsafe_allow_html=True)
         st.markdown(textwrap.dedent("""
             **사전지표 안내**
-            - **시사지표**: 사전시사 각 항목별 점수
+            - **시사지표**: 사전 시사를 통해 수집된 항목별 평가 점수
+            - **MPI (Marketing Power Index)**: 초기 인지/선호/시청의향 조사 결과 (W-6 ~ W+2)
             - **사전 디지털 반응**: 
-                - 디지털 언급량 : 방영주차(월~일) 내 총합 / 커뮤니티,트위터,블로그
-                - 디지털 조회 : 방영주간 월~일 발생 총합 / 유튜브,인스타그램,틱톡,네이버TV,페이스
+                - 집계 기준: **주차별 총합(Sum)** (IP 성과 페이지 그래프와 동일)
+                - 집계 기간: 방영 6주 전(W-6) ~ 1주 전(W-1)
         """).strip())
         st.markdown("</div>", unsafe_allow_html=True)
 
-    # --- 4. 비교군 필터링 (기존 로직 유지) ---
+    # --- 4. 비교군 필터링 ---
     target_row = df_all[df_all["IP"] == global_ip]
     default_year = []
     default_prog = None
@@ -3537,8 +3536,8 @@ def render_pre_launch_analysis():
 
     # --- 6. 시각화 헬퍼 함수 ---
 
+    # (A) 시사지표 (Bar)
     def _draw_sisa_bar(metric_list):
-        """시사지표 (Bar Chart) - Scalar 비교"""
         def _get_metric_mean(df, m_list):
             if df.empty: return {m: 0 for m in m_list}
             sub = df[df["metric"].isin(m_list)].copy()
@@ -3567,10 +3566,7 @@ def render_pre_launch_analysis():
             color_discrete_map={global_ip: C_TARGET, prev_label: C_PREV, group_label: C_GROUP},
             text="값"
         )
-        fig.update_traces(
-            texttemplate='%{text:.1f}', textposition='outside',
-            width=0.25 # 막대 두께 조절
-        )
+        fig.update_traces(texttemplate='%{text:.1f}', textposition='outside', width=0.25)
         fig.update_layout(
             height=300, margin=dict(t=30, b=10),
             xaxis_title=None, yaxis_title=None,
@@ -3580,29 +3576,50 @@ def render_pre_launch_analysis():
         st.markdown("###### 📊 시사지표 상세")
         st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
 
+    # (B) 트렌드 차트 (Line) - 집계방식 SUM 적용
+    def _fmt_kor_local(x):
+        """큰 숫자 포맷팅 (억/만)"""
+        if pd.isna(x) or x == 0: return "0"
+        val = int(x)
+        if val >= 100000000:
+            uk = val // 100000000
+            man = (val % 100000000) // 10000
+            return f"{uk}억{man}만" if man > 0 else f"{uk}억"
+        elif val >= 10000:
+            return f"{val // 10000}만"
+        return f"{val}"
+
     def _draw_trend_line_chart(metric_name, title, target_weeks, value_fmted=False):
-        """공통 트렌드 차트 (Line) - 조회수/언급량/MPI 통합"""
         
-        # [핵심] 데이터 추출 로직 분기
         def _fetch_trend_data(df_src, m_name):
             if df_src.empty: return pd.Series(dtype=float)
 
-            # 1. '조회수'인 경우 -> IP성과 상세와 동일한 로직(_get_view_data) 사용
+            # 1. 데이터 필터링 (조회수: 유튜브 규칙 적용 / 언급량: 단순 필터)
             if m_name == "조회수":
-                sub = _get_view_data(df_src) # [중요] 필터링된 데이터 가져오기
+                sub = _get_view_data(df_src) # [재사용] IP성과 페이지와 동일한 필터링
             else:
                 sub = df_src[df_src["metric"] == m_name].copy()
 
-            # 2. 주차 필터링 (Target Weeks에 있는 것만)
-            # 데이터의 '주차' 컬럼이 문자열(W-6 등)이라고 가정
+            # 2. 주차 필터링
             if "주차" in sub.columns:
                 sub = sub[sub["주차"].isin(target_weeks)]
             
-            # 3. 값 집계 (평균)
+            # 3. 집계: [수정] mean() -> sum()
+            # IP 성과 페이지의 그래프와 동일하게 '총합'을 보여줍니다.
             sub["val"] = pd.to_numeric(sub["value"], errors="coerce")
-            grp = sub.groupby("주차")["val"].mean()
             
-            # 4. 정렬 (Target Weeks 리스트 순서대로)
+            # (참고) 그룹 데이터의 경우:
+            # 여러 IP가 섞여 있으므로, 먼저 IP별로 합산(Sum)하고 -> 그 다음 IP들의 평균(Mean)을 내는 것이 논리적입니다.
+            # 하지만 여기서는 직관적인 비교를 위해 단순 '그룹 전체 평균' 보다는
+            # '그룹 내 개별 IP들의 주차별 평균값'으로 처리합니다.
+            
+            # A. 개별 IP별, 주차별 합계 계산 (동일 주차 내 매체 합산)
+            ip_weekly_sum = sub.groupby(["IP", "주차"])["val"].sum().reset_index()
+            
+            # B. 주차별 '평균' 계산 (타겟 IP는 1개라 그대로 유지, 그룹은 N개 IP의 평균)
+            grp = ip_weekly_sum.groupby("주차")["val"].mean()
+            
+            # 4. 정렬
             sorter = {k: v for v, k in enumerate(target_weeks)}
             return grp.sort_index(key=lambda x: x.map(sorter))
 
@@ -3616,15 +3633,15 @@ def render_pre_launch_analysis():
 
         fig = go.Figure()
 
-        # (1) Group (Background)
+        # (1) Group (배경)
         fig.add_trace(go.Scatter(
             x=s_group.index, y=s_group.values, mode='lines',
             name=group_label, 
-            line=dict(color=C_GROUP, width=2), # 점선 제거, 연한 실선으로 배경 처리
+            line=dict(color=C_GROUP, width=2),
             hoverinfo='name+y'
         ))
         
-        # (2) Previous Work
+        # (2) Previous (비교)
         fig.add_trace(go.Scatter(
             x=s_prev.index, y=s_prev.values, mode='lines+markers',
             name=prev_label, 
@@ -3632,8 +3649,13 @@ def render_pre_launch_analysis():
             marker=dict(size=6)
         ))
 
-        # (3) Target (Highlight)
-        text_vals = [f"{v:,.0f}" if value_fmted else f"{v:.1f}" for v in s_target.values]
+        # (3) Target (메인)
+        # 텍스트 포맷팅 (큰 숫자면 억/만 단위, 아니면 소수점)
+        if value_fmted:
+            text_vals = [_fmt_kor_local(v) for v in s_target.values]
+        else:
+            text_vals = [f"{v:.1f}" for v in s_target.values]
+
         fig.add_trace(go.Scatter(
             x=s_target.index, y=s_target.values, mode='lines+markers+text',
             name=global_ip, 
@@ -3648,7 +3670,7 @@ def render_pre_launch_analysis():
             height=280, margin=dict(t=40, b=20, l=10, r=10),
             legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
             xaxis=dict(categoryorder="array", categoryarray=target_weeks, showgrid=False),
-            yaxis=dict(showgrid=True, gridcolor='#f0f0f0', zeroline=False, showticklabels=False), # Y축 숫자 숨김(깔끔하게)
+            yaxis=dict(showgrid=True, gridcolor='#f0f0f0', zeroline=False, showticklabels=False),
             plot_bgcolor='rgba(0,0,0,0)',
             hovermode="x unified"
         )
@@ -3656,12 +3678,12 @@ def render_pre_launch_analysis():
 
     # --- 7. 화면 배치 ---
     
-    # [Row 1] 시사지표 (전체 너비 사용)
+    # [Row 1] 시사지표
     _draw_sisa_bar(METRICS_SISA)
     
     st.markdown("---")
     
-    # [Row 2] MPI 시리즈 (3열) -> W-6 ~ W+2
+    # [Row 2] MPI 시리즈
     st.markdown("###### 🧠 MPI (Marketing Power Index) 추이")
     c_m1, c_m2, c_m3 = st.columns(3)
     with c_m1: _draw_trend_line_chart("MPI_인지", "인지도", WEEKS_MPI)
@@ -3670,12 +3692,11 @@ def render_pre_launch_analysis():
 
     st.markdown("---")
 
-    # [Row 3] 디지털 반응 (2열) -> W-6 ~ W-1
+    # [Row 3] 디지털 반응 (Sum 적용됨)
     st.markdown("###### 💻 사전 디지털 반응 (W-6 ~ W-1)")
     c_d1, c_d2 = st.columns(2)
     with c_d1: _draw_trend_line_chart("조회수", "조회수 합계", WEEKS_DIGITAL, value_fmted=True)
     with c_d2: _draw_trend_line_chart("언급량", "언급량 합계", WEEKS_DIGITAL, value_fmted=True)
-
 
 # =====================================================
 #endregion
