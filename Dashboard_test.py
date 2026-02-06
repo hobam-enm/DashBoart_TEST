@@ -3772,7 +3772,7 @@ def render_pre_launch_analysis():
     # 2) 테이블 데이터 생성
     df_pre_perf, mpi_columns = calculate_pre_performance(df_all)
 
-    # 3) AgGrid 설정
+    # 3) AgGrid 설정 (컬럼 그룹핑 적용)
     fmt_thousands = JsCode("""function(params){ if(params.value==null||isNaN(params.value))return '-'; return Math.round(params.value).toLocaleString(); }""")
     fmt_fixed1 = JsCode("""function(params){ if(params.value==null||isNaN(params.value)||params.value==0)return '-'; return Number(params.value).toFixed(1); }""")
 
@@ -3790,46 +3790,84 @@ def render_pre_launch_analysis():
     }}
     """)
 
+    # 기본 옵션 빌드
     gb = GridOptionsBuilder.from_dataframe(df_pre_perf)
     gb.configure_default_column(
         sortable=True, resizable=True, filter=False,
         cellStyle={'textAlign': 'center'},
         headerClass='centered-header'
     )
-    
     gb.configure_grid_options(
         rowHeight=34, 
         suppressMenuHide=True, 
         domLayout='normal',
         getRowStyle=highlight_jscode 
     )
+    
+    # -------------------------------------------------------
+    # [핵심 변경] 컬럼 정의(columnDefs)를 직접 구성하여 그룹핑 구현
+    # -------------------------------------------------------
+    
+    # 1. 고정 컬럼들 (IP, 시사, 디지털)
+    custom_defs = [
+        {
+            "headerName": "IP", 
+            "field": "IP", 
+            "pinned": "left", 
+            "width": 140, 
+            "cellStyle": {'textAlign': 'left'}
+        },
+        {
+            "headerName": "시사지표(합)", 
+            "field": "시사합계", 
+            "valueFormatter": fmt_fixed1, 
+            "width": 90
+        },
+        {
+            "headerName": "사전 조회수", 
+            "field": "사전조회수", 
+            "valueFormatter": fmt_thousands, 
+            "width": 100
+        },
+        {
+            "headerName": "사전 언급량", 
+            "field": "사전언급량", 
+            "valueFormatter": fmt_thousands, 
+            "width": 100
+        }
+    ]
 
-    # [컬럼 정의 및 순서 설정]
-    # 1. IP
-    gb.configure_column('IP', header_name='IP', cellStyle={'textAlign':'left'}, pinned='left', width=140)
-    
-    # 2. 시사지표 (합계)
-    gb.configure_column('시사합계', header_name='시사지표(합)', valueFormatter=fmt_fixed1, width=100)
-    
-    # 3. MPI 인지도 (주차별 동적 컬럼)
-    #    데이터프레임에 존재하는 MPI 컬럼만 추가
+    # 2. MPI 그룹 컬럼 생성 (children 속성 사용)
+    mpi_children = []
     for col in mpi_columns:
-        # 헤더에서 "MPI_" 접두어 제거하고 "W-n"만 표시
-        header_display = col.replace("MPI_", "")
-        gb.configure_column(col, header_name=header_display, valueFormatter=fmt_fixed1, width=70)
+        mpi_children.append({
+            "headerName": col.replace("MPI_", ""), # "MPI_W-6" -> "W-6"로 표시
+            "field": col,
+            "valueFormatter": fmt_fixed1,
+            "width": 60, # 폭을 좁게 설정
+            "cellStyle": {'textAlign': 'center'}
+        })
 
-    # 4. 사전 디지털
-    gb.configure_column('사전조회수', header_name='사전 조회수', valueFormatter=fmt_thousands, width=110)
-    gb.configure_column('사전언급량', header_name='사전 언급량', valueFormatter=fmt_thousands, width=110)
+    # MPI 그룹을 custom_defs에 추가
+    if mpi_children:
+        custom_defs.append({
+            "headerName": "MPI 인지도", # 상위 헤더
+            "children": mpi_children,   # 하위 컬럼들
+            "headerClass": "centered-header"
+        })
 
+    # 3. gridOptions 빌드 후 columnDefs 덮어쓰기
     grid_options = gb.build()
+    grid_options['columnDefs'] = custom_defs
+
+    # -------------------------------------------------------
 
     AgGrid(
         df_pre_perf,
         gridOptions=grid_options,
         theme="streamlit",
         height=400,
-        fit_columns_on_grid_load=True, # [중요] 가로폭 자동 맞춤 시도
+        fit_columns_on_grid_load=True, 
         update_mode=GridUpdateMode.NO_UPDATE,
         allow_unsafe_jscode=True
     )
