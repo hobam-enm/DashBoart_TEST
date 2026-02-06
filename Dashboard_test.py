@@ -3710,15 +3710,15 @@ def render_pre_launch_analysis():
 
     st.divider()
 
-    # --- 8. [수정] 전체 IP 사전지표 종합 테이블 (AgGrid) ---
+    # --- 8. [최종 수정] 전체 IP 사전지표 종합 테이블 (AgGrid) ---
     st.markdown("#### 📋 전체 IP 사전지표 종합 현황")
     
-    # 1) 데이터 집계 함수 수정
+    # 1) 데이터 집계 함수
     def calculate_pre_performance(df):
         all_unique_ips = df["IP"].unique()
         if len(all_unique_ips) == 0: return pd.DataFrame(), []
 
-        # (1) 디지털 합계 (기존 동일: W-6 ~ W-1)
+        # (1) 디지털 합계
         target_weeks_dig = ["W-6", "W-5", "W-4", "W-3", "W-2", "W-1"]
         
         v_sub = _get_view_data(df)
@@ -3730,28 +3730,23 @@ def render_pre_launch_analysis():
         b_sub["val"] = pd.to_numeric(b_sub["value"], errors="coerce").fillna(0)
         buzz_sum = b_sub.groupby("IP")["val"].sum()
 
-        # (2) [변경] 시사지표 합산
-        # SISA_MAP에 있는 모든 지표의 값을 더함
+        # (2) 시사지표 합산
         sisa_keys = list(SISA_MAP.keys())
         s_sub = df[df["metric"].isin(sisa_keys)].copy()
         s_sub["val"] = pd.to_numeric(s_sub["value"], errors="coerce").fillna(0)
-        # IP별 총합 (7개 항목 합산)
         sisa_total = s_sub.groupby("IP")["val"].sum()
 
-        # (3) [변경] MPI 인지도 주차별 (Pivot)
-        # MPI_인지 지표만 필터링
+        # (3) MPI 인지도 주차별 (Pivot)
         m_sub = df[df["metric"] == "MPI_인지"].copy()
         m_sub["val"] = pd.to_numeric(m_sub["value"], errors="coerce")
         
-        # 주차별 피벗 (IP x 주차)
         mpi_pivot = m_sub.pivot_table(index="IP", columns="주차", values="val", aggfunc="mean")
         
-        # 표시할 주차 순서 정의 (데이터에 있는 것만 교집합으로 추림)
         desired_mpi_weeks = ["W-6", "W-5", "W-4", "W-3", "W-2", "W-1", "W+1", "W+2"]
         available_cols = [c for c in desired_mpi_weeks if c in mpi_pivot.columns]
-        mpi_pivot = mpi_pivot[available_cols] # 순서 정렬 및 컬럼 필터링
+        mpi_pivot = mpi_pivot[available_cols] 
         
-        # 컬럼명 변경 (ex: W-1 -> MPI_W-1)
+        # [중요] 데이터프레임 컬럼명을 'MPI인지도_W-n' 형식으로 생성
         mpi_pivot.columns = [f"MPI인지도_{c}" for c in mpi_pivot.columns]
 
         # 4) 전체 병합
@@ -3761,10 +3756,7 @@ def render_pre_launch_analysis():
             "사전언급량": buzz_sum
         })
         
-        # MPI 컬럼들을 합침
         merged = base_df.join(mpi_pivot, how="outer").reindex(all_unique_ips).fillna(0)
-        
-        # MPI 컬럼 리스트 반환 (AgGrid 설정용)
         mpi_cols = list(mpi_pivot.columns)
         
         return merged.reset_index().rename(columns={"index": "IP"}), mpi_cols
@@ -3772,11 +3764,10 @@ def render_pre_launch_analysis():
     # 2) 테이블 데이터 생성
     df_pre_perf, mpi_columns = calculate_pre_performance(df_all)
 
-    # 3) AgGrid 설정 (컬럼 그룹핑 적용)
+    # 3) AgGrid 설정
     fmt_thousands = JsCode("""function(params){ if(params.value==null||isNaN(params.value))return '-'; return Math.round(params.value).toLocaleString(); }""")
     fmt_fixed1 = JsCode("""function(params){ if(params.value==null||isNaN(params.value)||params.value==0)return '-'; return Number(params.value).toFixed(1); }""")
 
-    # 하이라이트 스타일
     highlight_jscode = JsCode(f"""
     function(params) {{
         if (params.data.IP === '{global_ip}') {{
@@ -3790,7 +3781,6 @@ def render_pre_launch_analysis():
     }}
     """)
 
-    # 기본 옵션 빌드
     gb = GridOptionsBuilder.from_dataframe(df_pre_perf)
     gb.configure_default_column(
         sortable=True, resizable=True, filter=False,
@@ -3804,63 +3794,37 @@ def render_pre_launch_analysis():
         getRowStyle=highlight_jscode 
     )
     
-    # -------------------------------------------------------
-    # [핵심 변경] 컬럼 정의(columnDefs)를 직접 구성하여 그룹핑 구현
-    # -------------------------------------------------------
-    
-    # 1. 고정 컬럼들 (IP, 시사, 디지털)
+    # [그룹핑 컬럼 정의]
     custom_defs = [
-        {
-            "headerName": "IP", 
-            "field": "IP", 
-            "pinned": "left", 
-            "width": 140, 
-            "cellStyle": {'textAlign': 'left'}
-        },
-        {
-            "headerName": "시사지표(합)", 
-            "field": "시사합계", 
-            "valueFormatter": fmt_fixed1, 
-            "width": 90
-        },
-        {
-            "headerName": "사전 조회수", 
-            "field": "사전조회수", 
-            "valueFormatter": fmt_thousands, 
-            "width": 100
-        },
-        {
-            "headerName": "사전 언급량", 
-            "field": "사전언급량", 
-            "valueFormatter": fmt_thousands, 
-            "width": 100
-        }
+        { "headerName": "IP", "field": "IP", "pinned": "left", "width": 140, "cellStyle": {'textAlign': 'left'} },
+        { "headerName": "시사지표(합)", "field": "시사합계", "valueFormatter": fmt_fixed1, "width": 90 },
+        { "headerName": "사전 조회수", "field": "사전조회수", "valueFormatter": fmt_thousands, "width": 100 },
+        { "headerName": "사전 언급량", "field": "사전언급량", "valueFormatter": fmt_thousands, "width": 100 }
     ]
 
-    # 2. MPI 그룹 컬럼 생성 (children 속성 사용)
+    # MPI 그룹 생성 (children)
     mpi_children = []
     for col in mpi_columns:
+        # [핵심 수정] 데이터 컬럼명(MPI인지도_W-6)에서 접두사를 제거하여 헤더명(W-6) 생성
+        clean_header = col.replace("MPI인지도_", "")
+        
         mpi_children.append({
-            "headerName": col.replace("MPI_", ""), # "MPI_W-6" -> "W-6"로 표시
+            "headerName": clean_header, 
             "field": col,
             "valueFormatter": fmt_fixed1,
-            "width": 60, # 폭을 좁게 설정
+            "width": 60, 
             "cellStyle": {'textAlign': 'center'}
         })
 
-    # MPI 그룹을 custom_defs에 추가
     if mpi_children:
         custom_defs.append({
-            "headerName": "MPI 인지도", # 상위 헤더
-            "children": mpi_children,   # 하위 컬럼들
+            "headerName": "MPI 인지도", # 상위 그룹 헤더
+            "children": mpi_children,   # 하위 컬럼들 (W-6, W-5...)
             "headerClass": "centered-header"
         })
 
-    # 3. gridOptions 빌드 후 columnDefs 덮어쓰기
     grid_options = gb.build()
     grid_options['columnDefs'] = custom_defs
-
-    # -------------------------------------------------------
 
     AgGrid(
         df_pre_perf,
