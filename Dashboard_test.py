@@ -612,18 +612,19 @@ st.session_state["page"] = current_page
 
 # 사이드바용 데이터 로드
 df_nav = load_data()
-all_ips = sorted(df_nav["IP"].dropna().unique().tolist()) if not df_nav.empty else []
 
-default_ip = all_ips[0] if all_ips else None
+# [수정] IP 리스트 정렬: '방영시작' 기준 최신순 (컬럼명 수정 반영)
+if not df_nav.empty and "방영시작" in df_nav.columns:
+    all_ips = (
+        df_nav.groupby("IP")["방영시작"]
+        .max()
+        .sort_values(ascending=False, na_position='last') # 최신순 정렬
+        .index.tolist()
+    )
+else:
+    # '방영시작' 컬럼이 없거나 데이터가 비어있으면 기존 가나다순 유지
+    all_ips = sorted(df_nav["IP"].dropna().unique().tolist()) if not df_nav.empty else []
 
-if not df_nav.empty and "방영시작일" in df_nav.columns:
-    try:
-        # 날짜 있는 것만 추려서 -> 내림차순 정렬 -> 첫 번째 행의 IP 추출
-        latest_series = df_nav.dropna(subset=["방영시작일"]).sort_values("방영시작일", ascending=False)
-        if not latest_series.empty:
-            default_ip = latest_series.iloc[0]["IP"]
-    except:
-        pass # 에러 나면 그냥 가나다순(all_ips[0]) 유지
 
 with st.sidebar:
     render_gradient_title("드라마 성과 대시보드", emoji="") # (폰트 키운 버전 적용됨)
