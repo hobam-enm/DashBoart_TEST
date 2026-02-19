@@ -16,7 +16,8 @@ from plotly import graph_objects as go
 import plotly.io as pio
 import streamlit as st
 from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode, JsCode
-from pymongo import MongoClient
+import gspread
+from google.oauth2.service_account import Credentials
 import extra_streamlit_components as stx
 #endregion
 
@@ -398,63 +399,69 @@ pio.templates.default = 'dashboard_theme'
 #endregion
 #region [ 4. 데이터 로드 / 전처리 ]
 def load_data() -> pd.DataFrame:
+    """
+    [수정] Streamlit Secrets와 gspread를 사용하여 비공개 Google Sheet에서 데이터를 인증하고 로드합니다.
+    st.secrets에 'gcp_service_account', 'SHEET_ID', 'SHEET_NAME'이 있어야 합니다.
+    """
+    
+    # --- 1. Google Sheets 인증 ---
+    scopes = ["https://www.googleapis.com/auth/spreadsheets"]
+    
     try:
-        # 1. MongoDB 연결
-        uri = st.secrets["mongo"]["uri"]
-        db_name = st.secrets["mongo"]["db"]
-        col_name = st.secrets["mongo"]["collection"]
+        creds_info = st.secrets["gcp_service_account"]
+        creds = Credentials.from_service_account_info(creds_info, scopes=scopes)
+        client = gspread.authorize(creds)
 
-        client = MongoClient(uri)
-        db = client[db_name]
-        collection = db[col_name]
-
-        # 2. 데이터 가져오기 (전체 조회, _id 제외)
-        cursor = collection.find({}, {"_id": 0})
-        data = list(cursor)
+        # --- 2. 데이터 로드 ---
+        sheet_id = st.secrets["SHEET_ID"]
+        worksheet_name = st.secrets["SHEET_NAME"] 
         
-        if not data:
-            return pd.DataFrame()
-
+        spreadsheet = client.open_by_key(sheet_id)
+        worksheet = spreadsheet.worksheet(worksheet_name)
+        
+        data = worksheet.get_all_records() 
         df = pd.DataFrame(data)
 
+    except gspread.exceptions.WorksheetNotFound:
+        st.error(f"Streamlit Secrets의 SHEET_NAME 값 ('{worksheet_name}')에 해당하는 워크시트를 찾을 수 없습니다.")
+        return pd.DataFrame()
+    except KeyError as e:
+        st.error(f"Streamlit Secrets에 필요한 키({e})가 없습니다. TOML 설정을 확인하세요.")
+        return pd.DataFrame()
     except Exception as e:
-        st.error(f"MongoDB 데이터 로드 중 오류 발생: {e}")
+        st.error(f"Google Sheets 데이터 로드 중 오류 발생: {e}")
         return pd.DataFrame()
 
-    # --- 3. 데이터 타입 안전장치 ---
-    # 날짜 컬럼 변환
-    for col in ["주차시작일", "방영시작일"]:
-        if col in df.columns:
-            df[col] = pd.to_datetime(df[col], errors="coerce")
+    # --- 3. 데이터 전처리 (원본 코드와 동일) ---
+    if "주차시작일" in df.columns:
+        df["주차시작일"] = pd.to_datetime(
+            df["주차시작일"].astype(str).str.strip(),
+            format="%Y. %m. %d", 
+            errors="coerce"
+        )
+    if "방영시작일" in df.columns:
+        df["방영시작일"] = pd.to_datetime(
+            df["방영시작일"].astype(str).str.strip(),
+            format="%Y. %m. %d", 
+            errors="coerce"
+        )
 
-    # 숫자 컬럼 변환 (결측치 0 처리)
     if "value" in df.columns:
-        df["value"] = pd.to_numeric(df["value"], errors="coerce").fillna(0)
+        v = df["value"].astype(str).str.replace(",", "", regex=False).str.replace("%", "", regex=False)
+        df["value"] = pd.to_numeric(v, errors="coerce").fillna(0)
 
-    # 문자열 공백 제거
-    str_cols = ["IP", "편성", "지표구분", "매체", "데모", "metric", "회차", "주차"]
-    existing_cols = [c for c in str_cols if c in df.columns]
-    if existing_cols:
-        df[existing_cols] = df[existing_cols].astype(str).apply(lambda x: x.str.strip())
+    for c in ["IP", "편성", "지표구분", "매체", "데모", "metric", "회차", "주차"]:
+        if c in df.columns:
+            df[c] = df[c].astype(str).str.strip() 
 
-    # 회차_numeric 안전장치
-    if "회차_numeric" not in df.columns:
+    if "회차" in df.columns:
+        df["회차_numeric"] = df["회차"].str.extract(r"(\d+)", expand=False).astype(float)
+    else:
         df["회차_numeric"] = pd.NA
-    # 표준 컬럼: 지표명 정규화(metric_norm)
-    if "metric" in df.columns and "metric_norm" not in df.columns:
-        def _normalize_metric_for_load(s):
-            s2 = re.sub(r"[^A-Za-z0-9가-힣]+", "", str(s)).lower()
-            return s2
-        df["metric_norm"] = df["metric"].apply(_normalize_metric_for_load)
-    # 표준 컬럼: 회차 숫자(ep_num) (회차_numeric 기반)
-    # 사용)
-    if "ep_num" not in df.columns:
-        df["ep_num"] = pd.to_numeric(df["회차_numeric"], errors="coerce") if "회차_numeric" in df.columns else pd.NA
-
     return df
 
-# ===== 3.2. UI / 포맷팅 헬퍼 함수 =====
 
+# ===== 3.x. 공통 필터: 방영 시작일이 '미래'인 IP 제외 (평균/순위 산정용) =====
 def fmt(v, digits=3, intlike=False):
     """
     숫자 포맷팅 헬퍼 (None이나 NaN은 '–'로 표시)
