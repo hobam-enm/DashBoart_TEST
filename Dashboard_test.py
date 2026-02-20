@@ -4418,7 +4418,7 @@ def render_pre_launch_analysis():
                 ]},
             ]
 
-            go = {
+            grid_options = {
                 "columnDefs": column_defs,
                 "defaultColDef": {"resizable": True, "sortable": True, "filter": True},
                 "domLayout": "normal",
@@ -4427,7 +4427,7 @@ def render_pre_launch_analysis():
 
             AgGrid(
                 grid,
-                gridOptions=go,
+                gridOptions=grid_options,
                 height=420,
                 fit_columns_on_grid_load=False,
                 allow_unsafe_jscode=True,
