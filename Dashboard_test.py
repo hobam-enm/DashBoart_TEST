@@ -1373,15 +1373,26 @@ def render_ip_detail():
 
     # [Col 2] 동일 편성 여부 (셀렉트박스)
     with filter_cols[2]:
+        comp_options = ["동일 편성", "전체", "월화", "수목", "토일", "평일"]
+        default_comp = "평일" if (sel_prog == "수목") else "동일 편성"
         comp_type = st.selectbox(
             "편성 기준",
-            ["동일 편성", "전체"], 
-            index=0,
+            comp_options,
+            index=comp_options.index(default_comp),
             label_visibility="collapsed"
         )
+
         use_same_prog = (comp_type == "동일 편성")
 
-    # --- 선택 IP 데이터 필터링 ---
+        # 비교 그룹 편성 필터(없으면 전체)
+        comp_prog_filter = None
+        if comp_type == "평일":
+            comp_prog_filter = ["월화", "수목"]
+        elif comp_type in ["월화", "수목", "토일"]:
+            comp_prog_filter = [comp_type]
+        elif use_same_prog:
+            comp_prog_filter = [sel_prog] if sel_prog else None
+# --- 선택 IP 데이터 필터링 ---
     f = target_ip_rows.copy()
 
     if "회차_numeric" in f.columns:
@@ -1403,13 +1414,20 @@ def render_ip_detail():
     base_raw = df_full.copy()
     group_name_parts = []
 
-    # 1. 동일 편성 필터
-    if use_same_prog:
-        if sel_prog:
-            base_raw = base_raw[base_raw["편성"] == sel_prog]
-            group_name_parts.append(f"'{sel_prog}'")
-        else:
+    # 1. 편성 기준 필터
+    if comp_prog_filter is not None:
+        # '동일 편성'인데 IP 편성 정보가 없으면, 필터를 건너뜀
+        if use_same_prog and not sel_prog:
             st.warning(f"'{ip_selected}'의 편성 정보가 없어 '동일 편성' 기준은 제외됩니다.", icon="⚠️")
+        else:
+            base_raw = base_raw[base_raw["편성"].isin(comp_prog_filter)]
+
+            if comp_type == "평일":
+                group_name_parts.append("'평일(월화+수목)'")
+            elif comp_type in ["월화", "수목", "토일"]:
+                group_name_parts.append(f"'{comp_type}'")
+            elif use_same_prog and sel_prog:
+                group_name_parts.append(f"'{sel_prog}'")
 
     # 2. 방영 연도 필터
     if selected_years:
@@ -2829,6 +2847,7 @@ def render_comparison():
     else: 
         # 기준 IP 정보 자동 로드
         base_ip_info_rows = df_all[df_all["IP"] == selected_ip1]
+        base_ip_prog = base_ip_info_rows["편성"].dropna().mode().iloc[0] if (("편성" in base_ip_info_rows.columns) and (not base_ip_info_rows["편성"].dropna().empty)) else None
         
         all_years = []
         if "편성연도" in df_all.columns:
@@ -2842,12 +2861,16 @@ def render_comparison():
             if not y_mode.empty: default_year_list = [y_mode.iloc[0]]
 
         with filter_cols[2]:
+            comp_options = ["동일 편성", "전체", "월화", "수목", "토일", "평일"]
+            default_comp = "평일" if (base_ip_prog == "수목") else "동일 편성"
             comp_type = st.selectbox(
-                "동일 편성 기준", ["동일 편성", "전체"], index=0,
-                key="comp_prog_page4", label_visibility="collapsed"
+                "편성 기준",
+                comp_options,
+                index=comp_options.index(default_comp),
+                key="comp_prog_page4",
+                label_visibility="collapsed"
             )
             use_same_prog = (comp_type == "동일 편성")
-
         with filter_cols[3]:
             selected_years = st.multiselect(
                 "방영 연도", all_years, default=default_year_list,
@@ -2884,13 +2907,29 @@ def render_comparison():
         group_name_parts = []
         df_comp = df_all.copy()
         ip_prog = df_target["편성"].dropna().mode().iloc[0] if not df_target["편성"].dropna().empty else None
-        
-        if use_same_prog: 
-            if ip_prog:
-                df_comp = df_comp[df_comp["편성"] == ip_prog]
-                group_name_parts.append(f"'{ip_prog}'")
-            else: st.warning("편성 정보 없음 (제외)")
-        
+
+        # 편성 기준 필터(없으면 전체)
+        comp_prog_filter = None
+        if comp_type == "평일":
+            comp_prog_filter = ["월화", "수목"]
+        elif comp_type in ["월화", "수목", "토일"]:
+            comp_prog_filter = [comp_type]
+        elif comp_type == "동일 편성":
+            comp_prog_filter = [ip_prog] if ip_prog else None
+
+        if comp_prog_filter is not None:
+            if (comp_type == "동일 편성") and (not ip_prog):
+                st.warning("편성 정보 없음 (제외)")
+            else:
+                df_comp = df_comp[df_comp["편성"].isin(comp_prog_filter)]
+
+                if comp_type == "평일":
+                    group_name_parts.append("'평일(월화+수목)'")
+                elif comp_type in ["월화", "수목", "토일"]:
+                    group_name_parts.append(f"'{comp_type}'")
+                elif comp_type == "동일 편성" and ip_prog:
+                    group_name_parts.append(f"'{ip_prog}'")
+
         if selected_years:
             df_comp = df_comp[df_comp["편성연도"].isin(selected_years)]
             if len(selected_years) <= 3:
