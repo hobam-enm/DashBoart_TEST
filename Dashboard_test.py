@@ -3797,6 +3797,9 @@ def render_pre_launch_analysis():
             sisa_wide = pd.DataFrame(index=meta.index, columns=sisa_keys).fillna(0)
 
         # ---- (2) MPI 3종: 주차별 -> 요약 피처 ----
+        # [중요] 일부 IP는 W-3까지만 존재하는 등 주차가 덜 채워진 경우가 있음.
+        # 이때 '존재하는 주차만' 평균/기울기를 내면 과대평가될 수 있으므로,
+        # 항상 W-6~W-1의 고정 6주 프레임으로 맞춘 뒤(누락=0) 요약 피처를 만든다.
         mpi_metrics = ["MPI_인지", "MPI_선호", "MPI_시청의향"]
         mpi_weeks = ["W-6", "W-5", "W-4", "W-3", "W-2", "W-1"]
 
@@ -3806,34 +3809,34 @@ def render_pre_launch_analysis():
         if not mpi_sub.empty:
             mpi_sub["val"] = pd.to_numeric(mpi_sub["value"], errors="coerce")
             mpi_pv = mpi_sub.pivot_table(index="IP", columns=["metric", "주차"], values="val", aggfunc="mean")
+
             for m in mpi_metrics:
-                cols = [(m, w) for w in mpi_weeks if (m, w) in mpi_pv.columns]
-                if not cols:
-                    continue
-                tmp = mpi_pv[cols].copy()
-                tmp.columns = [f"{m}_{w}" for _, w in cols]
+                # 고정 6주 컬럼 프레임 생성 (누락=0)
+                fixed_cols = [f"{m}_{w}" for w in mpi_weeks]
+                tmp = pd.DataFrame(index=meta.index, columns=fixed_cols, dtype=float).fillna(0.0)
+
+                # 존재하는 주차만 채우기
+                for w in mpi_weeks:
+                    key = (m, w)
+                    if key in mpi_pv.columns:
+                        tmp[f"{m}_{w}"] = mpi_pv[key].reindex(meta.index).fillna(0.0)
 
                 # level (W-1)
-                if f"{m}_W-1" in tmp.columns:
-                    mpi_wide_all[f"{m}_level_W-1"] = tmp[f"{m}_W-1"].fillna(0)
+                mpi_wide_all[f"{m}_level_W-1"] = tmp[f"{m}_W-1"]
 
-                # mean level (W-6~W-1)
-                mpi_wide_all[f"{m}_mean_W-6_W-1"] = tmp.fillna(0).mean(axis=1)
+                # mean level (W-6~W-1)  ※ 항상 6주 평균
+                mpi_wide_all[f"{m}_mean_W-6_W-1"] = tmp.mean(axis=1)
 
-                # momentum: W-1 - W-3
-                w1 = tmp.get(f"{m}_W-1")
-                w3 = tmp.get(f"{m}_W-3")
-                if w1 is not None and w3 is not None:
-                    mpi_wide_all[f"{m}_mom_W-1_minus_W-3"] = (w1.fillna(0) - w3.fillna(0))
+                # momentum: W-1 - W-3 (누락=0 처리 후 계산)
+                mpi_wide_all[f"{m}_mom_W-1_minus_W-3"] = tmp[f"{m}_W-1"] - tmp[f"{m}_W-3"]
 
-                # slope across weeks
-                vals = tmp.fillna(0).values
-                if vals.shape[1] >= 2:
-                    x = np.arange(vals.shape[1])
-                    x_mean = x.mean()
-                    denom = ((x - x_mean) ** 2).sum()
-                    slope = ((vals * (x - x_mean)).sum(axis=1) / denom) if denom != 0 else np.zeros(vals.shape[0])
-                    mpi_wide_all[f"{m}_slope_W-6_W-1"] = slope
+                # slope across fixed weeks (W-6~W-1)
+                vals = tmp.values  # shape: (n_ip, 6)
+                x = np.arange(vals.shape[1], dtype=float)  # 0..5
+                x_mean = x.mean()
+                denom = ((x - x_mean) ** 2).sum()
+                slope = ((vals * (x - x_mean)).sum(axis=1) / denom) if denom != 0 else np.zeros(vals.shape[0])
+                mpi_wide_all[f"{m}_slope_W-6_W-1"] = slope
 
         mpi_wide_all = mpi_wide_all.fillna(0)
 
