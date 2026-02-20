@@ -3995,36 +3995,19 @@ def render_pre_launch_analysis():
             try:
                 scaler = model.named_steps["scaler"]
                 ridge = model.named_steps["ridge"]
-                x_scaled = scaler.transform(x_ip.values)[0]
-                coefs = ridge.coef_
-                contrib_vals = coefs * x_scaled
 
-                contrib_df = pd.DataFrame({"feature": feature_cols, "contribution": contrib_vals})
-                contrib_df["pretty"] = contrib_df["feature"].apply(_pretty_name)
-                contrib_df["abs"] = np.abs(contrib_df["contribution"])
-                contrib_df = contrib_df.sort_values("abs", ascending=False).drop(columns=["abs"])
-                
                 def _grp(feat: str) -> str:
                     """변수를 4개 그룹(사전 디지털/언급, 시사지표, MPI, 보정)으로 강제 분류"""
                     f = str(feat)
-
-                    # 1) 시사지표
                     if f.startswith("시사지표_"):
                         return "시사지표"
-
-                    # 2) MPI (3종 + 파생)
                     if f.startswith("MPI_"):
                         return "MPI"
-
-                    # 3) 사전 디지털/언급 (조회수/언급량 + 파생)
-                    # - log1p_*, slog_* 는 모두 사전 디지털/언급으로
+                    # 사전 디지털/언급: 조회/언급 + 파생(log1p_/slog_)
                     if f.startswith("log1p_") or f.startswith("slog_"):
                         return "사전 디지털/언급"
-                    # - 키워드 기반(조회/조회수/언급)
                     if ("조회" in f) or ("조회수" in f) or ("언급" in f) or ("언급량" in f):
                         return "사전 디지털/언급"
-
-                    # 4) 보정(커버리지/수축 등)
                     return "보정"
 
                 def _pretty_name(feat: str) -> str:
@@ -4037,16 +4020,9 @@ def render_pre_launch_analysis():
 
                     # --- MPI ---
                     if f.startswith("MPI_"):
-                        # 예: MPI_인지_mom_W-1_minus_W-3  ->  MPI 인지: 최근변화 (W-1 - W-3)
-                        # 예: MPI_시청의향_level_W-1      ->  MPI 시청의향: 수준 (W-1)
                         s = f.replace("MPI_", "")
                         parts = s.split("_")
-
-                        # 타입(인지/선호/시청의향)
                         mpi_kind = parts[0] if parts else s
-
-                        # 나머지 토큰에서 feature type 찾기
-                        # level/mean/mom/slope
                         label_map = {"level": "수준", "mean": "평균", "mom": "최근변화", "slope": "추세"}
                         feat_type = None
                         for k in ["level", "mean", "mom", "slope"]:
@@ -4054,11 +4030,8 @@ def render_pre_launch_analysis():
                                 feat_type = k
                                 break
 
-                        # 주차 정보(예: W-6_W-1 / W-1_minus_W-3)
                         week_txt = ""
-                        if "W-6" in f and "W-1" in f and "sum" in f:
-                            week_txt = "(W-6~W-1)"
-                        if "W-6" in f and "W-1" in f and ("mean" in f or "slope" in f):
+                        if "W-6" in f and "W-1" in f and ("sum" in f or "mean" in f or "slope" in f):
                             week_txt = "(W-6~W-1)"
                         if "W-1_minus_W-3" in f:
                             week_txt = "(W-1 - W-3)"
@@ -4070,44 +4043,44 @@ def render_pre_launch_analysis():
 
                     # --- 보정(커버리지 등) ---
                     if "week_coverage" in f:
-                        # 예: 조회수_week_coverage_W-6_W-1 -> 보정: 조회수 주차커버리지 (W-6~W-1)
                         base = f.replace("_week_coverage_", " 주차커버리지 ")
                         base = base.replace("_W-6_W-1", " (W-6~W-1)")
                         base = base.replace("_", " ")
                         return f"보정: {base}"
 
                     # --- 사전 디지털/언급 ---
-                    # log1p_조회수_sum_W-6_W-1  -> 사전: 조회수 총량 (W-6~W-1)
-                    if f.startswith("log1p_"):
-                        s = f.replace("log1p_", "")
+                    def _pretty_common(s: str) -> str:
                         s = s.replace("_W-6_W-1", " (W-6~W-1)")
                         s = s.replace("_W-1_minus_W-3", " (W-1 - W-3)")
                         s = s.replace("_W-1", " (W-1)")
                         s = s.replace("_", " ")
                         s = s.replace("sum", "총량").replace("level", "마지막값").replace("mom", "최근변화").replace("slope", "추세").replace("minus", "-")
-                        return f"사전: {s}"
+                        return s
 
+                    if f.startswith("log1p_"):
+                        return f"사전: {_pretty_common(f.replace('log1p_', ''))}"
                     if f.startswith("slog_"):
                         s = f.replace("slog_", "")
-                        s = s.replace("_W-6_W-1", " (W-6~W-1)")
-                        s = s.replace("_W-1_minus_W-3", " (W-1 - W-3)")
-                        s = s.replace("_W-1", " (W-1)")
-                        s = s.replace("_", " ")
-                        s = s.replace("mom", "최근변화").replace("minus", "-")
+                        s = _pretty_common(s).replace("총량", "총량").replace("마지막값", "마지막값")
                         return f"사전: {s}"
 
-                    # 그 외 조회/언급 키워드가 들어가면 사전으로 표시
                     if ("조회" in f) or ("조회수" in f) or ("언급" in f) or ("언급량" in f):
-                        s = f.replace("_W-6_W-1", " (W-6~W-1)")
-                        s = s.replace("_W-1_minus_W-3", " (W-1 - W-3)")
-                        s = s.replace("_W-1", " (W-1)")
-                        s = s.replace("_", " ")
-                        s = s.replace("sum", "총량").replace("level", "마지막값").replace("mom", "최근변화").replace("minus", "-")
-                        return f"사전: {s}"
+                        return f"사전: {_pretty_common(f)}"
 
                     return f
 
+                x_scaled = scaler.transform(x_ip.values)[0]
+                coefs = ridge.coef_
+                contrib_vals = coefs * x_scaled
+
+                contrib_df = pd.DataFrame({"feature": feature_cols, "contribution": contrib_vals})
                 contrib_df["group"] = contrib_df["feature"].apply(_grp)
+                contrib_df["pretty"] = contrib_df["feature"].apply(_pretty_name)
+
+                # sort by absolute contribution (for display)
+                contrib_df["_abs"] = contrib_df["contribution"].abs()
+                contrib_df = contrib_df.sort_values("_abs", ascending=False).drop(columns=["_abs"])
+
                 group_contrib_df = (
                     contrib_df.groupby("group")["contribution"]
                     .sum()
@@ -4119,6 +4092,7 @@ def render_pre_launch_analysis():
             except Exception:
                 contrib_df = None
                 group_contrib_df = None
+
 
         meta = {
             "total_ip_cnt": total_ip_cnt,
