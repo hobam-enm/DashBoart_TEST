@@ -3920,7 +3920,7 @@ def render_pre_launch_analysis():
         """
         from sklearn.pipeline import Pipeline
         from sklearn.preprocessing import StandardScaler
-        from sklearn.linear_model import Ridge
+        from sklearn.linear_model import Lasso  # ===== 수정: Ridge -> Lasso =====
         from sklearn.metrics import mean_absolute_error
 
         # --- counts for UI ---
@@ -3947,7 +3947,7 @@ def render_pre_launch_analysis():
         # ----- Fit once on ALL labelled data -----
         model = Pipeline([
             ("scaler", StandardScaler(with_mean=True, with_std=True)),
-            ("ridge", Ridge(alpha=1.0, random_state=42)),
+            ("lasso", Lasso(alpha=0.1, random_state=42)),  # ===== 수정: Ridge -> Lasso, alpha 0.1 =====
         ])
 
         X_all = trainable[feature_cols].replace([np.inf, -np.inf], 0).fillna(0)
@@ -3995,7 +3995,7 @@ def render_pre_launch_analysis():
             # contributions (linear, scaled)
             try:
                 scaler = model.named_steps["scaler"]
-                ridge = model.named_steps["ridge"]
+                lasso = model.named_steps["lasso"]  # ===== 수정: ridge -> lasso =====
 
                 def _grp(feat: str) -> str:
                     """변수를 4개 그룹(사전 디지털/언급, 시사지표, MPI, 보정)으로 강제 분류"""
@@ -4071,7 +4071,7 @@ def render_pre_launch_analysis():
                     return f
 
                 x_scaled = scaler.transform(x_ip.values)[0]
-                coefs = ridge.coef_
+                coefs = lasso.coef_  # ===== 수정: ridge.coef_ -> lasso.coef_ =====
                 contrib_vals = coefs * x_scaled
 
                 contrib_df = pd.DataFrame({"feature": feature_cols, "contribution": contrib_vals})
@@ -4117,7 +4117,7 @@ def render_pre_launch_analysis():
     try:
         from sklearn.pipeline import Pipeline
         from sklearn.preprocessing import StandardScaler
-        from sklearn.linear_model import Ridge
+        from sklearn.linear_model import Lasso  # ===== 수정: Ridge -> Lasso =====
     except Exception as _e:
         raise ModuleNotFoundError(
             "scikit-learn is required for the multi-model predictor. "
@@ -4244,7 +4244,7 @@ def render_pre_launch_analysis():
 
         pipe = Pipeline([
             ("scaler", StandardScaler(with_mean=True, with_std=True)),
-            ("ridge", Ridge(alpha=10.0, random_state=42)),
+            ("lasso", Lasso(alpha=0.1, random_state=42)),  # ===== 수정: Ridge -> Lasso, alpha 0.1 =====
         ])
         pipe.fit(X, y_log)
 
