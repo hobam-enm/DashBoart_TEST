@@ -4371,12 +4371,60 @@ def render_pre_launch_analysis():
             for c in ["오차(W-3)","오차(W-2)","오차(W-1)"]:
                 acc[c] = acc[c].map(lambda v: f"{v:.1f}%" if pd.notna(v) else "-")
 
-            view = acc[["IP","W-3기반예측","오차(W-3)","W-2기반예측","오차(W-2)","W-1기반예측(최종)","오차(W-1)","실제"]].copy()
+            # --- Display table (grouped columns) ---
+            view = acc[["IP","실제","W-3기반예측","W-2기반예측","W-1기반예측(최종)","오차(W-3)","오차(W-2)","오차(W-1)"]].copy()
+
             # sort by final error (desc)
-            _sort = pd.to_numeric(acc["오차(W-1)"].astype(str).str.replace("%","",regex=False), errors="coerce")
+            _sort = pd.to_numeric(view["오차(W-1)"].astype(str).str.replace("%","",regex=False), errors="coerce")
             view["_sort"] = _sort
             view = view.sort_values("_sort", ascending=False).drop(columns=["_sort"])
-            st.dataframe(view, use_container_width=True, hide_index=True, height=420)
+
+            # build MultiIndex columns for grouped headers: 예측 / 오차
+            disp = view.rename(columns={
+                "W-3기반예측": "W-3",
+                "W-2기반예측": "W-2",
+                "W-1기반예측(최종)": "W-1(최종)",
+                "오차(W-3)": "W-3",
+                "오차(W-2)": "W-2",
+                "오차(W-1)": "W-1",
+            }).copy()
+
+            disp.columns = pd.MultiIndex.from_tuples([
+                ("", "IP"),
+                ("실제", "화제성(W1)"),
+                ("예측", "W-3"),
+                ("예측", "W-2"),
+                ("예측", "W-1(최종)"),
+                ("오차", "W-3"),
+                ("오차", "W-2"),
+                ("오차", "W-1"),
+            ])
+
+            # highlight '실제' column
+            styler = disp.style.set_properties(
+                subset=[("실제","화제성(W1)")],
+                **{"background-color": "#FFF2CC", "font-weight": "700"}
+            )
+
+            # keep non-IP columns visually similar width
+            col_cfg = {
+                ("", "IP"): st.column_config.Column("IP", width="large"),
+                ("실제","화제성(W1)"): st.column_config.Column("실제", width="small"),
+                ("예측","W-3"): st.column_config.Column("W-3예측", width="small"),
+                ("예측","W-2"): st.column_config.Column("W-2예측", width="small"),
+                ("예측","W-1(최종)"): st.column_config.Column("W-1예측", width="small"),
+                ("오차","W-3"): st.column_config.Column("W-3오차", width="small"),
+                ("오차","W-2"): st.column_config.Column("W-2오차", width="small"),
+                ("오차","W-1"): st.column_config.Column("W-1오차", width="small"),
+            }
+
+            st.dataframe(
+                styler,
+                use_container_width=True,
+                hide_index=True,
+                height=420,
+                column_config=col_cfg,
+            )
     st.divider()
 
     # --- 8. [최종 수정] 전체 IP 사전지표 종합 테이블 (AgGrid) ---
