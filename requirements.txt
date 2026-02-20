@@ -12,3 +12,4 @@ extra_streamlit_components
 pymongo
 dnspython
 oauth2client
+scikit-learn
