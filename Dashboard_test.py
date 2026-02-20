@@ -4000,24 +4000,56 @@ def render_pre_launch_analysis():
                 contrib_vals = coefs * x_scaled
 
                 contrib_df = pd.DataFrame({"feature": feature_cols, "contribution": contrib_vals})
+                contrib_df["pretty"] = contrib_df["feature"].apply(_pretty_name)
                 contrib_df["abs"] = np.abs(contrib_df["contribution"])
                 contrib_df = contrib_df.sort_values("abs", ascending=False).drop(columns=["abs"])
-
                 def _grp(feat: str) -> str:
+                    # 그룹 분류: 기타 제거(모든 변수는 아래 4그룹 중 하나로 강제 분류)
                     if feat.startswith("시사지표_"):
                         return "시사지표"
                     if feat.startswith("MPI_"):
                         return "MPI"
-                    if feat.startswith("조회수_") or feat.startswith("언급량_") or feat.startswith("log1p_"):
+                    if ("week_coverage" in feat) or ("coverage" in feat):
+                        return "보정"
+                    # 디지털/언급 계열 (조회수/언급량/로그 피처 포함)
+                    if ("조회수" in feat) or ("언급" in feat) or feat.startswith("log1p_") or feat.startswith("slog_"):
                         return "사전 디지털/언급"
-                    return "기타"
+                    # 남는 것은 보정으로 처리
+                    return "보정"
+
+                def _pretty_name(feat: str) -> str:
+                    """개발자틱 변수명을 사용자 친화 라벨로 변환(표시용)"""
+                    if feat.startswith("시사지표_"):
+                        return feat.replace("시사지표_", "시사지표: ")
+                    if feat.startswith("MPI_"):
+                        base = feat.replace("MPI_", "MPI: ").replace("_", " ")
+                        base = base.replace(" level ", " (수준) ").replace(" mean ", " (평균) ").replace(" mom ", " (최근변화) ").replace(" slope ", " (추세) ")
+                        base = base.replace("minus", "-")
+                        return base
+                    if "week_coverage" in feat:
+                        t = feat.replace("_week_coverage_", " 주차커버리지 ").replace("_", " ")
+                        return f"보정: {t}"
+                    if feat.startswith("log1p_"):
+                        t = feat.replace("log1p_", "").replace("_", " ")
+                        t = t.replace("sum", "총량").replace("level", "마지막값").replace("mom", "최근변화").replace("slope", "추세").replace("minus", "-")
+                        return f"사전: {t} (log)"
+                    if feat.startswith("slog_"):
+                        t = feat.replace("slog_", "").replace("_", " ")
+                        t = t.replace("mom", "최근변화").replace("minus", "-")
+                        return f"사전: {t} (signed log)"
+                    if ("조회수" in feat) or ("언급" in feat):
+                        t = feat.replace("_", " ").replace("mom", "최근변화").replace("sum", "총량").replace("level", "마지막값").replace("minus", "-")
+                        return f"사전: {t}"
+                    return feat
 
                 contrib_df["group"] = contrib_df["feature"].apply(_grp)
                 group_contrib_df = (
                     contrib_df.groupby("group")["contribution"]
                     .sum()
                     .reset_index()
-                    .sort_values("contribution", ascending=False)
+                    .assign(_abs=lambda d: d["contribution"].abs())
+                    .sort_values("_abs", ascending=False)
+                    .drop(columns=["_abs"])
                 )
             except Exception:
                 contrib_df = None
@@ -4052,23 +4084,23 @@ def render_pre_launch_analysis():
     if pred_val is None:
         st.info(f"예측 모델을 만들기 위한 방영작 학습 데이터가 충분하지 않습니다. ({target_week} 화제성 데이터가 더 필요합니다)")
     else:
-        c_pred1, c_pred2 = st.columns([2, 3])
-        with c_pred1:
-            st.markdown(f"""
-            <div class="kpi-card" style="padding:16px 14px;">
-                <div class="kpi-title">예측 화제성점수 ({target_week})</div>
-                <div class="kpi-value" style="font-size:34px; margin-top:6px;">{pred_val:,.0f}</div>
-                <div style="color:#111827; font-size:13px; margin-top:8px;">
-                    실제 화제성점수 ({target_week}): <b>{(f"{actual_val:,.0f}" if actual_val is not None else "방영전입니다")}</b>
-                </div>
-                <div style="color:#6b7280; font-size:12.5px; margin-top:6px; line-height:1.35;">
-                    사전지표(W-6~W-1)만 사용해 1주차 화제성점수를 통계모델로 추정했습니다.<br/>
-                    데이터가 누적되면 모델이 재학습되어 지표 영향도가 업데이트됩니다.
-                </div>
+                # ---- 예측 결과(한 행 전체) ----
+        st.markdown(f"""
+        <div class="kpi-card" style="padding:16px 14px;">
+            <div class="kpi-title">예측 화제성점수 ({target_week})</div>
+            <div class="kpi-value" style="font-size:34px; margin-top:6px;">{pred_val:,.0f}</div>
+            <div style="color:#111827; font-size:13px; margin-top:8px;">
+                실제 화제성점수 ({target_week}): <b>{(f"{actual_val:,.0f}" if actual_val is not None else "방영전입니다")}</b>
             </div>
-            """, unsafe_allow_html=True)
+            <div style="color:#6b7280; font-size:12.5px; margin-top:6px; line-height:1.35;">
+                사전지표(W-6~W-1)만 사용해 1주차 화제성점수를 통계모델로 추정했습니다.<br/>
+                데이터가 누적되면 모델이 재학습되어 지표 영향도가 업데이트됩니다.
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
 
-        with c_pred2:
+        # ---- 예측 기여 요인(접힘/펼침) ----
+        with st.expander("예측 기여 요인 보기", expanded=False):
             if group_contrib_df is not None and not group_contrib_df.empty:
                 st.markdown("###### 예측에 기여한 요인(그룹 합)")
                 view = group_contrib_df.copy()
@@ -4076,12 +4108,15 @@ def render_pre_launch_analysis():
                 view = view.rename(columns={"group": "그룹"})[["그룹", "기여(+) / 감소(-)"]]
                 st.dataframe(view, use_container_width=True, hide_index=True)
 
-            with st.expander("상세: 주요 기여 변수 Top 8", expanded=False):
-                if contrib_df is not None and not contrib_df.empty:
-                    top = contrib_df.head(8).copy()
-                    top["기여(+) / 감소(-)"] = top["contribution"].apply(lambda v: f"{v:+.3f}")
-                    top = top.rename(columns={"feature": "변수", "group": "그룹"})[["변수", "그룹", "기여(+) / 감소(-)"]]
-                    st.dataframe(top, use_container_width=True, hide_index=True)
+            if contrib_df is not None and not contrib_df.empty:
+                st.markdown("###### 상세 기여 변수(전체)")
+                allv = contrib_df.copy()
+                # 기여 절대값 기준으로 높은 순 정렬(이미 정렬되어 있지만 안전하게)
+                allv["abs"] = allv["contribution"].abs()
+                allv = allv.sort_values("abs", ascending=False).drop(columns=["abs"])
+                allv["기여(+) / 감소(-)"] = allv["contribution"].apply(lambda v: f"{v:+.3f}")
+                allv = allv.rename(columns={"pretty": "변수", "group": "그룹"})[["변수", "그룹", "기여(+) / 감소(-)"]]
+                st.dataframe(allv, use_container_width=True, hide_index=True)
 
     st.markdown("#### ✅ 예측 정확도(방영작 검증)")
     if all_pred_df is None or all_pred_df.empty:
