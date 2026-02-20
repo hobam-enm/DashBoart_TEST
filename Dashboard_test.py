@@ -3979,6 +3979,15 @@ def render_pre_launch_analysis():
                 # 예측값 클리핑(학습 데이터 분포 기준) - 극단 과대예측 방지
                 y_p05, y_p95 = np.percentile(y_all_raw, [5, 95])
                 pred_ip_val = float(np.clip(pred_ip_val, y_p05, y_p95))
+                # 주차 커버리지(데이터 누락) 보정: W-3까지만 존재 등 커버리지가 낮으면 중앙값 쪽으로 수축
+                try:
+                    cov_cols = [c for c in x_ip.columns if "week_coverage" in c]
+                    cov = float(min([float(x_ip.iloc[0][c]) for c in cov_cols])) if cov_cols else 1.0
+                    if cov < 0.75:
+                        y_med = float(np.median(y_all_raw))
+                        pred_ip_val = float(0.7 * pred_ip_val + 0.3 * y_med)
+                except Exception:
+                    pass
             except Exception:
                 pred_ip_val = None
 
