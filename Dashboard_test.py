@@ -3902,12 +3902,24 @@ def render_pre_launch_analysis():
         from sklearn.linear_model import Ridge
         from sklearn.metrics import mean_absolute_error
 
+        # --- counts for UI ---
+        total_ip_cnt = int(frame["IP"].nunique()) if "IP" in frame.columns else 0
+
         trainable = frame[pd.to_numeric(frame[target_col], errors="coerce").notna()].copy()
         trainable[target_col] = pd.to_numeric(trainable[target_col], errors="coerce")
         trainable = trainable.dropna(subset=[target_col])
+        target_ip_cnt = int(trainable["IP"].nunique()) if "IP" in trainable.columns else int(trainable.shape[0])
 
+        # minimum guard (too few supervised labels)
         if trainable.shape[0] < 12:
-            return None, None, None, None, None
+            meta = {
+                "total_ip_cnt": total_ip_cnt,
+                "target_ip_cnt": target_ip_cnt,
+                "feature_ready_cnt": target_ip_cnt,
+                "trainable_rows": int(trainable.shape[0]),
+                "note": "insufficient_labels",
+            }
+            return None, None, None, None, None, meta
 
         # split key
         if "방영시작_dt" in trainable.columns and trainable["방영시작_dt"].notna().sum() >= 8:
@@ -3940,6 +3952,14 @@ def render_pre_launch_analysis():
         y_pred = model.predict(X_test)
         test_df["_pred"] = y_pred
         mae = float(mean_absolute_error(test_df[target_col].values, y_pred))
+
+        # predict for ALL labeled IPs (train + test) for display
+        all_df = trainable.copy()
+        X_disp = all_df[feature_cols].replace([np.inf, -np.inf], 0).fillna(0)
+        all_df["_pred"] = model.predict(X_disp)
+        all_df["_split"] = "TRAIN"
+        if not test_df.empty:
+            all_df.loc[all_df["IP"].isin(test_df["IP"].unique()), "_split"] = "TEST"
 
         # full model for prediction
         model_full = Pipeline([
@@ -3981,10 +4001,31 @@ def render_pre_launch_analysis():
             contrib_df["group"] = contrib_df["feature"].apply(_grp)
             group_contrib_df = contrib_df.groupby("group")["contribution"].sum().reset_index().sort_values("contribution", ascending=False)
 
-        return test_df, mae, pred_ip_val, contrib_df, group_contrib_df
+        meta = {
+            "total_ip_cnt": total_ip_cnt,
+            "target_ip_cnt": target_ip_cnt,
+            "feature_ready_cnt": target_ip_cnt,  # we impute missing features -> ready == labeled
+            "trainable_rows": int(trainable.shape[0]),
+            "n_test": int(n_test),
+            "note": "ok",
+        }
+
+        return all_df, mae, pred_ip_val, contrib_df, group_contrib_df, meta
 
     model_frame, feature_cols, target_col, target_week = build_prelaunch_model_frame(df_all)
-    test_df, mae, pred_val, contrib_df, group_contrib_df = fit_and_predict_mvp(model_frame, feature_cols, target_col, global_ip)
+    all_pred_df, mae, pred_val, contrib_df, group_contrib_df, pred_meta = fit_and_predict_mvp(model_frame, feature_cols, target_col, global_ip)
+
+    # actual value (if already aired / has target_week score)
+    actual_val = None
+    try:
+        _a = df_all[(df_all.get("metric") == "F_Score") & (df_all.get("주차") == target_week) & (df_all.get("IP") == global_ip)].copy()
+        if not _a.empty:
+            _a["__v"] = pd.to_numeric(_a.get("value"), errors="coerce")
+            if _a["__v"].notna().any():
+                actual_val = float(_a["__v"].dropna().iloc[-1])
+    except Exception:
+        actual_val = None
+
 
     st.markdown(f"#### 🔮 1주차({target_week}) 화제성점수 예측")
     if pred_val is None:
@@ -3995,7 +4036,10 @@ def render_pre_launch_analysis():
             st.markdown(f"""
             <div class="kpi-card" style="padding:16px 14px;">
                 <div class="kpi-title">예측 화제성점수 ({target_week})</div>
-                <div class="kpi-value" style="font-size:34px; margin-top:6px;">{pred_val:,.1f}</div>
+                <div class="kpi-value" style="font-size:34px; margin-top:6px;">{pred_val:,.0f}</div>
+                <div style="color:#111827; font-size:13px; margin-top:8px;">
+                    실제 화제성점수 ({target_week}): <b>{(f"{actual_val:,.0f}" if actual_val is not None else "방영전입니다")}</b>
+                </div>
                 <div style="color:#6b7280; font-size:12.5px; margin-top:6px; line-height:1.35;">
                     사전지표(W-6~W-1)만 사용해 1주차 화제성점수를 통계모델로 추정했습니다.<br/>
                     데이터가 누적되면 모델이 재학습되어 지표 영향도가 업데이트됩니다.
@@ -4019,15 +4063,48 @@ def render_pre_launch_analysis():
                     st.dataframe(top, use_container_width=True, hide_index=True)
 
     st.markdown("#### ✅ 예측 정확도(방영작 검증)")
-    if test_df is None or test_df.empty:
+    if all_pred_df is None or all_pred_df.empty:
         st.info("검증용 데이터가 없습니다.")
+        if isinstance(pred_meta, dict) and pred_meta.get("note") == "insufficient_labels":
+            st.caption(
+                f"전체 IP: **{pred_meta.get('total_ip_cnt', 0):,}개** · "
+                f"{target_week} 실제값 보유 IP: **{pred_meta.get('target_ip_cnt', 0):,}개** (학습 최소 12개 필요)"
+            )
     else:
-        st.caption(f"최근 작품 홀드아웃 기준 MAE(평균절대오차): **{mae:,.2f}**")
-        disp = test_df[["IP", "_pred", target_col]].copy()
-        disp = disp.rename(columns={"_pred": f"예측({target_week})", target_col: f"실제({target_week})"})
-        disp["오차(절대)"] = np.abs(disp[f"예측({target_week})"] - disp[f"실제({target_week})"])
-        disp = disp.sort_values("오차(절대)", ascending=False)
-        st.dataframe(disp, use_container_width=True, hide_index=True)
+        # headline counts
+        if isinstance(pred_meta, dict):
+            st.caption(
+                f"전체 IP: **{pred_meta.get('total_ip_cnt', 0):,}개** · "
+                f"{target_week} 실제값 보유 IP: **{pred_meta.get('target_ip_cnt', 0):,}개** · "
+                f"표시(예측/실제 비교 가능): **{pred_meta.get('feature_ready_cnt', 0):,}개**"
+            )
+
+        # test-set MAPE (recent holdout)
+        _test = all_pred_df[all_pred_df.get("_split") == "TEST"].copy()
+        if not _test.empty:
+            _y = pd.to_numeric(_test[target_col], errors="coerce")
+            _p = pd.to_numeric(_test["_pred"], errors="coerce")
+            _pe = np.where(_y.notna() & (_y != 0) & _p.notna(), np.abs(_p - _y) / np.abs(_y) * 100.0, np.nan)
+            mape = float(np.nanmean(_pe)) if np.isfinite(_pe).any() else float("nan")
+            st.caption(f"참고: 최근 작품 홀드아웃 기준 MAPE(평균오차율): **{mape:,.1f}%**")
+
+        disp = all_pred_df[["IP", "_split", "_pred", target_col]].copy()
+        disp = disp.rename(columns={"_pred": f"예측({target_week})", target_col: f"실제({target_week})", "_split": "구분"})
+
+        # no decimals for score
+        disp[f"예측({target_week})"] = pd.to_numeric(disp[f"예측({target_week})"], errors="coerce").round(0).astype("Int64")
+        disp[f"실제({target_week})"] = pd.to_numeric(disp[f"실제({target_week})"], errors="coerce").round(0).astype("Int64")
+
+        # percent error
+        _a = pd.to_numeric(disp[f"실제({target_week})"], errors="coerce")
+        _pp = pd.to_numeric(disp[f"예측({target_week})"], errors="coerce")
+        _pct = np.where(_a.notna() & (_a != 0) & _pp.notna(), (np.abs(_pp - _a) / np.abs(_a) * 100.0), np.nan)
+        disp["오차(%)"] = _pct
+        disp["_sort"] = disp["오차(%)"]
+        disp["오차(%)"] = disp["오차(%)"].map(lambda v: (f"{v:.1f}%" if pd.notna(v) else "-"))
+
+        disp = disp.sort_values("_sort", ascending=False).drop(columns=["_sort"])
+        st.dataframe(disp[["IP", "구분", f"예측({target_week})", f"실제({target_week})", "오차(%)"]], use_container_width=True, hide_index=True)
 
 
     st.divider()
