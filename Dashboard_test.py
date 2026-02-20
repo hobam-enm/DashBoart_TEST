@@ -3894,8 +3894,11 @@ def render_pre_launch_analysis():
         return frame.reset_index().rename(columns={"index": "IP"}), feature_cols, f"y_{target_week}_화제성", target_week
 
     def fit_and_predict_mvp(frame: pd.DataFrame, feature_cols: list[str], target_col: str, target_ip: str):
-        """(1) 방영작 검증용: 시간기준 홀드아웃 예측
-        (2) 신규 IP 예측용: 전체 방영작으로 학습 후 target_ip 예측
+        """예측(운영 단순화: ALL-TRAIN)
+
+        - 학습: 타깃(예: F_Score, W1)이 존재하는 모든 IP를 사용해 1회 학습
+        - 검증표: (참고용) 동일 데이터 기준 예측 vs 실제를 전 IP에 대해 표시
+        - 신규 IP: target_ip에 대해 예측값과 간단한 기여도(선형 계수 기반)를 제공
         """
         from sklearn.pipeline import Pipeline
         from sklearn.preprocessing import StandardScaler
@@ -3904,72 +3907,42 @@ def render_pre_launch_analysis():
 
         # --- counts for UI ---
         total_ip_cnt = int(frame["IP"].nunique()) if "IP" in frame.columns else 0
-
+        # labelled rows (have target)
         trainable = frame[pd.to_numeric(frame[target_col], errors="coerce").notna()].copy()
         trainable[target_col] = pd.to_numeric(trainable[target_col], errors="coerce")
         trainable = trainable.dropna(subset=[target_col])
+
         target_ip_cnt = int(trainable["IP"].nunique()) if "IP" in trainable.columns else int(trainable.shape[0])
+        feature_any_cnt = int(frame[feature_cols].notna().any(axis=1).sum()) if len(feature_cols) > 0 else 0
 
         # minimum guard (too few supervised labels)
         if trainable.shape[0] < 12:
             meta = {
                 "total_ip_cnt": total_ip_cnt,
                 "target_ip_cnt": target_ip_cnt,
-                "feature_ready_cnt": target_ip_cnt,
+                "feature_ready_cnt": feature_any_cnt,
                 "trainable_rows": int(trainable.shape[0]),
                 "note": "insufficient_labels",
             }
             return None, None, None, None, None, meta
 
-        # split key
-        if "방영시작_dt" in trainable.columns and trainable["방영시작_dt"].notna().sum() >= 8:
-            trainable = trainable.sort_values("방영시작_dt")
-        elif "편성연도" in trainable.columns:
-            trainable["_year"] = pd.to_numeric(trainable["편성연도"], errors="coerce")
-            trainable = trainable.sort_values("_year")
-        else:
-            trainable = trainable.sort_values("IP")
-
-        n = trainable.shape[0]
-        n_test = int(round(n * 0.2))
-        n_test = max(8, n_test)
-        n_test = min(30, n_test) if n >= 30 else min(n_test, n - 4)
-        n_test = max(1, n_test)
-
-        test_df = trainable.iloc[-n_test:].copy()
-        train_df = trainable.iloc[:-n_test].copy()
-
+        # ----- Fit once on ALL labelled data -----
         model = Pipeline([
             ("scaler", StandardScaler(with_mean=True, with_std=True)),
-            ("ridge", Ridge(alpha=1.0, random_state=42))
+            ("ridge", Ridge(alpha=1.0, random_state=42)),
         ])
 
-        X_train = train_df[feature_cols].replace([np.inf, -np.inf], 0).fillna(0)
-        y_train = train_df[target_col].values
-        model.fit(X_train, y_train)
-
-        X_test = test_df[feature_cols].replace([np.inf, -np.inf], 0).fillna(0)
-        y_pred = model.predict(X_test)
-        test_df["_pred"] = y_pred
-        mae = float(mean_absolute_error(test_df[target_col].values, y_pred))
-
-        # predict for ALL labeled IPs (train + test) for display
-        all_df = trainable.copy()
-        X_disp = all_df[feature_cols].replace([np.inf, -np.inf], 0).fillna(0)
-        all_df["_pred"] = model.predict(X_disp)
-        all_df["_split"] = "TRAIN"
-        if not test_df.empty:
-            all_df.loc[all_df["IP"].isin(test_df["IP"].unique()), "_split"] = "TEST"
-
-        # full model for prediction
-        model_full = Pipeline([
-            ("scaler", StandardScaler(with_mean=True, with_std=True)),
-            ("ridge", Ridge(alpha=1.0, random_state=42))
-        ])
         X_all = trainable[feature_cols].replace([np.inf, -np.inf], 0).fillna(0)
         y_all = trainable[target_col].values
-        model_full.fit(X_all, y_all)
+        model.fit(X_all, y_all)
 
+        # ----- In-sample validation table (reference only) -----
+        all_df = trainable.copy()
+        all_df["_pred"] = model.predict(X_all)
+
+        mae = float(mean_absolute_error(all_df[target_col].values, all_df["_pred"].values))
+
+        # ----- Predict for the selected IP (can be pre-launch without label) -----
         pred_ip_val = None
         contrib_df = None
         group_contrib_df = None
@@ -3977,37 +3950,50 @@ def render_pre_launch_analysis():
         row_ip = frame[frame["IP"] == target_ip].copy()
         if not row_ip.empty:
             x_ip = row_ip[feature_cols].replace([np.inf, -np.inf], 0).fillna(0)
-            pred_ip_val = float(model_full.predict(x_ip)[0])
 
-            scaler = model_full.named_steps["scaler"]
-            ridge = model_full.named_steps["ridge"]
-            x_scaled = scaler.transform(x_ip.values)[0]
-            coefs = ridge.coef_
-            contrib_vals = coefs * x_scaled
+            try:
+                pred_ip_val = float(model.predict(x_ip)[0])
+            except Exception:
+                pred_ip_val = None
 
-            contrib_df = pd.DataFrame({"feature": feature_cols, "contribution": contrib_vals})
-            contrib_df["abs"] = np.abs(contrib_df["contribution"])
-            contrib_df = contrib_df.sort_values("abs", ascending=False).drop(columns=["abs"])
+            # contributions (linear, scaled)
+            try:
+                scaler = model.named_steps["scaler"]
+                ridge = model.named_steps["ridge"]
+                x_scaled = scaler.transform(x_ip.values)[0]
+                coefs = ridge.coef_
+                contrib_vals = coefs * x_scaled
 
-            def _grp(feat: str) -> str:
-                if feat.startswith("시사지표_"):
-                    return "시사지표"
-                if feat.startswith("MPI_"):
-                    return "MPI"
-                if feat.startswith("조회수_") or feat.startswith("언급량_") or feat.startswith("log1p_"):
-                    return "사전 디지털/언급"
-                return "기타"
+                contrib_df = pd.DataFrame({"feature": feature_cols, "contribution": contrib_vals})
+                contrib_df["abs"] = np.abs(contrib_df["contribution"])
+                contrib_df = contrib_df.sort_values("abs", ascending=False).drop(columns=["abs"])
 
-            contrib_df["group"] = contrib_df["feature"].apply(_grp)
-            group_contrib_df = contrib_df.groupby("group")["contribution"].sum().reset_index().sort_values("contribution", ascending=False)
+                def _grp(feat: str) -> str:
+                    if feat.startswith("시사지표_"):
+                        return "시사지표"
+                    if feat.startswith("MPI_"):
+                        return "MPI"
+                    if feat.startswith("조회수_") or feat.startswith("언급량_") or feat.startswith("log1p_"):
+                        return "사전 디지털/언급"
+                    return "기타"
+
+                contrib_df["group"] = contrib_df["feature"].apply(_grp)
+                group_contrib_df = (
+                    contrib_df.groupby("group")["contribution"]
+                    .sum()
+                    .reset_index()
+                    .sort_values("contribution", ascending=False)
+                )
+            except Exception:
+                contrib_df = None
+                group_contrib_df = None
 
         meta = {
             "total_ip_cnt": total_ip_cnt,
             "target_ip_cnt": target_ip_cnt,
-            "feature_ready_cnt": target_ip_cnt,  # we impute missing features -> ready == labeled
+            "feature_ready_cnt": feature_any_cnt,
             "trainable_rows": int(trainable.shape[0]),
-            "n_test": int(n_test),
-            "note": "ok",
+            "note": "ok_alltrain",
         }
 
         return all_df, mae, pred_ip_val, contrib_df, group_contrib_df, meta
@@ -4079,17 +4065,17 @@ def render_pre_launch_analysis():
                 f"표시(예측/실제 비교 가능): **{pred_meta.get('feature_ready_cnt', 0):,}개**"
             )
 
-        # test-set MAPE (recent holdout)
-        _test = all_pred_df[all_pred_df.get("_split") == "TEST"].copy()
-        if not _test.empty:
-            _y = pd.to_numeric(_test[target_col], errors="coerce")
-            _p = pd.to_numeric(_test["_pred"], errors="coerce")
-            _pe = np.where(_y.notna() & (_y != 0) & _p.notna(), np.abs(_p - _y) / np.abs(_y) * 100.0, np.nan)
-            mape = float(np.nanmean(_pe)) if np.isfinite(_pe).any() else float("nan")
-            st.caption(f"참고: 최근 작품 홀드아웃 기준 MAPE(평균오차율): **{mape:,.1f}%**")
+        # in-sample MAPE (reference; trained on all labeled IPs)
+        _all = all_pred_df.copy()
+        _y = pd.to_numeric(_all.get(target_col), errors="coerce")
+        _p = pd.to_numeric(_all.get("_pred"), errors="coerce")
+        _pe = np.where(_y.notna() & (_y != 0) & _p.notna(), np.abs(_p - _y) / np.abs(_y) * 100.0, np.nan)
+        mape = float(np.nanmean(_pe)) if np.isfinite(_pe).any() else float("nan")
+        if np.isfinite(mape):
+            st.caption(f"참고: 학습 포함 기준 MAPE(평균오차율): **{mape:,.1f}%**")
 
-        disp = all_pred_df[["IP", "_split", "_pred", target_col]].copy()
-        disp = disp.rename(columns={"_pred": f"예측({target_week})", target_col: f"실제({target_week})", "_split": "구분"})
+        disp = all_pred_df[["IP", "_pred", target_col]].copy()
+        disp = disp.rename(columns={"_pred": f"예측({target_week})", target_col: f"실제({target_week})"})
 
         # no decimals for score
         disp[f"예측({target_week})"] = pd.to_numeric(disp[f"예측({target_week})"], errors="coerce").round(0).astype("Int64")
@@ -4104,7 +4090,7 @@ def render_pre_launch_analysis():
         disp["오차(%)"] = disp["오차(%)"].map(lambda v: (f"{v:.1f}%" if pd.notna(v) else "-"))
 
         disp = disp.sort_values("_sort", ascending=False).drop(columns=["_sort"])
-        st.dataframe(disp[["IP", "구분", f"예측({target_week})", f"실제({target_week})", "오차(%)"]], use_container_width=True, hide_index=True)
+        st.dataframe(disp[["IP", f"예측({target_week})", f"실제({target_week})", "오차(%)"]], use_container_width=True, hide_index=True)
 
 
     st.divider()
