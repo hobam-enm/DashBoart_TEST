@@ -3866,9 +3866,13 @@ def render_pre_launch_analysis():
         for c in ["조회수_sum_W-6_W-1", "언급량_sum_W-6_W-1", "조회수_level_W-1", "언급량_level_W-1"]:
             dig_feats[f"log1p_{c}"] = np.log1p(dig_feats[c].clip(lower=0))
 
-        # ---- (4) 타깃: W+1 화제성 점수(F_Score) ----
+        # ---- (4) 타깃: 1주차 화제성 점수(F_Score) ----
         target_metric = "F_Score"
-        target_week = "W+1"
+        # 데이터에 따라 1주차 표기가 W+1 또는 W1일 수 있어 자동 감지
+        week_candidates = ["W+1", "W1", "W+01", "1주차", "1"]
+        weeks_avail = set(df["주차"].astype(str).unique())
+        target_week = next((w for w in week_candidates if w in weeks_avail), "W+1")
+
         y_sub = df[(df["metric"] == target_metric) & (df["주차"] == target_week)].copy()
         if not y_sub.empty:
             y_sub["y"] = pd.to_numeric(y_sub["value"], errors="coerce")
@@ -3878,7 +3882,7 @@ def render_pre_launch_analysis():
 
         X = pd.concat([sisa_wide.reindex(meta.index).fillna(0), mpi_wide_all, dig_feats], axis=1).fillna(0)
         frame = X.copy()
-        frame["y_W+1_화제성"] = y
+        frame[f"y_{target_week}_화제성"] = y
 
         if not meta.empty:
             for c in meta.columns:
@@ -3887,7 +3891,7 @@ def render_pre_launch_analysis():
                 frame["방영시작_dt"] = meta["방영시작_dt"]
 
         feature_cols = list(X.columns)
-        return frame.reset_index().rename(columns={"index": "IP"}), feature_cols, "y_W+1_화제성"
+        return frame.reset_index().rename(columns={"index": "IP"}), feature_cols, f"y_{target_week}_화제성", target_week
 
     def fit_and_predict_mvp(frame: pd.DataFrame, feature_cols: list[str], target_col: str, target_ip: str):
         """(1) 방영작 검증용: 시간기준 홀드아웃 예측
@@ -3979,18 +3983,18 @@ def render_pre_launch_analysis():
 
         return test_df, mae, pred_ip_val, contrib_df, group_contrib_df
 
-    model_frame, feature_cols, target_col = build_prelaunch_model_frame(df_all)
+    model_frame, feature_cols, target_col, target_week = build_prelaunch_model_frame(df_all)
     test_df, mae, pred_val, contrib_df, group_contrib_df = fit_and_predict_mvp(model_frame, feature_cols, target_col, global_ip)
 
-    st.markdown("#### 🔮 1주차(W+1) 화제성점수 예측")
+    st.markdown(f"#### 🔮 1주차({target_week}) 화제성점수 예측")
     if pred_val is None:
-        st.info("예측 모델을 만들기 위한 방영작 학습 데이터가 충분하지 않습니다. (W+1 화제성 데이터가 더 필요합니다)")
+        st.info(f"예측 모델을 만들기 위한 방영작 학습 데이터가 충분하지 않습니다. ({target_week} 화제성 데이터가 더 필요합니다)")
     else:
         c_pred1, c_pred2 = st.columns([2, 3])
         with c_pred1:
             st.markdown(f"""
             <div class="kpi-card" style="padding:16px 14px;">
-                <div class="kpi-title">예측 화제성점수 (W+1)</div>
+                <div class="kpi-title">예측 화제성점수 ({target_week})</div>
                 <div class="kpi-value" style="font-size:34px; margin-top:6px;">{pred_val:,.1f}</div>
                 <div style="color:#6b7280; font-size:12.5px; margin-top:6px; line-height:1.35;">
                     사전지표(W-6~W-1)만 사용해 1주차 화제성점수를 통계모델로 추정했습니다.<br/>
@@ -4020,8 +4024,8 @@ def render_pre_launch_analysis():
     else:
         st.caption(f"최근 작품 홀드아웃 기준 MAE(평균절대오차): **{mae:,.2f}**")
         disp = test_df[["IP", "_pred", target_col]].copy()
-        disp = disp.rename(columns={"_pred": "예측(W+1)", target_col: "실제(W+1)"})
-        disp["오차(절대)"] = np.abs(disp["예측(W+1)"] - disp["실제(W+1)"])
+        disp = disp.rename(columns={"_pred": f"예측({target_week})", target_col: f"실제({target_week})"})
+        disp["오차(절대)"] = np.abs(disp[f"예측({target_week})"] - disp[f"실제({target_week})"])
         disp = disp.sort_values("오차(절대)", ascending=False)
         st.dataframe(disp, use_container_width=True, hide_index=True)
 
