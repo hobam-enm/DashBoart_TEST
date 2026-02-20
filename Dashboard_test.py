@@ -3756,7 +3756,7 @@ def render_pre_launch_analysis():
 
 
 
-# --- 7-1. 🔮 W+1 화제성점수 예측 (MVP) ---
+    # --- 7-1. 🔮 W+1 화제성점수 예측 (MVP) ---
     # 목표: 사용자에게는 '예측값 1개 + 간단한 근거 + (방영작) 예측 vs 실제'만 보여줌
     # 입력은 사전지표(W-6~W-1)만 사용하며, 데이터가 누적되면 자동으로 재학습됨.
 
@@ -3920,7 +3920,7 @@ def render_pre_launch_analysis():
         """
         from sklearn.pipeline import Pipeline
         from sklearn.preprocessing import StandardScaler
-        from sklearn.linear_model import Lasso  # ===== 수정: Ridge -> Lasso =====
+        from sklearn.linear_model import Ridge
         from sklearn.metrics import mean_absolute_error
 
         # --- counts for UI ---
@@ -3947,7 +3947,7 @@ def render_pre_launch_analysis():
         # ----- Fit once on ALL labelled data -----
         model = Pipeline([
             ("scaler", StandardScaler(with_mean=True, with_std=True)),
-            ("lasso", Lasso(alpha=0.1, random_state=42)),  # ===== 수정: Ridge -> Lasso, alpha 0.1 =====
+            ("ridge", Ridge(alpha=1.0, random_state=42)),
         ])
 
         X_all = trainable[feature_cols].replace([np.inf, -np.inf], 0).fillna(0)
@@ -3995,7 +3995,7 @@ def render_pre_launch_analysis():
             # contributions (linear, scaled)
             try:
                 scaler = model.named_steps["scaler"]
-                lasso = model.named_steps["lasso"]  # ===== 수정: ridge -> lasso =====
+                ridge = model.named_steps["ridge"]
 
                 def _grp(feat: str) -> str:
                     """변수를 4개 그룹(사전 디지털/언급, 시사지표, MPI, 보정)으로 강제 분류"""
@@ -4071,7 +4071,7 @@ def render_pre_launch_analysis():
                     return f
 
                 x_scaled = scaler.transform(x_ip.values)[0]
-                coefs = lasso.coef_  # ===== 수정: ridge.coef_ -> lasso.coef_ =====
+                coefs = ridge.coef_
                 contrib_vals = coefs * x_scaled
 
                 contrib_df = pd.DataFrame({"feature": feature_cols, "contribution": contrib_vals})
@@ -4117,7 +4117,7 @@ def render_pre_launch_analysis():
     try:
         from sklearn.pipeline import Pipeline
         from sklearn.preprocessing import StandardScaler
-        from sklearn.linear_model import Lasso  # ===== 수정: Ridge -> Lasso =====
+        from sklearn.linear_model import Ridge
     except Exception as _e:
         raise ModuleNotFoundError(
             "scikit-learn is required for the multi-model predictor. "
@@ -4244,7 +4244,7 @@ def render_pre_launch_analysis():
 
         pipe = Pipeline([
             ("scaler", StandardScaler(with_mean=True, with_std=True)),
-            ("lasso", Lasso(alpha=0.1, random_state=42)),  # ===== 수정: Ridge -> Lasso, alpha 0.1 =====
+            ("ridge", Ridge(alpha=10.0, random_state=42)),
         ])
         pipe.fit(X, y_log)
 
@@ -4395,14 +4395,13 @@ def render_pre_launch_analysis():
             right_align = JsCode("""function(params){ return {'textAlign':'right'}; }""")
             actual_style = JsCode("""function(params){ return {'backgroundColor':'#FFF2CC','fontWeight':'700','textAlign':'right'}; }""")
 
-            # ===== [수정 1] AgGrid 렌더링 충돌(표 증발) 방지를 위해 flex 제거 및 명시적 width 지정 =====
-            # width 값으로 기본 비율을 주고 fit_columns_on_grid_load=True를 적용하면 꽉 차면서도 에러가 나지 않습니다.
+            # 심플해진 컬럼 정의 (flex 속성을 추가하여 남는 공간을 비율대로 꽉 채움)
             column_defs = [
-                {"headerName": "IP", "field": "IP", "pinned": "left", "width": 180},
-                {"headerName": "실제 화제성(W1)", "field": "실제", "width": 130, "valueFormatter": fmt_int, "cellStyle": actual_style},
-                {"headerName": "W-1 예측(오차)", "field": "W-1 예측(오차)", "width": 130, "cellStyle": right_align},
-                {"headerName": "W-2 예측(오차)", "field": "W-2 예측(오차)", "width": 130, "cellStyle": right_align},
-                {"headerName": "W-3 예측(오차)", "field": "W-3 예측(오차)", "width": 130, "cellStyle": right_align},
+                {"headerName": "IP", "field": "IP", "pinned": "left", "flex": 1.5},
+                {"headerName": "실제 화제성(W1)", "field": "실제", "flex": 1, "valueFormatter": fmt_int, "cellStyle": actual_style},
+                {"headerName": "W-1 예측(오차)", "field": "W-1 예측(오차)", "flex": 1, "cellStyle": right_align},
+                {"headerName": "W-2 예측(오차)", "field": "W-2 예측(오차)", "flex": 1, "cellStyle": right_align},
+                {"headerName": "W-3 예측(오차)", "field": "W-3 예측(오차)", "flex": 1, "cellStyle": right_align},
             ]
 
             gb_val = GridOptionsBuilder.from_dataframe(grid)
@@ -4416,7 +4415,7 @@ def render_pre_launch_analysis():
                 grid,
                 gridOptions=grid_options,
                 height=420,
-                fit_columns_on_grid_load=True, # 화면 폭에 맞게 자동 조절 유지
+                fit_columns_on_grid_load=True, # ===== [수정 1] 열 너비 꽉차게 설정 =====
                 allow_unsafe_jscode=True,
                 update_mode=GridUpdateMode.NO_UPDATE,
                 theme="alpine",
