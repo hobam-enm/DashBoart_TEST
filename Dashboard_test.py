@@ -984,6 +984,7 @@ def get_previous_work_ip(df_full: pd.DataFrame, target_ip: str) -> str | None:
 # =====================================================
 #endregion
 #region [ 6. 페이지 렌더러 ]
+#region [ 6-1. Overview ]
 def render_overview():
     df = load_data() 
   
@@ -1306,6 +1307,8 @@ def render_overview():
 
 
 # =====================================================
+#endregion
+#region [ 6-2. IP 성과 자세히보기 ]
 def render_ip_detail():
     
     df_full = load_data() # [3. 공통 함수]
@@ -2775,6 +2778,8 @@ def _render_unified_charts(df_target, df_comp, target_name, comp_name, kpi_perce
 
 
 # ===== 10.5. [페이지 4] 메인 렌더링 함수 =====
+#endregion
+#region [ 6-3. 성과 비교분석 ]
 def render_comparison():
     df_all = load_data() 
     if "회차_numeric" not in df_all.columns:
@@ -3124,6 +3129,8 @@ def _calc_growth_grades_cached(df_filtered: pd.DataFrame, target_ips: List[str],
 
 
 # ---------- [메인] 통합 렌더링 함수 ----------
+#endregion
+#region [ 6-4. 성장스코어 ]
 def render_growth_score():
     df_all = load_data().copy()
     all_ip_list = sorted(df_all["IP"].dropna().unique().tolist())
@@ -3501,6 +3508,8 @@ def render_growth_score():
 
 # =====================================================
 # [수정] 7. 사전지표 분석 페이지 렌더러 (v2.3 - 시사지표 박스 제거)
+#endregion
+#region [ 6-5. 사전지표 분석 ]
 def render_pre_launch_analysis():
     df_all = load_data()
     
@@ -4549,6 +4558,7 @@ def render_pre_launch_analysis():
     )
     
 # =====================================================
+#endregion
 #endregion
 
 #region [ 7. 라우터 / 엔트리 ]
