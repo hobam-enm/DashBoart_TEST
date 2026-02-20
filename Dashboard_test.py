@@ -19,6 +19,7 @@ from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode, JsCode
 import gspread
 from google.oauth2.service_account import Credentials
 import extra_streamlit_components as stx
+from plotly import graph_objects as go
 #endregion
 
 
