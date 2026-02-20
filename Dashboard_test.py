@@ -4355,10 +4355,11 @@ def render_pre_launch_analysis():
             _attach_pred("W-2기반예측", "W-2")
             _attach_pred("W-1기반예측(최종)", "W-1")
 
+            # ===== [수정 4] 오차율 방향(+/-) 표기를 위해 분자 부분의 abs() 제거 =====
             def _err_pct(p, a):
                 if pd.isna(p) or pd.isna(a) or a == 0:
                     return np.nan
-                return abs(p - a) / abs(a) * 100.0
+                return (p - a) / abs(a) * 100.0
 
             acc["오차"] = np.nan  # placeholder
 
@@ -4369,69 +4370,52 @@ def render_pre_launch_analysis():
             for c in ["W-3기반예측","W-2기반예측","W-1기반예측(최종)","실제"]:
                 acc[c] = pd.to_numeric(acc[c], errors="coerce").round(0)
 
-            for c in ["오차(W-3)","오차(W-2)","오차(W-1)"]:
-                acc[c] = acc[c].map(lambda v: f"{v:.1f}%" if pd.notna(v) else "-")
+            # ===== [수정 3] 예측값과 오차율을 결합하여 직관적인 텍스트 생성 =====
+            def _combine_pred_err(pred, err):
+                if pd.isna(pred): return "-"
+                p_str = f"{int(pred):,}"
+                if pd.isna(err): return p_str
+                sign = "+" if err > 0 else ""
+                return f"{p_str} ({sign}{err:.1f}%)"
 
-            # --- Display table (grouped columns) ---
-            # NOTE: Streamlit's st.dataframe column_config does not support MultiIndex (tuple) keys reliably.
-            # We render this table with AgGrid to support header grouping + fixed column widths + highlight.
-            grid = acc.rename(columns={
-                "W-3기반예측": "W-3예측",
-                "W-2기반예측": "W-2예측",
-                "W-1기반예측(최종)": "W-1예측",
-                "오차(W-3)": "W-3오차",
-                "오차(W-2)": "W-2오차",
-                "오차(W-1)": "W-1오차",
-            })[["IP","실제","W-3예측","W-2예측","W-1예측","W-3오차","W-2오차","W-1오차"]].copy()
+            acc["W-1 예측(오차)"] = [ _combine_pred_err(p, e) for p, e in zip(acc["W-1기반예측(최종)"], acc["오차(W-1)"]) ]
+            acc["W-2 예측(오차)"] = [ _combine_pred_err(p, e) for p, e in zip(acc["W-2기반예측"], acc["오차(W-2)"]) ]
+            acc["W-3 예측(오차)"] = [ _combine_pred_err(p, e) for p, e in zip(acc["W-3기반예측"], acc["오차(W-3)"]) ]
 
-            # Ensure display types
-            for c in ["실제","W-3예측","W-2예측","W-1예측"]:
-                grid[c] = pd.to_numeric(grid[c], errors="coerce").round(0)
+            # ===== [수정 2] W-1이 가장 먼저 오도록 컬럼 순서 재배치 =====
+            grid = acc[["IP", "실제", "W-1 예측(오차)", "W-2 예측(오차)", "W-3 예측(오차)"]].copy()
 
-            # Formatter: thousands separator for score columns, keep '-' for NaN
+            # Formatter: 실제값 숫자 포맷팅
             fmt_int = JsCode("""
                 function(params){
                     if (params.value === null || params.value === undefined || params.value === '' || isNaN(params.value)) return '-';
                     return Math.round(params.value).toLocaleString();
                 }
             """)
-            # Right align numeric-like columns
             right_align = JsCode("""function(params){ return {'textAlign':'right'}; }""")
             actual_style = JsCode("""function(params){ return {'backgroundColor':'#FFF2CC','fontWeight':'700','textAlign':'right'}; }""")
 
+            # 심플해진 컬럼 정의 (flex 속성을 추가하여 남는 공간을 비율대로 꽉 채움)
             column_defs = [
-                {"headerName":"", "children":[
-                    {"headerName":"IP", "field":"IP", "pinned":"left", "width":210}
-                ]},
-                {"headerName":"실제", "children":[
-                    {"headerName":"화제성(W1)", "field":"실제", "width":120, "valueFormatter": fmt_int, "cellStyle": actual_style}
-                ]},
-                {"headerName":"예측", "children":[
-                    {"headerName":"W-3", "field":"W-3예측", "width":120, "valueFormatter": fmt_int, "cellStyle": right_align},
-                    {"headerName":"W-2", "field":"W-2예측", "width":120, "valueFormatter": fmt_int, "cellStyle": right_align},
-                    {"headerName":"W-1(최종)", "field":"W-1예측", "width":120, "valueFormatter": fmt_int, "cellStyle": right_align},
-                ]},
-                {"headerName":"오차", "children":[
-                    {"headerName":"W-3", "field":"W-3오차", "width":120, "cellStyle": right_align},
-                    {"headerName":"W-2", "field":"W-2오차", "width":120, "cellStyle": right_align},
-                    {"headerName":"W-1", "field":"W-1오차", "width":120, "cellStyle": right_align},
-                ]},
+                {"headerName": "IP", "field": "IP", "pinned": "left", "flex": 1.5},
+                {"headerName": "실제 화제성(W1)", "field": "실제", "flex": 1, "valueFormatter": fmt_int, "cellStyle": actual_style},
+                {"headerName": "W-1 예측(오차)", "field": "W-1 예측(오차)", "flex": 1, "cellStyle": right_align},
+                {"headerName": "W-2 예측(오차)", "field": "W-2 예측(오차)", "flex": 1, "cellStyle": right_align},
+                {"headerName": "W-3 예측(오차)", "field": "W-3 예측(오차)", "flex": 1, "cellStyle": right_align},
             ]
 
-            # ===== [수정된 부분] =====
             gb_val = GridOptionsBuilder.from_dataframe(grid)
             gb_val.configure_default_column(resizable=True, sortable=True, filter=True)
             gb_val.configure_grid_options(domLayout="normal", suppressDragLeaveHidesColumns=True)
             
             grid_options = gb_val.build()
             grid_options["columnDefs"] = column_defs
-            # =========================
 
             AgGrid(
                 grid,
                 gridOptions=grid_options,
                 height=420,
-                fit_columns_on_grid_load=False,
+                fit_columns_on_grid_load=True, # ===== [수정 1] 열 너비 꽉차게 설정 =====
                 allow_unsafe_jscode=True,
                 update_mode=GridUpdateMode.NO_UPDATE,
                 theme="alpine",
