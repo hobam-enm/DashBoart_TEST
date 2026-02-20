@@ -3500,6 +3500,245 @@ def render_growth_score():
 
 # =====================================================
 # [수정] 7. 사전지표 분석 페이지 렌더러 (v2.3 - 시사지표 박스 제거)
+# ======================================================
+# 🔮 Pre-launch prediction — multi-model by cutoff week
+#   - Target: W+1 (e.g., W1) F_Score
+#   - Train 3 models separately:
+#       * W-3 cutoff: uses prelaunch weeks W-6..W-3
+#       * W-2 cutoff: uses prelaunch weeks W-6..W-2
+#       * W-1 cutoff: uses prelaunch weeks W-6..W-1
+#   - For a new IP, automatically selects the model that matches
+#     the latest available prelaunch week (prefers W-1 > W-2 > W-3)
+# ======================================================
+
+def _mm_has_week(df_all: pd.DataFrame, ip: str, week: str) -> bool:
+    """Return True if IP has any meaningful prelaunch signal for the given week."""
+    if df_all is None or df_all.empty:
+        return False
+    if "IP" not in df_all.columns or "주차" not in df_all.columns:
+        return False
+    d = df_all[(df_all["IP"] == ip) & (df_all["주차"] == week)].copy()
+    if d.empty:
+        return False
+    if "metric" not in d.columns:
+        return True
+    m = d["metric"].astype(str)
+    # Treat any MPI / 조회 / 언급 related rows as evidence of availability
+    return bool(m.str.contains(r"MPI|조회|언급", regex=True, na=False).any())
+
+def _mm_pick_model_key(df_all: pd.DataFrame, ip: str) -> str | None:
+    """Pick model key by latest available prelaunch week for IP."""
+    if _mm_has_week(df_all, ip, "W-1"):
+        return "W-1"
+    if _mm_has_week(df_all, ip, "W-2"):
+        return "W-2"
+    if _mm_has_week(df_all, ip, "W-3"):
+        return "W-3"
+    return None
+
+def _mm_group_and_pretty(feature_name: str) -> tuple[str, str]:
+    """Map raw feature name to (group, pretty label) without '기타'."""
+    s = str(feature_name)
+
+    # Grouping (no '기타' — force into one of these buckets)
+    if s.startswith("MPI_") or "MPI" in s:
+        group = "MPI"
+    elif s.startswith("시사지표_") or "시사지표" in s:
+        group = "시사지표"
+    elif ("조회" in s) or ("언급" in s) or ("digital" in s) or ("view" in s) or ("buzz" in s):
+        group = "사전 디지털/언급"
+    else:
+        group = "보정"  # coverage, shrinkage helper signals, etc.
+
+    # Pretty labels
+    pretty = s
+    pretty = pretty.replace("log1p_", "사전: ")
+    pretty = pretty.replace("slog_", "사전: ")
+    pretty = pretty.replace("MPI_", "MPI ")
+    pretty = pretty.replace("시사지표_", "시사: ")
+    pretty = pretty.replace("_sum_W-6_W-1", " 총량 (W-6~W-1)")
+    pretty = pretty.replace("_sum_W-6_W-2", " 총량 (W-6~W-2)")
+    pretty = pretty.replace("_sum_W-6_W-3", " 총량 (W-6~W-3)")
+    pretty = pretty.replace("_level_W-1", " 수준 (W-1)")
+    pretty = pretty.replace("_level_W-2", " 수준 (W-2)")
+    pretty = pretty.replace("_level_W-3", " 수준 (W-3)")
+    pretty = pretty.replace("_mean_W-6_W-1", " 평균 (W-6~W-1)")
+    pretty = pretty.replace("_mean_W-6_W-2", " 평균 (W-6~W-2)")
+    pretty = pretty.replace("_mean_W-6_W-3", " 평균 (W-6~W-3)")
+    pretty = pretty.replace("_mom_W-1_minus_W-3", " 최근변화 (W-1 - W-3)")
+    pretty = pretty.replace("_mom_W-2_minus_W-4", " 최근변화 (W-2 - W-4)")
+    pretty = pretty.replace("_mom_W-3_minus_W-5", " 최근변화 (W-3 - W-5)")
+    pretty = pretty.replace("_week_coverage_W-6_W-1", " 주차커버리지 (W-6~W-1)")
+    pretty = pretty.replace("_week_coverage_W-6_W-2", " 주차커버리지 (W-6~W-2)")
+    pretty = pretty.replace("_week_coverage_W-6_W-3", " 주차커버리지 (W-6~W-3)")
+    pretty = pretty.replace("__", " ")
+    return group, pretty
+
+def fit_and_predict_multimodel(
+    frames: dict,
+    target_col: str,
+    selected_ip: str,
+    df_all: pd.DataFrame,
+    target_week: str,
+) -> tuple[pd.DataFrame, dict]:
+    """Train 3 ridge models (W-3/W-2/W-1 cutoff frames) to predict the same target (W+1 F_Score).
+
+    Returns
+    -------
+    val : pd.DataFrame
+        Validation table with columns:
+        IP, 실제, W-3기반예측/오차, W-2기반예측/오차, W-1기반예측(최종)/오차
+    out : dict
+        Selected IP prediction payload:
+        {model_key, pred, mape_model, contrib_df}
+    """
+    # --- sklearn (runtime dependency) ---
+    try:
+        from sklearn.pipeline import Pipeline
+        from sklearn.preprocessing import StandardScaler
+        from sklearn.linear_model import Ridge
+    except Exception as _e:
+        raise ModuleNotFoundError(
+            "scikit-learn is required for the multi-model predictor. "
+            "Add 'scikit-learn' to requirements.txt and redeploy."
+        ) from _e
+
+    # Helper: safe MAPE
+    def _mape(y_true: np.ndarray, y_pred: np.ndarray) -> float:
+        y_true = np.asarray(y_true, dtype=float)
+        y_pred = np.asarray(y_pred, dtype=float)
+        denom = np.where(np.abs(y_true) < 1e-9, np.nan, np.abs(y_true))
+        return float(np.nanmean(np.abs(y_pred - y_true) / denom) * 100.0)
+
+    models: dict[str, Pipeline] = {}
+    preds_all: dict[str, pd.DataFrame] = {}
+    mape_all: dict[str, float] = {}
+
+    # Train each model on its own cutoff frame
+    for key, (frame_df, feature_cols) in frames.items():
+        if frame_df is None or frame_df.empty:
+            continue
+        d = frame_df.copy()
+
+        # require target present
+        d = d.dropna(subset=[target_col])
+        if d.empty:
+            continue
+
+        X = d[feature_cols].fillna(0.0)
+        y = d[target_col].astype(float).values
+        y_log = np.log1p(np.clip(y, a_min=0.0, a_max=None))
+
+        pipe = Pipeline(
+            steps=[
+                ("scaler", StandardScaler(with_mean=True, with_std=True)),
+                ("ridge", Ridge(alpha=1.0, random_state=42)),
+            ]
+        )
+        pipe.fit(X, y_log)
+        models[key] = pipe
+
+        # in-sample predictions (for validation table)
+        pred_log = pipe.predict(X)
+        pred = np.expm1(pred_log)
+        pred = np.clip(pred, a_min=0.0, a_max=None)
+
+        p = pd.DataFrame(
+            {
+                "IP": d["IP"].astype(str).values,
+                f"pred_{key}": pred,
+                "actual": y,
+            }
+        )
+        # abs % error
+        denom = np.where(np.abs(p["actual"].values) < 1e-9, np.nan, np.abs(p["actual"].values))
+        p[f"err_{key}"] = np.abs(p[f"pred_{key}"].values - p["actual"].values) / denom * 100.0
+
+        preds_all[key] = p[["IP", "actual", f"pred_{key}", f"err_{key}"]]
+        mape_all[key] = _mape(y, pred)
+
+    # Build validation table across available models
+    # Start from union of IPs that have actuals in any model frame
+    all_ips = sorted({ip for dfp in preds_all.values() for ip in dfp["IP"].astype(str).unique()})
+    val = pd.DataFrame({"IP": all_ips})
+
+    # Attach actual (prefer from richest model if available)
+    actual_series = None
+    for k in ["W-1", "W-2", "W-3"]:
+        if k in preds_all:
+            s = preds_all[k].drop_duplicates("IP").set_index("IP")["actual"]
+            actual_series = s if actual_series is None else actual_series.combine_first(s)
+    if actual_series is None:
+        actual_series = pd.Series(dtype=float)
+    val = val.merge(actual_series.rename("actual").reset_index().rename(columns={"index": "IP"}), on="IP", how="left")
+
+    # Merge each model's pred/err
+    for k in ["W-3", "W-2", "W-1"]:
+        if k in preds_all:
+            tmp = preds_all[k].drop_duplicates("IP")[["IP", f"pred_{k}", f"err_{k}"]]
+            val = val.merge(tmp, on="IP", how="left")
+        else:
+            val[f"pred_{k}"] = np.nan
+            val[f"err_{k}"] = np.nan
+
+    # Rename to requested Korean columns
+    val = val.rename(
+        columns={
+            "actual": "실제",
+            "pred_W-3": "W-3기반예측",
+            "err_W-3": "W-3기반오차(%)",
+            "pred_W-2": "W-2기반예측",
+            "err_W-2": "W-2기반오차(%)",
+            "pred_W-1": "W-1기반예측(최종)",
+            "err_W-1": "W-1기반오차(%)",
+        }
+    )
+
+    # Decide which model to use for selected IP
+    sel_key = None
+    for k in ["W-1", "W-2", "W-3"]:
+        if k in frames and frames[k][0] is not None:
+            if selected_ip in set(frames[k][0]["IP"].astype(str).values):
+                sel_key = k
+                break
+
+    if sel_key is None or sel_key not in models:
+        out = {"model_key": None, "pred": None, "mape_model": None, "contrib_df": pd.DataFrame()}
+        return val, out
+
+    sel_frame, sel_feats = frames[sel_key]
+    sel_model = models[sel_key]
+    row = sel_frame[sel_frame["IP"].astype(str) == str(selected_ip)].head(1)
+    X_ip = row[sel_feats].fillna(0.0)
+
+    pred_log = float(sel_model.predict(X_ip)[0])
+    pred = float(np.expm1(pred_log))
+    pred = max(0.0, pred)
+
+    # Contribution breakdown: standardized_x * coef (approx, in log-space)
+    contrib_df = pd.DataFrame()
+    try:
+        scaler = sel_model.named_steps["scaler"]
+        ridge = sel_model.named_steps["ridge"]
+        x_scaled = scaler.transform(X_ip)[0]
+        coefs = ridge.coef_
+        contrib = x_scaled * coefs
+        contrib_df = pd.DataFrame({"feature": sel_feats, "contribution": contrib})
+
+        mapped = contrib_df["feature"].apply(lambda f: _mm_group_and_pretty(f))
+        contrib_df["group"] = mapped.apply(lambda t: t[0])
+        contrib_df["pretty"] = mapped.apply(lambda t: t[1])
+    except Exception:
+        contrib_df = pd.DataFrame()
+
+    out = {
+        "model_key": sel_key,
+        "pred": pred,
+        "mape_model": mape_all.get(sel_key),
+        "contrib_df": contrib_df,
+    }
+    return val, out
+
 def render_pre_launch_analysis():
     df_all = load_data()
     
@@ -3775,337 +4014,36 @@ def render_pre_launch_analysis():
         except Exception:
             return pd.NaT
 
-    def build_prelaunch_model_frame(df: pd.DataFrame) -> tuple[pd.DataFrame, list[str], str]:
-        """IP 단위 학습 프레임 생성.
-        - X: 시사지표(항목별), MPI 3종(다주차 요약), 사전 디지털(조회/언급: 다주차 요약)
-        - y: W+1 화제성 점수(F_Score)
-        """
+    def build_prelaunch_model_frame(df: pd.DataFrame, last_week: str = "W-1", target_week_override: str | None = None) -> tuple[pd.DataFrame, list[str], str, str]:
+            """IP 단위 학습 프레임 생성 (사전 데이터 컷오프 버전)
 
-        # ---- Meta(편성/연도/방영시작 등) IP 단위로 모으기 ----
-        meta_cols = [c for c in ["편성", "편성연도", "방영시작"] if c in df.columns]
-        meta = df.groupby("IP")[meta_cols].first() if meta_cols else pd.DataFrame(index=sorted(df["IP"].unique()))
-        if "방영시작" in meta.columns:
-            meta["방영시작_dt"] = meta["방영시작"].apply(_parse_date_any)
-
-        # ---- (1) 시사지표: 항목별 평균 ----
-        sisa_keys = list(SISA_MAP.keys())
-        s_sub = df[df["metric"].isin(sisa_keys)].copy()
-        if not s_sub.empty:
-            s_sub["val"] = _safe_num(s_sub["value"])
-            sisa_wide = s_sub.pivot_table(index="IP", columns="metric", values="val", aggfunc="mean")
-        else:
-            sisa_wide = pd.DataFrame(index=meta.index, columns=sisa_keys).fillna(0)
-
-        # ---- (2) MPI 3종: 주차별 -> 요약 피처 ----
-        # [중요] 일부 IP는 W-3까지만 존재하는 등 주차가 덜 채워진 경우가 있음.
-        # 이때 '존재하는 주차만' 평균/기울기를 내면 과대평가될 수 있으므로,
-        # 항상 W-6~W-1의 고정 6주 프레임으로 맞춘 뒤(누락=0) 요약 피처를 만든다.
-        mpi_metrics = ["MPI_인지", "MPI_선호", "MPI_시청의향"]
-        mpi_weeks = ["W-6", "W-5", "W-4", "W-3", "W-2", "W-1"]
-
-        mpi_sub = df[(df["metric"].isin(mpi_metrics)) & (df["주차"].isin(mpi_weeks))].copy()
-        mpi_wide_all = pd.DataFrame(index=meta.index)
-
-        if not mpi_sub.empty:
-            mpi_sub["val"] = pd.to_numeric(mpi_sub["value"], errors="coerce")
-            mpi_pv = mpi_sub.pivot_table(index="IP", columns=["metric", "주차"], values="val", aggfunc="mean")
-
-            for m in mpi_metrics:
-                # 고정 6주 컬럼 프레임 생성 (누락=0)
-                fixed_cols = [f"{m}_{w}" for w in mpi_weeks]
-                tmp = pd.DataFrame(index=meta.index, columns=fixed_cols, dtype=float).fillna(0.0)
-
-                # 존재하는 주차만 채우기
-                for w in mpi_weeks:
-                    key = (m, w)
-                    if key in mpi_pv.columns:
-                        tmp[f"{m}_{w}"] = mpi_pv[key].reindex(meta.index).fillna(0.0)
-
-                # level (W-1)
-                mpi_wide_all[f"{m}_level_W-1"] = tmp[f"{m}_W-1"]
-
-                # mean level (W-6~W-1)  ※ 항상 6주 평균
-                mpi_wide_all[f"{m}_mean_W-6_W-1"] = tmp.mean(axis=1)
-
-                # momentum: W-1 - W-3 (누락=0 처리 후 계산)
-                mpi_wide_all[f"{m}_mom_W-1_minus_W-3"] = tmp[f"{m}_W-1"] - tmp[f"{m}_W-3"]
-
-                # slope across fixed weeks (W-6~W-1)
-                vals = tmp.values  # shape: (n_ip, 6)
-                x = np.arange(vals.shape[1], dtype=float)  # 0..5
-                x_mean = x.mean()
-                denom = ((x - x_mean) ** 2).sum()
-                slope = ((vals * (x - x_mean)).sum(axis=1) / denom) if denom != 0 else np.zeros(vals.shape[0])
-                mpi_wide_all[f"{m}_slope_W-6_W-1"] = slope
-
-        mpi_wide_all = mpi_wide_all.fillna(0)
-
-        # ---- (3) 사전 디지털: 조회수/언급량 주차별 -> 요약 ----
-        dig_weeks = ["W-6", "W-5", "W-4", "W-3", "W-2", "W-1"]
-
-        v_sub = _get_view_data(df)
-        v_sub = v_sub[v_sub["주차"].isin(dig_weeks)].copy() if not v_sub.empty else pd.DataFrame()
-        if not v_sub.empty:
-            v_sub["val"] = _safe_num(v_sub["value"])
-            v_pv = v_sub.pivot_table(index="IP", columns="주차", values="val", aggfunc="sum").reindex(meta.index).fillna(0)
-        else:
-            v_pv = pd.DataFrame(index=meta.index, columns=dig_weeks).fillna(0)
-
-        b_sub = df[(df["metric"] == "언급량") & (df["주차"].isin(dig_weeks))].copy()
-        if not b_sub.empty:
-            b_sub["val"] = _safe_num(b_sub["value"])
-            b_pv = b_sub.pivot_table(index="IP", columns="주차", values="val", aggfunc="sum").reindex(meta.index).fillna(0)
-        else:
-            b_pv = pd.DataFrame(index=meta.index, columns=dig_weeks).fillna(0)
-
-        dig_feats = pd.DataFrame(index=meta.index)
-
-        # 원본 카운트(조회/언급)는 스케일이 매우 크고 롱테일이어서 과대예측을 유발하기 쉬움.
-        # → 모델 입력은 log1p 변환 및 모멘텀의 signed-log 변환 중심으로 구성한다.
-        view_sum = v_pv.sum(axis=1)
-        buzz_sum = b_pv.sum(axis=1)
-        view_w1 = v_pv.get("W-1", 0)
-        buzz_w1 = b_pv.get("W-1", 0)
-        view_mom = v_pv.get("W-1", 0) - v_pv.get("W-3", 0)
-        buzz_mom = b_pv.get("W-1", 0) - b_pv.get("W-3", 0)
-
-        dig_feats["log1p_조회수_sum_W-6_W-1"] = np.log1p(view_sum.clip(lower=0))
-        dig_feats["log1p_언급량_sum_W-6_W-1"] = np.log1p(buzz_sum.clip(lower=0))
-        dig_feats["log1p_조회수_level_W-1"]   = np.log1p(pd.Series(view_w1, index=meta.index).clip(lower=0))
-        dig_feats["log1p_언급량_level_W-1"]   = np.log1p(pd.Series(buzz_w1, index=meta.index).clip(lower=0))
-
-        # 모멘텀은 음수도 가능하므로 signed-log1p로 변환
-        dig_feats["slog_조회수_mom_W-1_minus_W-3"] = np.sign(view_mom) * np.log1p(np.abs(view_mom))
-        dig_feats["slog_언급량_mom_W-1_minus_W-3"] = np.sign(buzz_mom) * np.log1p(np.abs(buzz_mom))
-
-        # 데이터 커버리지(주차가 덜 쌓인 IP에 대한 과대추정 완화용)
-        # 0이 '실제로 0'일 수도 있지만, 사전 구간에서 완전 0이 반복되면 정보가 부족한 케이스가 많아 보정에 도움이 됨.
-        dig_feats["조회수_week_coverage_W-6_W-1"] = (v_pv.fillna(0) > 0).mean(axis=1)
-        dig_feats["언급량_week_coverage_W-6_W-1"] = (b_pv.fillna(0) > 0).mean(axis=1)
-
-        # ---- (4) 타깃: 1주차 화제성 점수(F_Score) ----
-        target_metric = "F_Score"
-        # 데이터에 따라 1주차 표기가 W+1 또는 W1일 수 있어 자동 감지
-        week_candidates = ["W+1", "W1", "W+01", "1주차", "1"]
-        weeks_avail = set(df["주차"].astype(str).unique())
-        target_week = next((w for w in week_candidates if w in weeks_avail), "W+1")
-
-        y_sub = df[(df["metric"] == target_metric) & (df["주차"] == target_week)].copy()
-        if not y_sub.empty:
-            y_sub["y"] = pd.to_numeric(y_sub["value"], errors="coerce")
-            y = y_sub.groupby("IP")["y"].mean().reindex(meta.index)
-        else:
-            y = pd.Series(index=meta.index, dtype=float)
-
-        X = pd.concat([sisa_wide.reindex(meta.index).fillna(0), mpi_wide_all, dig_feats], axis=1).fillna(0)
-        frame = X.copy()
-        frame[f"y_{target_week}_화제성"] = y
-
-        if not meta.empty:
-            for c in meta.columns:
-                frame[c] = meta[c]
-            if "방영시작_dt" in meta.columns:
-                frame["방영시작_dt"] = meta["방영시작_dt"]
-
-        feature_cols = list(X.columns)
-        return frame.reset_index().rename(columns={"index": "IP"}), feature_cols, f"y_{target_week}_화제성", target_week
-
-    def fit_and_predict_mvp(frame: pd.DataFrame, feature_cols: list[str], target_col: str, target_ip: str):
-        """예측(운영 단순화: ALL-TRAIN)
-
-        - 학습: 타깃(예: F_Score, W1)이 존재하는 모든 IP를 사용해 1회 학습
-        - 검증표: (참고용) 동일 데이터 기준 예측 vs 실제를 전 IP에 대해 표시
-        - 신규 IP: target_ip에 대해 예측값과 간단한 기여도(선형 계수 기반)를 제공
-        """
-        from sklearn.pipeline import Pipeline
-        from sklearn.preprocessing import StandardScaler
-        from sklearn.linear_model import Ridge
-        from sklearn.metrics import mean_absolute_error
-
-        # --- counts for UI ---
-        total_ip_cnt = int(frame["IP"].nunique()) if "IP" in frame.columns else 0
-        # labelled rows (have target)
-        trainable = frame[pd.to_numeric(frame[target_col], errors="coerce").notna()].copy()
-        trainable[target_col] = pd.to_numeric(trainable[target_col], errors="coerce")
-        trainable = trainable.dropna(subset=[target_col])
-
-        target_ip_cnt = int(trainable["IP"].nunique()) if "IP" in trainable.columns else int(trainable.shape[0])
-        feature_any_cnt = int(frame[feature_cols].notna().any(axis=1).sum()) if len(feature_cols) > 0 else 0
-
-        # minimum guard (too few supervised labels)
-        if trainable.shape[0] < 12:
-            meta = {
-                "total_ip_cnt": total_ip_cnt,
-                "target_ip_cnt": target_ip_cnt,
-                "feature_ready_cnt": feature_any_cnt,
-                "trainable_rows": int(trainable.shape[0]),
-                "note": "insufficient_labels",
-            }
-            return None, None, None, None, None, meta
-
-        # ----- Fit once on ALL labelled data -----
-        model = Pipeline([
-            ("scaler", StandardScaler(with_mean=True, with_std=True)),
-            ("ridge", Ridge(alpha=1.0, random_state=42)),
-        ])
-
-        X_all = trainable[feature_cols].replace([np.inf, -np.inf], 0).fillna(0)
-        y_all_raw = trainable[target_col].values
-        # 타깃도 롱테일이어서 log1p로 학습 후 expm1로 복원(과대예측 완화)
-        y_all = np.log1p(np.clip(y_all_raw, a_min=0, a_max=None))
-        model.fit(X_all, y_all)
-
-        # ----- In-sample validation table (reference only) -----
-        all_df = trainable.copy()
-        all_df["_pred_log"] = model.predict(X_all)
-        y_p05, y_p95 = np.percentile(y_all_raw, [5, 95])
-        all_df["_pred"] = np.expm1(all_df["_pred_log"]).clip(lower=0)
-        all_df["_pred"] = all_df["_pred"].clip(lower=y_p05, upper=y_p95)
-
-        mae = float(mean_absolute_error(all_df[target_col].values, all_df["_pred"].values))
-
-        # ----- Predict for the selected IP (can be pre-launch without label) -----
-        pred_ip_val = None
-        contrib_df = None
-        group_contrib_df = None
-
-        row_ip = frame[frame["IP"] == target_ip].copy()
-        if not row_ip.empty:
-            x_ip = row_ip[feature_cols].replace([np.inf, -np.inf], 0).fillna(0)
-
-            try:
-                pred_ip_val_log = float(model.predict(x_ip)[0])
-                pred_ip_val = float(np.expm1(pred_ip_val_log))
-                # 예측값 클리핑(학습 데이터 분포 기준) - 극단 과대예측 방지
-                y_p05, y_p95 = np.percentile(y_all_raw, [5, 95])
-                pred_ip_val = float(np.clip(pred_ip_val, y_p05, y_p95))
-                # 주차 커버리지(데이터 누락) 보정: W-3까지만 존재 등 커버리지가 낮으면 중앙값 쪽으로 수축
-                try:
-                    cov_cols = [c for c in x_ip.columns if "week_coverage" in c]
-                    cov = float(min([float(x_ip.iloc[0][c]) for c in cov_cols])) if cov_cols else 1.0
-                    if cov < 0.75:
-                        y_med = float(np.median(y_all_raw))
-                        pred_ip_val = float(0.7 * pred_ip_val + 0.3 * y_med)
-                except Exception:
-                    pass
-            except Exception:
-                pred_ip_val = None
-
-            # contributions (linear, scaled)
-            try:
-                scaler = model.named_steps["scaler"]
-                ridge = model.named_steps["ridge"]
-
-                def _grp(feat: str) -> str:
-                    """변수를 4개 그룹(사전 디지털/언급, 시사지표, MPI, 보정)으로 강제 분류"""
-                    f = str(feat)
-                    if f.startswith("시사지표_"):
-                        return "시사지표"
-                    if f.startswith("MPI_"):
-                        return "MPI"
-                    # 사전 디지털/언급: 조회/언급 + 파생(log1p_/slog_)
-                    if f.startswith("log1p_") or f.startswith("slog_"):
-                        return "사전 디지털/언급"
-                    if ("조회" in f) or ("조회수" in f) or ("언급" in f) or ("언급량" in f):
-                        return "사전 디지털/언급"
-                    return "보정"
-
-                def _pretty_name(feat: str) -> str:
-                    """개발자틱 변수명을 사용자 친화 라벨로 변환(표시용)"""
-                    f = str(feat)
-
-                    # --- 시사지표 ---
-                    if f.startswith("시사지표_"):
-                        return f"시사: {f.replace('시사지표_', '')}"
-
-                    # --- MPI ---
-                    if f.startswith("MPI_"):
-                        s = f.replace("MPI_", "")
-                        parts = s.split("_")
-                        mpi_kind = parts[0] if parts else s
-                        label_map = {"level": "수준", "mean": "평균", "mom": "최근변화", "slope": "추세"}
-                        feat_type = None
-                        for k in ["level", "mean", "mom", "slope"]:
-                            if k in parts:
-                                feat_type = k
-                                break
-
-                        week_txt = ""
-                        if "W-6" in f and "W-1" in f and ("sum" in f or "mean" in f or "slope" in f):
-                            week_txt = "(W-6~W-1)"
-                        if "W-1_minus_W-3" in f:
-                            week_txt = "(W-1 - W-3)"
-                        elif "_W-1" in f:
-                            week_txt = "(W-1)"
-
-                        ft = label_map.get(feat_type, "지표")
-                        return f"MPI {mpi_kind}: {ft} {week_txt}".strip()
-
-                    # --- 보정(커버리지 등) ---
-                    if "week_coverage" in f:
-                        base = f.replace("_week_coverage_", " 주차커버리지 ")
-                        base = base.replace("_W-6_W-1", " (W-6~W-1)")
-                        base = base.replace("_", " ")
-                        return f"보정: {base}"
-
-                    # --- 사전 디지털/언급 ---
-                    def _pretty_common(s: str) -> str:
-                        s = s.replace("_W-6_W-1", " (W-6~W-1)")
-                        s = s.replace("_W-1_minus_W-3", " (W-1 - W-3)")
-                        s = s.replace("_W-1", " (W-1)")
-                        s = s.replace("_", " ")
-                        s = s.replace("sum", "총량").replace("level", "마지막값").replace("mom", "최근변화").replace("slope", "추세").replace("minus", "-")
-                        return s
-
-                    if f.startswith("log1p_"):
-                        return f"사전: {_pretty_common(f.replace('log1p_', ''))}"
-                    if f.startswith("slog_"):
-                        s = f.replace("slog_", "")
-                        s = _pretty_common(s).replace("총량", "총량").replace("마지막값", "마지막값")
-                        return f"사전: {s}"
-
-                    if ("조회" in f) or ("조회수" in f) or ("언급" in f) or ("언급량" in f):
-                        return f"사전: {_pretty_common(f)}"
-
-                    return f
-
-                x_scaled = scaler.transform(x_ip.values)[0]
-                coefs = ridge.coef_
-                contrib_vals = coefs * x_scaled
-
-                contrib_df = pd.DataFrame({"feature": feature_cols, "contribution": contrib_vals})
-                contrib_df["group"] = contrib_df["feature"].apply(_grp)
-                contrib_df["pretty"] = contrib_df["feature"].apply(_pretty_name)
-
-                # sort by absolute contribution (for display)
-                contrib_df["_abs"] = contrib_df["contribution"].abs()
-                contrib_df = contrib_df.sort_values("_abs", ascending=False).drop(columns=["_abs"])
-
-                group_contrib_df = (
-                    contrib_df.groupby("group")["contribution"]
-                    .sum()
-                    .reset_index()
-                    .assign(_abs=lambda d: d["contribution"].abs())
-                    .sort_values("_abs", ascending=False)
-                    .drop(columns=["_abs"])
-                )
-            except Exception:
-                contrib_df = None
-                group_contrib_df = None
+    - last_week: 입력으로 사용할 사전 데이터의 마지막 주차 (W-3 / W-2 / W-1)
+    - X: 시사지표(항목별), MPI 3종(다주차 요약), 사전 디지털(조회/언급: 다주차 요약)
+    - y: W+1(=W1) 화제성 점수(F_Score)  ※ 타깃 주차 표기는 데이터에 맞춰 자동 감지
+    """
+    # ---- 유효 last_week ----
+    last_week = str(last_week).strip()
+    week_order = ["W-6", "W-5", "W-4", "W-3", "W-2", "W-1"]
+    if last_week not in week_order:
+        last_week = "W-1"
+    weeks_use = week_order[: week_order.index(last_week) + 1]
+    first_week = weeks_use[0]
+    # momentum은 "최근 2주 변화"로 통일 (W-3 기준이면 W-3 - W-5)
+    mom_ref_week = weeks_use[-3] if len(weeks_use) >= 3 else weeks_use[0]
 
 
-        meta = {
-            "total_ip_cnt": total_ip_cnt,
-            "target_ip_cnt": target_ip_cnt,
-            "feature_ready_cnt": feature_any_cnt,
-            "trainable_rows": int(trainable.shape[0]),
-            "note": "ok_alltrain",
-        }
+    # ---- 사전 데이터 컷오프별(W-3/W-2/W-1) 프레임 생성 ----
+    frame_w1, feat_w1, target_col, target_week = build_prelaunch_model_frame(df_all, last_week="W-1", target_week_override=None)
+    frame_w2, feat_w2, _, _ = build_prelaunch_model_frame(df_all, last_week="W-2", target_week_override=target_week)
+    frame_w3, feat_w3, _, _ = build_prelaunch_model_frame(df_all, last_week="W-3", target_week_override=target_week)
 
-        return all_df, mae, pred_ip_val, contrib_df, group_contrib_df, meta
+    frames = {
+        "W-1": (frame_w1, feat_w1),
+        "W-2": (frame_w2, feat_w2),
+        "W-3": (frame_w3, feat_w3),
+    }
 
-    model_frame, feature_cols, target_col, target_week = build_prelaunch_model_frame(df_all)
-    all_pred_df, mae, pred_val, contrib_df, group_contrib_df, pred_meta = fit_and_predict_mvp(model_frame, feature_cols, target_col, global_ip)
+    acc_df, selected_out = fit_and_predict_multimodel(frames, target_col, global_ip, df_all, target_week)
 
     # actual value (if already aired / has target_week score)
     actual_val = None
@@ -4120,20 +4058,27 @@ def render_pre_launch_analysis():
 
 
     st.markdown(f"#### 🔮 1주차({target_week}) 화제성점수 예측")
-    if pred_val is None:
+    if selected_out.get("model_key") is None:
+        st.info("현재 사전 데이터가 부족해 예측할 수 없습니다. (최소 W-3 데이터 필요)")
+    elif selected_out.get("pred") is None:
         st.info(f"예측 모델을 만들기 위한 방영작 학습 데이터가 충분하지 않습니다. ({target_week} 화제성 데이터가 더 필요합니다)")
     else:
                 # ---- 예측 결과(한 행 전체) ----
+
+        model_label = selected_out.get("model_key") or "-"
+        mape_val = selected_out.get("mape_model")
+        mape_text = f"{mape_val:.1f}%" if isinstance(mape_val, (int, float)) else "-"
         st.markdown(f"""
         <div class="kpi-card" style="padding:16px 14px;">
             <div class="kpi-title">예측 화제성점수 ({target_week})</div>
-            <div class="kpi-value" style="font-size:34px; margin-top:6px;">{pred_val:,.0f}</div>
+            <div class="kpi-value" style="font-size:34px; margin-top:6px;">{selected_out.get("pred"):,.0f}</div>
             <div style="color:#111827; font-size:13px; margin-top:8px;">
                 실제 화제성점수 ({target_week}): <b>{(f"{actual_val:,.0f}" if actual_val is not None else "방영전입니다")}</b>
             </div>
             <div style="color:#6b7280; font-size:12.5px; margin-top:6px; line-height:1.35;">
-                사전지표(W-6~W-1)만 사용해 1주차 화제성점수를 통계모델로 추정했습니다.<br/>
-                데이터가 누적되면 모델이 재학습되어 지표 영향도가 업데이트됩니다.
+                현재 확보된 사전 데이터 범위에 맞는 모델로 1주차 화제성점수를 통계적으로 추정했습니다.<br/>
+                <b>적용 모델:</b> {model_label} 기반 · <b>평균오차율:</b> {mape_text}<br/>
+                데이터가 누적되면 모델이 다시 학습되어 지표 영향도가 업데이트됩니다.
             </div>
         </div>
         """, unsafe_allow_html=True)
@@ -4142,73 +4087,47 @@ def render_pre_launch_analysis():
         
         # ---- 예측 기여 요인(기본 접힘) ----
         with st.expander("📌 예측 기여 요인(펼치기)", expanded=False):
-            if (group_contrib_df is None or group_contrib_df.empty) and (contrib_df is None or contrib_df.empty):
+            detail = selected_out.get("contrib_df")
+            if detail is None or getattr(detail, "empty", True):
                 st.info("기여 요인 정보를 계산할 수 없습니다. (학습 데이터 부족 또는 계산 실패)")
             else:
-                if group_contrib_df is not None and not group_contrib_df.empty:
-                    st.markdown("###### 예측에 기여한 요인(그룹 합)")
-                    view = group_contrib_df.copy()
-                    view["기여(+) / 감소(-)"] = view["contribution"].apply(lambda v: f"{v:+.3f}")
-                    view = view.rename(columns={"group": "그룹"})[["그룹", "기여(+) / 감소(-)"]]
-                    st.dataframe(view, use_container_width=True, hide_index=True)
+                # group sum
+                st.markdown("###### 예측에 기여한 요인(그룹 합)")
+                grp = detail.groupby("group", as_index=False)["contribution"].sum().sort_values("contribution", ascending=False)
+                grp["기여(+) / 감소(-)"] = grp["contribution"].apply(lambda v: f"{v:+.3f}")
+                grp = grp.rename(columns={"group": "그룹"})[["그룹", "기여(+) / 감소(-)"]]
+                st.dataframe(grp, use_container_width=True, hide_index=True)
 
-                if contrib_df is not None and not contrib_df.empty:
-                    st.markdown("###### 상세 기여 변수(전체 · 영향 큰 순)")
-                    allv = contrib_df.copy()
-                    allv["abs"] = allv["contribution"].abs()
-                    allv = allv.sort_values("abs", ascending=False).drop(columns=["abs"])
-                    allv["기여(+) / 감소(-)"] = allv["contribution"].apply(lambda v: f"{v:+.3f}")
-                    allv = allv.rename(columns={"pretty": "변수", "group": "그룹"})[["변수", "그룹", "기여(+) / 감소(-)"]]
-                    st.dataframe(allv, use_container_width=True, hide_index=True, height=420)
-
-    st.markdown("#### ✅ 예측 정확도(방영작 검증)")
-    if all_pred_df is None or all_pred_df.empty:
-        st.info("검증용 데이터가 없습니다.")
-        if isinstance(pred_meta, dict) and pred_meta.get("note") == "insufficient_labels":
-            st.caption(
-                f"전체 IP: **{pred_meta.get('total_ip_cnt', 0):,}개** · "
-                f"{target_week} 실제값 보유 IP: **{pred_meta.get('target_ip_cnt', 0):,}개** (학습 최소 12개 필요)"
-            )
-    else:
-        # headline counts
-        if isinstance(pred_meta, dict):
-            st.caption(
-                f"전체 IP: **{pred_meta.get('total_ip_cnt', 0):,}개** · "
-                f"{target_week} 실제값 보유 IP: **{pred_meta.get('target_ip_cnt', 0):,}개** · "
-                f"표시(예측/실제 비교 가능): **{pred_meta.get('feature_ready_cnt', 0):,}개**"
-            )
-
-        # in-sample MAPE (reference; trained on all labeled IPs)
-        _all = all_pred_df.copy()
-        _y = pd.to_numeric(_all.get(target_col), errors="coerce")
-        _p = pd.to_numeric(_all.get("_pred"), errors="coerce")
-        _pe = np.where(_y.notna() & (_y != 0) & _p.notna(), np.abs(_p - _y) / np.abs(_y) * 100.0, np.nan)
-        mape = float(np.nanmean(_pe)) if np.isfinite(_pe).any() else float("nan")
-        if np.isfinite(mape):
-            st.caption(f"참고: 학습 포함 기준 MAPE(평균오차율): **{mape:,.1f}%**")
-
-        disp = all_pred_df[["IP", "_pred", target_col]].copy()
-        disp = disp.rename(columns={"_pred": f"예측({target_week})", target_col: f"실제({target_week})"})
-
-        # no decimals for score
-        disp[f"예측({target_week})"] = pd.to_numeric(disp[f"예측({target_week})"], errors="coerce").round(0).astype("Int64")
-        disp[f"실제({target_week})"] = pd.to_numeric(disp[f"실제({target_week})"], errors="coerce").round(0).astype("Int64")
-
-        # percent error
-        _a = pd.to_numeric(disp[f"실제({target_week})"], errors="coerce")
-        _pp = pd.to_numeric(disp[f"예측({target_week})"], errors="coerce")
-        _pct = np.where(_a.notna() & (_a != 0) & _pp.notna(), (np.abs(_pp - _a) / np.abs(_a) * 100.0), np.nan)
-        disp["오차(%)"] = _pct
-        disp["_sort"] = disp["오차(%)"]
-        disp["오차(%)"] = disp["오차(%)"].map(lambda v: (f"{v:.1f}%" if pd.notna(v) else "-"))
-
-        disp = disp.sort_values("_sort", ascending=False).drop(columns=["_sort"])
-        st.dataframe(disp[["IP", f"예측({target_week})", f"실제({target_week})", "오차(%)"]], use_container_width=True, hide_index=True)
+                st.markdown("###### 상세 기여 변수(전체 · 영향 큰 순)")
+                allv = detail.copy()
+                allv["abs"] = allv["contribution"].abs()
+                allv = allv.sort_values("abs", ascending=False).drop(columns=["abs"])
+                allv["기여(+) / 감소(-)"] = allv["contribution"].apply(lambda v: f"{v:+.3f}")
+                allv = allv.rename(columns={"pretty": "변수", "group": "그룹"})[["변수", "그룹", "기여(+) / 감소(-)"]]
+                st.dataframe(allv, use_container_width=True, hide_index=True, height=420)
 
 
-    st.divider()
+    # ---- 예측 정확도(방영작 검증) : 접힘 ----
+    with st.expander("✅ 예측 정확도(방영작 검증) — W-3/W-2/W-1 기준 모델 비교", expanded=False):
+        if acc_df is None or acc_df.empty:
+            st.info("검증용 데이터가 없습니다.")
+        else:
+            show = acc_df.copy()
+            for c in ["W-3기반예측", "W-2기반예측", "W-1기반예측(최종)", "실제"]:
+                if c in show.columns:
+                    show[c] = pd.to_numeric(show[c], errors="coerce").round(0)
+            for c in ["오차%_W-3", "오차%_W-2", "오차%_W-1"]:
+                if c in show.columns:
+                    show[c] = pd.to_numeric(show[c], errors="coerce").map(lambda v: (f"{v:.1f}%" if pd.notna(v) else ""))
+            if "오차%_W-1" in show.columns:
+                _tmp = pd.to_numeric(acc_df["오차%_W-1"], errors="coerce")
+                show["_sort"] = _tmp
+                show = show.sort_values(["_sort"], ascending=True, na_position="last").drop(columns=["_sort"])
+            cols = ["IP", "W-3기반예측", "오차%_W-3", "W-2기반예측", "오차%_W-2", "W-1기반예측(최종)", "오차%_W-1", "실제"]
+            cols = [c for c in cols if c in show.columns]
+            st.dataframe(show[cols], use_container_width=True, hide_index=True, height=520)
 
-    # --- 8. [최종 수정] 전체 IP 사전지표 종합 테이블 (AgGrid) ---
+
     st.markdown("#### 📋 전체 IP 사전지표 종합 현황")
     
     # 1) 데이터 집계 함수
