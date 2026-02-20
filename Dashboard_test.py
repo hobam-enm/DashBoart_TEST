@@ -4317,7 +4317,7 @@ def render_pre_launch_analysis():
     except Exception:
         actual_val = None
 
-    st.markdown(f"#### 🔮 1주차({target_week}) 화제성점수 예측")
+    st.markdown(f"###### 🔮 1주차({target_week}) 화제성점수 예측")
 
     if chosen is None:
         st.info("현재 사전 데이터가 부족해 예측할 수 없습니다. (최소 W-3 데이터 필요)")
@@ -4336,7 +4336,7 @@ def render_pre_launch_analysis():
                 실제 화제성점수 ({target_week}): <b>{(f"{actual_val:,.0f}" if actual_val is not None else "방영전입니다")}</b>
             </div>
             <div style="color:#6b7280; font-size:12.5px; margin-top:6px; line-height:1.35;">
-                사전 데이터의 마지막 주차(컷오프)에 맞춰 학습된 모델로 1주차 화제성점수를 추정했습니다.<br/>
+                사전 데이터가 누적된 주차에 맞춰 학습된 모델로 1주차 화제성점수를 추정했습니다.<br/>
                 <b>적용 모델:</b> {chosen} 기반 · <b>평균오차율:</b> {mape_text}<br/>
                 데이터가 누적되면(예: W-2 → W-1) 더 많은 정보를 반영한 모델로 자동 전환됩니다.
             </div>
