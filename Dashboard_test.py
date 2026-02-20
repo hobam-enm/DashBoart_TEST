@@ -3859,15 +3859,29 @@ def render_pre_launch_analysis():
             b_pv = pd.DataFrame(index=meta.index, columns=dig_weeks).fillna(0)
 
         dig_feats = pd.DataFrame(index=meta.index)
-        dig_feats["조회수_sum_W-6_W-1"] = v_pv.sum(axis=1)
-        dig_feats["언급량_sum_W-6_W-1"] = b_pv.sum(axis=1)
-        dig_feats["조회수_level_W-1"] = v_pv.get("W-1", 0)
-        dig_feats["언급량_level_W-1"] = b_pv.get("W-1", 0)
-        dig_feats["조회수_mom_W-1_minus_W-3"] = v_pv.get("W-1", 0) - v_pv.get("W-3", 0)
-        dig_feats["언급량_mom_W-1_minus_W-3"] = b_pv.get("W-1", 0) - b_pv.get("W-3", 0)
 
-        for c in ["조회수_sum_W-6_W-1", "언급량_sum_W-6_W-1", "조회수_level_W-1", "언급량_level_W-1"]:
-            dig_feats[f"log1p_{c}"] = np.log1p(dig_feats[c].clip(lower=0))
+        # 원본 카운트(조회/언급)는 스케일이 매우 크고 롱테일이어서 과대예측을 유발하기 쉬움.
+        # → 모델 입력은 log1p 변환 및 모멘텀의 signed-log 변환 중심으로 구성한다.
+        view_sum = v_pv.sum(axis=1)
+        buzz_sum = b_pv.sum(axis=1)
+        view_w1 = v_pv.get("W-1", 0)
+        buzz_w1 = b_pv.get("W-1", 0)
+        view_mom = v_pv.get("W-1", 0) - v_pv.get("W-3", 0)
+        buzz_mom = b_pv.get("W-1", 0) - b_pv.get("W-3", 0)
+
+        dig_feats["log1p_조회수_sum_W-6_W-1"] = np.log1p(view_sum.clip(lower=0))
+        dig_feats["log1p_언급량_sum_W-6_W-1"] = np.log1p(buzz_sum.clip(lower=0))
+        dig_feats["log1p_조회수_level_W-1"]   = np.log1p(pd.Series(view_w1, index=meta.index).clip(lower=0))
+        dig_feats["log1p_언급량_level_W-1"]   = np.log1p(pd.Series(buzz_w1, index=meta.index).clip(lower=0))
+
+        # 모멘텀은 음수도 가능하므로 signed-log1p로 변환
+        dig_feats["slog_조회수_mom_W-1_minus_W-3"] = np.sign(view_mom) * np.log1p(np.abs(view_mom))
+        dig_feats["slog_언급량_mom_W-1_minus_W-3"] = np.sign(buzz_mom) * np.log1p(np.abs(buzz_mom))
+
+        # 데이터 커버리지(주차가 덜 쌓인 IP에 대한 과대추정 완화용)
+        # 0이 '실제로 0'일 수도 있지만, 사전 구간에서 완전 0이 반복되면 정보가 부족한 케이스가 많아 보정에 도움이 됨.
+        dig_feats["조회수_week_coverage_W-6_W-1"] = (v_pv.fillna(0) > 0).mean(axis=1)
+        dig_feats["언급량_week_coverage_W-6_W-1"] = (b_pv.fillna(0) > 0).mean(axis=1)
 
         # ---- (4) 타깃: 1주차 화제성 점수(F_Score) ----
         target_metric = "F_Score"
@@ -3936,12 +3950,17 @@ def render_pre_launch_analysis():
         ])
 
         X_all = trainable[feature_cols].replace([np.inf, -np.inf], 0).fillna(0)
-        y_all = trainable[target_col].values
+        y_all_raw = trainable[target_col].values
+        # 타깃도 롱테일이어서 log1p로 학습 후 expm1로 복원(과대예측 완화)
+        y_all = np.log1p(np.clip(y_all_raw, a_min=0, a_max=None))
         model.fit(X_all, y_all)
 
         # ----- In-sample validation table (reference only) -----
         all_df = trainable.copy()
-        all_df["_pred"] = model.predict(X_all)
+        all_df["_pred_log"] = model.predict(X_all)
+        y_p05, y_p95 = np.percentile(y_all_raw, [5, 95])
+        all_df["_pred"] = np.expm1(all_df["_pred_log"]).clip(lower=0)
+        all_df["_pred"] = all_df["_pred"].clip(lower=y_p05, upper=y_p95)
 
         mae = float(mean_absolute_error(all_df[target_col].values, all_df["_pred"].values))
 
@@ -3955,7 +3974,11 @@ def render_pre_launch_analysis():
             x_ip = row_ip[feature_cols].replace([np.inf, -np.inf], 0).fillna(0)
 
             try:
-                pred_ip_val = float(model.predict(x_ip)[0])
+                pred_ip_val_log = float(model.predict(x_ip)[0])
+                pred_ip_val = float(np.expm1(pred_ip_val_log))
+                # 예측값 클리핑(학습 데이터 분포 기준) - 극단 과대예측 방지
+                y_p05, y_p95 = np.percentile(y_all_raw, [5, 95])
+                pred_ip_val = float(np.clip(pred_ip_val, y_p05, y_p95))
             except Exception:
                 pred_ip_val = None
 
