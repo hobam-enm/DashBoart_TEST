@@ -4418,12 +4418,14 @@ def render_pre_launch_analysis():
                 ]},
             ]
 
-            grid_options = {
-                "columnDefs": column_defs,
-                "defaultColDef": {"resizable": True, "sortable": True, "filter": True},
-                "domLayout": "normal",
-                "suppressDragLeaveHidesColumns": True,
-            }
+            # ===== [수정된 부분] =====
+            gb_val = GridOptionsBuilder.from_dataframe(grid)
+            gb_val.configure_default_column(resizable=True, sortable=True, filter=True)
+            gb_val.configure_grid_options(domLayout="normal", suppressDragLeaveHidesColumns=True)
+            
+            grid_options = gb_val.build()
+            grid_options["columnDefs"] = column_defs
+            # =========================
 
             AgGrid(
                 grid,
