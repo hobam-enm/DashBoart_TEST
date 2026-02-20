@@ -4372,58 +4372,66 @@ def render_pre_launch_analysis():
                 acc[c] = acc[c].map(lambda v: f"{v:.1f}%" if pd.notna(v) else "-")
 
             # --- Display table (grouped columns) ---
-            view = acc[["IP","실제","W-3기반예측","W-2기반예측","W-1기반예측(최종)","오차(W-3)","오차(W-2)","오차(W-1)"]].copy()
+            # NOTE: Streamlit's st.dataframe column_config does not support MultiIndex (tuple) keys reliably.
+            # We render this table with AgGrid to support header grouping + fixed column widths + highlight.
+            grid = acc.rename(columns={
+                "W-3기반예측": "W-3예측",
+                "W-2기반예측": "W-2예측",
+                "W-1기반예측(최종)": "W-1예측",
+                "오차(W-3)": "W-3오차",
+                "오차(W-2)": "W-2오차",
+                "오차(W-1)": "W-1오차",
+            })[["IP","실제","W-3예측","W-2예측","W-1예측","W-3오차","W-2오차","W-1오차"]].copy()
 
-            # sort by final error (desc)
-            _sort = pd.to_numeric(view["오차(W-1)"].astype(str).str.replace("%","",regex=False), errors="coerce")
-            view["_sort"] = _sort
-            view = view.sort_values("_sort", ascending=False).drop(columns=["_sort"])
+            # Ensure display types
+            for c in ["실제","W-3예측","W-2예측","W-1예측"]:
+                grid[c] = pd.to_numeric(grid[c], errors="coerce").round(0)
 
-            # build MultiIndex columns for grouped headers: 예측 / 오차
-            disp = view.rename(columns={
-                "W-3기반예측": "W-3",
-                "W-2기반예측": "W-2",
-                "W-1기반예측(최종)": "W-1(최종)",
-                "오차(W-3)": "W-3",
-                "오차(W-2)": "W-2",
-                "오차(W-1)": "W-1",
-            }).copy()
+            # Formatter: thousands separator for score columns, keep '-' for NaN
+            fmt_int = JsCode("""
+                function(params){
+                    if (params.value === null || params.value === undefined || params.value === '' || isNaN(params.value)) return '-';
+                    return Math.round(params.value).toLocaleString();
+                }
+            """)
+            # Right align numeric-like columns
+            right_align = JsCode("""function(params){ return {'textAlign':'right'}; }""")
+            actual_style = JsCode("""function(params){ return {'backgroundColor':'#FFF2CC','fontWeight':'700','textAlign':'right'}; }""")
 
-            disp.columns = pd.MultiIndex.from_tuples([
-                ("", "IP"),
-                ("실제", "화제성(W1)"),
-                ("예측", "W-3"),
-                ("예측", "W-2"),
-                ("예측", "W-1(최종)"),
-                ("오차", "W-3"),
-                ("오차", "W-2"),
-                ("오차", "W-1"),
-            ])
+            column_defs = [
+                {"headerName":"", "children":[
+                    {"headerName":"IP", "field":"IP", "pinned":"left", "width":210}
+                ]},
+                {"headerName":"실제", "children":[
+                    {"headerName":"화제성(W1)", "field":"실제", "width":120, "valueFormatter": fmt_int, "cellStyle": actual_style}
+                ]},
+                {"headerName":"예측", "children":[
+                    {"headerName":"W-3", "field":"W-3예측", "width":120, "valueFormatter": fmt_int, "cellStyle": right_align},
+                    {"headerName":"W-2", "field":"W-2예측", "width":120, "valueFormatter": fmt_int, "cellStyle": right_align},
+                    {"headerName":"W-1(최종)", "field":"W-1예측", "width":120, "valueFormatter": fmt_int, "cellStyle": right_align},
+                ]},
+                {"headerName":"오차", "children":[
+                    {"headerName":"W-3", "field":"W-3오차", "width":120, "cellStyle": right_align},
+                    {"headerName":"W-2", "field":"W-2오차", "width":120, "cellStyle": right_align},
+                    {"headerName":"W-1", "field":"W-1오차", "width":120, "cellStyle": right_align},
+                ]},
+            ]
 
-            # highlight '실제' column
-            styler = disp.style.set_properties(
-                subset=[("실제","화제성(W1)")],
-                **{"background-color": "#FFF2CC", "font-weight": "700"}
-            )
-
-            # keep non-IP columns visually similar width
-            col_cfg = {
-                ("", "IP"): st.column_config.Column("IP", width="large"),
-                ("실제","화제성(W1)"): st.column_config.Column("실제", width="small"),
-                ("예측","W-3"): st.column_config.Column("W-3예측", width="small"),
-                ("예측","W-2"): st.column_config.Column("W-2예측", width="small"),
-                ("예측","W-1(최종)"): st.column_config.Column("W-1예측", width="small"),
-                ("오차","W-3"): st.column_config.Column("W-3오차", width="small"),
-                ("오차","W-2"): st.column_config.Column("W-2오차", width="small"),
-                ("오차","W-1"): st.column_config.Column("W-1오차", width="small"),
+            go = {
+                "columnDefs": column_defs,
+                "defaultColDef": {"resizable": True, "sortable": True, "filter": True},
+                "domLayout": "normal",
+                "suppressDragLeaveHidesColumns": True,
             }
 
-            st.dataframe(
-                styler,
-                use_container_width=True,
-                hide_index=True,
+            AgGrid(
+                grid,
+                gridOptions=go,
                 height=420,
-                column_config=col_cfg,
+                fit_columns_on_grid_load=False,
+                allow_unsafe_jscode=True,
+                update_mode=GridUpdateMode.NO_UPDATE,
+                theme="alpine",
             )
     st.divider()
 
