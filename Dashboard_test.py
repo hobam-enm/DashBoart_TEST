@@ -4336,9 +4336,9 @@ def render_pre_launch_analysis():
                 실제 화제성점수 ({target_week}): <b>{(f"{actual_val:,.0f}" if actual_val is not None else "방영전입니다")}</b>
             </div>
             <div style="color:#6b7280; font-size:12.5px; margin-top:6px; line-height:1.35;">
-                사전 데이터가 누적된 주차에 맞춰 학습된 모델로 1주차 화제성점수를 추정했습니다.<br/>
+                사전 데이터가 누적된 주차에 맞춰 학습된 모델로 방영 첫 주차 화제성점수를 추정<br/>
                 <b>적용 모델:</b> {chosen} 기반 · <b>평균오차율:</b> {mape_text}<br/>
-                데이터가 누적되면(예: W-2 → W-1) 더 많은 정보를 반영한 모델로 자동 전환됩니다.
+                (데이터가 누적되면(예: W-2 → W-1) 더 많은 정보를 반영한 모델로 자동 전환됩니다.)
             </div>
         </div>
         """, unsafe_allow_html=True)
