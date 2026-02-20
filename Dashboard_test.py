@@ -4003,44 +4003,109 @@ def render_pre_launch_analysis():
                 contrib_df["pretty"] = contrib_df["feature"].apply(_pretty_name)
                 contrib_df["abs"] = np.abs(contrib_df["contribution"])
                 contrib_df = contrib_df.sort_values("abs", ascending=False).drop(columns=["abs"])
+                
                 def _grp(feat: str) -> str:
-                    # 그룹 분류: 기타 제거(모든 변수는 아래 4그룹 중 하나로 강제 분류)
-                    if feat.startswith("시사지표_"):
+                    """변수를 4개 그룹(사전 디지털/언급, 시사지표, MPI, 보정)으로 강제 분류"""
+                    f = str(feat)
+
+                    # 1) 시사지표
+                    if f.startswith("시사지표_"):
                         return "시사지표"
-                    if feat.startswith("MPI_"):
+
+                    # 2) MPI (3종 + 파생)
+                    if f.startswith("MPI_"):
                         return "MPI"
-                    if ("week_coverage" in feat) or ("coverage" in feat):
-                        return "보정"
-                    # 디지털/언급 계열 (조회수/언급량/로그 피처 포함)
-                    if ("조회수" in feat) or ("언급" in feat) or feat.startswith("log1p_") or feat.startswith("slog_"):
+
+                    # 3) 사전 디지털/언급 (조회수/언급량 + 파생)
+                    # - log1p_*, slog_* 는 모두 사전 디지털/언급으로
+                    if f.startswith("log1p_") or f.startswith("slog_"):
                         return "사전 디지털/언급"
-                    # 남는 것은 보정으로 처리
+                    # - 키워드 기반(조회/조회수/언급)
+                    if ("조회" in f) or ("조회수" in f) or ("언급" in f) or ("언급량" in f):
+                        return "사전 디지털/언급"
+
+                    # 4) 보정(커버리지/수축 등)
                     return "보정"
 
                 def _pretty_name(feat: str) -> str:
                     """개발자틱 변수명을 사용자 친화 라벨로 변환(표시용)"""
-                    if feat.startswith("시사지표_"):
-                        return feat.replace("시사지표_", "시사지표: ")
-                    if feat.startswith("MPI_"):
-                        base = feat.replace("MPI_", "MPI: ").replace("_", " ")
-                        base = base.replace(" level ", " (수준) ").replace(" mean ", " (평균) ").replace(" mom ", " (최근변화) ").replace(" slope ", " (추세) ")
-                        base = base.replace("minus", "-")
-                        return base
-                    if "week_coverage" in feat:
-                        t = feat.replace("_week_coverage_", " 주차커버리지 ").replace("_", " ")
-                        return f"보정: {t}"
-                    if feat.startswith("log1p_"):
-                        t = feat.replace("log1p_", "").replace("_", " ")
-                        t = t.replace("sum", "총량").replace("level", "마지막값").replace("mom", "최근변화").replace("slope", "추세").replace("minus", "-")
-                        return f"사전: {t} (log)"
-                    if feat.startswith("slog_"):
-                        t = feat.replace("slog_", "").replace("_", " ")
-                        t = t.replace("mom", "최근변화").replace("minus", "-")
-                        return f"사전: {t} (signed log)"
-                    if ("조회수" in feat) or ("언급" in feat):
-                        t = feat.replace("_", " ").replace("mom", "최근변화").replace("sum", "총량").replace("level", "마지막값").replace("minus", "-")
-                        return f"사전: {t}"
-                    return feat
+                    f = str(feat)
+
+                    # --- 시사지표 ---
+                    if f.startswith("시사지표_"):
+                        return f"시사: {f.replace('시사지표_', '')}"
+
+                    # --- MPI ---
+                    if f.startswith("MPI_"):
+                        # 예: MPI_인지_mom_W-1_minus_W-3  ->  MPI 인지: 최근변화 (W-1 - W-3)
+                        # 예: MPI_시청의향_level_W-1      ->  MPI 시청의향: 수준 (W-1)
+                        s = f.replace("MPI_", "")
+                        parts = s.split("_")
+
+                        # 타입(인지/선호/시청의향)
+                        mpi_kind = parts[0] if parts else s
+
+                        # 나머지 토큰에서 feature type 찾기
+                        # level/mean/mom/slope
+                        label_map = {"level": "수준", "mean": "평균", "mom": "최근변화", "slope": "추세"}
+                        feat_type = None
+                        for k in ["level", "mean", "mom", "slope"]:
+                            if k in parts:
+                                feat_type = k
+                                break
+
+                        # 주차 정보(예: W-6_W-1 / W-1_minus_W-3)
+                        week_txt = ""
+                        if "W-6" in f and "W-1" in f and "sum" in f:
+                            week_txt = "(W-6~W-1)"
+                        if "W-6" in f and "W-1" in f and ("mean" in f or "slope" in f):
+                            week_txt = "(W-6~W-1)"
+                        if "W-1_minus_W-3" in f:
+                            week_txt = "(W-1 - W-3)"
+                        elif "_W-1" in f:
+                            week_txt = "(W-1)"
+
+                        ft = label_map.get(feat_type, "지표")
+                        return f"MPI {mpi_kind}: {ft} {week_txt}".strip()
+
+                    # --- 보정(커버리지 등) ---
+                    if "week_coverage" in f:
+                        # 예: 조회수_week_coverage_W-6_W-1 -> 보정: 조회수 주차커버리지 (W-6~W-1)
+                        base = f.replace("_week_coverage_", " 주차커버리지 ")
+                        base = base.replace("_W-6_W-1", " (W-6~W-1)")
+                        base = base.replace("_", " ")
+                        return f"보정: {base}"
+
+                    # --- 사전 디지털/언급 ---
+                    # log1p_조회수_sum_W-6_W-1  -> 사전: 조회수 총량 (W-6~W-1)
+                    if f.startswith("log1p_"):
+                        s = f.replace("log1p_", "")
+                        s = s.replace("_W-6_W-1", " (W-6~W-1)")
+                        s = s.replace("_W-1_minus_W-3", " (W-1 - W-3)")
+                        s = s.replace("_W-1", " (W-1)")
+                        s = s.replace("_", " ")
+                        s = s.replace("sum", "총량").replace("level", "마지막값").replace("mom", "최근변화").replace("slope", "추세").replace("minus", "-")
+                        return f"사전: {s}"
+
+                    if f.startswith("slog_"):
+                        s = f.replace("slog_", "")
+                        s = s.replace("_W-6_W-1", " (W-6~W-1)")
+                        s = s.replace("_W-1_minus_W-3", " (W-1 - W-3)")
+                        s = s.replace("_W-1", " (W-1)")
+                        s = s.replace("_", " ")
+                        s = s.replace("mom", "최근변화").replace("minus", "-")
+                        return f"사전: {s}"
+
+                    # 그 외 조회/언급 키워드가 들어가면 사전으로 표시
+                    if ("조회" in f) or ("조회수" in f) or ("언급" in f) or ("언급량" in f):
+                        s = f.replace("_W-6_W-1", " (W-6~W-1)")
+                        s = s.replace("_W-1_minus_W-3", " (W-1 - W-3)")
+                        s = s.replace("_W-1", " (W-1)")
+                        s = s.replace("_", " ")
+                        s = s.replace("sum", "총량").replace("level", "마지막값").replace("mom", "최근변화").replace("minus", "-")
+                        return f"사전: {s}"
+
+                    return f
 
                 contrib_df["group"] = contrib_df["feature"].apply(_grp)
                 group_contrib_df = (
@@ -4100,23 +4165,27 @@ def render_pre_launch_analysis():
         """, unsafe_allow_html=True)
 
         # ---- 예측 기여 요인(접힘/펼침) ----
-        with st.expander("예측 기여 요인 보기", expanded=False):
-            if group_contrib_df is not None and not group_contrib_df.empty:
-                st.markdown("###### 예측에 기여한 요인(그룹 합)")
-                view = group_contrib_df.copy()
-                view["기여(+) / 감소(-)"] = view["contribution"].apply(lambda v: f"{v:+.3f}")
-                view = view.rename(columns={"group": "그룹"})[["그룹", "기여(+) / 감소(-)"]]
-                st.dataframe(view, use_container_width=True, hide_index=True)
+        
+        # ---- 예측 기여 요인(기본 접힘) ----
+        with st.expander("📌 예측 기여 요인(펼치기)", expanded=False):
+            if (group_contrib_df is None or group_contrib_df.empty) and (contrib_df is None or contrib_df.empty):
+                st.info("기여 요인 정보를 계산할 수 없습니다. (학습 데이터 부족 또는 계산 실패)")
+            else:
+                if group_contrib_df is not None and not group_contrib_df.empty:
+                    st.markdown("###### 예측에 기여한 요인(그룹 합)")
+                    view = group_contrib_df.copy()
+                    view["기여(+) / 감소(-)"] = view["contribution"].apply(lambda v: f"{v:+.3f}")
+                    view = view.rename(columns={"group": "그룹"})[["그룹", "기여(+) / 감소(-)"]]
+                    st.dataframe(view, use_container_width=True, hide_index=True)
 
-            if contrib_df is not None and not contrib_df.empty:
-                st.markdown("###### 상세 기여 변수(전체)")
-                allv = contrib_df.copy()
-                # 기여 절대값 기준으로 높은 순 정렬(이미 정렬되어 있지만 안전하게)
-                allv["abs"] = allv["contribution"].abs()
-                allv = allv.sort_values("abs", ascending=False).drop(columns=["abs"])
-                allv["기여(+) / 감소(-)"] = allv["contribution"].apply(lambda v: f"{v:+.3f}")
-                allv = allv.rename(columns={"pretty": "변수", "group": "그룹"})[["변수", "그룹", "기여(+) / 감소(-)"]]
-                st.dataframe(allv, use_container_width=True, hide_index=True)
+                if contrib_df is not None and not contrib_df.empty:
+                    st.markdown("###### 상세 기여 변수(전체 · 영향 큰 순)")
+                    allv = contrib_df.copy()
+                    allv["abs"] = allv["contribution"].abs()
+                    allv = allv.sort_values("abs", ascending=False).drop(columns=["abs"])
+                    allv["기여(+) / 감소(-)"] = allv["contribution"].apply(lambda v: f"{v:+.3f}")
+                    allv = allv.rename(columns={"pretty": "변수", "group": "그룹"})[["변수", "그룹", "기여(+) / 감소(-)"]]
+                    st.dataframe(allv, use_container_width=True, hide_index=True, height=420)
 
     st.markdown("#### ✅ 예측 정확도(방영작 검증)")
     if all_pred_df is None or all_pred_df.empty:
