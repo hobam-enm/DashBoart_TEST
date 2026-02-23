@@ -4326,7 +4326,22 @@ def render_pre_launch_analysis():
     # actual value
     actual_val = None
     try:
-        _a = df_all[(df_all.get("metric") == "F_Score") & (df_all.get("주차").astype(str) == str(target_week)) & (df_all.get("IP") == global_ip)].copy()
+        def _norm_week_label_for_actual(s):
+            s = str(s)
+            return s.replace("+", "").replace("주차", "").strip()
+
+        if "주차" in df_all.columns:
+            week_norm_all = df_all["주차"].astype(str).map(_norm_week_label_for_actual)
+            target_week_norm = _norm_week_label_for_actual(target_week)
+
+            _a = df_all[
+                (df_all.get("metric") == "F_Score") &
+                (week_norm_all == target_week_norm) &
+                (df_all.get("IP") == global_ip)
+            ].copy()
+        else:
+            _a = pd.DataFrame()
+
         if not _a.empty:
             _a["__v"] = pd.to_numeric(_a.get("value"), errors="coerce")
             if _a["__v"].notna().any():
