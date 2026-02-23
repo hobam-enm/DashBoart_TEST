@@ -4462,6 +4462,7 @@ def render_pre_launch_analysis():
                 gb_val.configure_column("W-3 예측(오차)", headerName="W-3 예측(오차)", flex=1, cellStyle=right_align)
             
                 grid_options = gb_val.build()
+                grid = grid.fillna("")
 
                 AgGrid(
                     grid,
@@ -4471,6 +4472,7 @@ def render_pre_launch_analysis():
                     allow_unsafe_jscode=True,
                     update_mode=GridUpdateMode.NO_UPDATE,
                     theme="alpine",
+                    key=f"predict_acc_grid_{global_ip}"
                 )
     st.divider()
 
