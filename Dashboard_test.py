@@ -4449,33 +4449,30 @@ def render_pre_launch_analysis():
                 right_align = JsCode("""function(params){ return {'textAlign':'right'}; }""")
                 actual_style = JsCode("""function(params){ return {'backgroundColor':'#FFF2CC','fontWeight':'700','textAlign':'right'}; }""")
 
-                # ===== [수정] JsCode 직렬화 오류 방지를 위해 configure_column을 사용하도록 변경 =====
-                # 1. inf/-inf 값을 NaN으로 바꾼 뒤 문자열로 치환 (JSON 에러 완전 차단)
+                # ===== [안전장치] inf/-inf 값을 NaN으로 바꾼 뒤 문자열로 치환 =====
                 grid = grid.replace([np.inf, -np.inf], np.nan).fillna("-")
 
                 gb_val = GridOptionsBuilder.from_dataframe(grid)
                 gb_val.configure_default_column(resizable=True, sortable=True, filter=True)
-                
-                # 2. st.expander 내부 렌더링 버그 우회 (autoHeight 적용)
                 gb_val.configure_grid_options(domLayout="autoHeight", suppressDragLeaveHidesColumns=True)
                 
-                # 개별 컬럼 설정 적용
-                gb_val.configure_column("IP", headerName="IP", pinned="left", flex=1.5)
-                gb_val.configure_column("실제", headerName="실제 화제성(W1)", flex=1, valueFormatter=fmt_int, cellStyle=actual_style)
-                gb_val.configure_column("W-1 예측(오차)", headerName="W-1 예측(오차)", flex=1, cellStyle=right_align)
-                gb_val.configure_column("W-2 예측(오차)", headerName="W-2 예측(오차)", flex=1, cellStyle=right_align)
-                gb_val.configure_column("W-3 예측(오차)", headerName="W-3 예측(오차)", flex=1, cellStyle=right_align)
+                # ===== [최종 해결책] flex 비율을 없애고 고정 width를 할당 =====
+                gb_val.configure_column("IP", header_name="IP", pinned="left", width=160)
+                gb_val.configure_column("실제", header_name="실제 화제성(W1)", width=130, valueFormatter=fmt_int, cellStyle=actual_style)
+                gb_val.configure_column("W-1 예측(오차)", header_name="W-1 예측(오차)", width=150, cellStyle=right_align)
+                gb_val.configure_column("W-2 예측(오차)", header_name="W-2 예측(오차)", width=150, cellStyle=right_align)
+                gb_val.configure_column("W-3 예측(오차)", header_name="W-3 예측(오차)", width=150, cellStyle=right_align)
             
                 grid_options = gb_val.build()
 
                 AgGrid(
                     grid,
                     gridOptions=grid_options,
-                    fit_columns_on_grid_load=True, # ===== [수정 1] 열 너비 꽉차게 설정 =====
+                    fit_columns_on_grid_load=False, # 👈 [핵심] 너비 강제 맞춤 해제
                     allow_unsafe_jscode=True,
                     update_mode=GridUpdateMode.NO_UPDATE,
                     theme="alpine",
-                    key=f"predict_acc_grid_{global_ip}"
+                    key=f"predict_acc_grid_{global_ip}_v3" # 캐시 갱신을 위해 키 변경
                 )
     st.divider()
 
