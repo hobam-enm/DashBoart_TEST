@@ -4449,30 +4449,40 @@ def render_pre_launch_analysis():
                 right_align = JsCode("""function(params){ return {'textAlign':'right'}; }""")
                 actual_style = JsCode("""function(params){ return {'backgroundColor':'#FFF2CC','fontWeight':'700','textAlign':'right'}; }""")
 
-                # ===== [안전장치] inf/-inf 값을 NaN으로 바꾼 뒤 문자열로 치환 =====
+                # ===== [플랜 B] AgGrid 버그 우회를 위한 Streamlit 네이티브 데이터프레임 렌더링 =====
+                # 1. JSON 직렬화 에러를 방지하기 위해 무한대 값 및 결측치 안전 처리
                 grid = grid.replace([np.inf, -np.inf], np.nan).fillna("-")
 
-                gb_val = GridOptionsBuilder.from_dataframe(grid)
-                gb_val.configure_default_column(resizable=True, sortable=True, filter=True)
-                gb_val.configure_grid_options(domLayout="autoHeight", suppressDragLeaveHidesColumns=True)
-                
-                # ===== [최종 해결책] flex 비율을 없애고 고정 width를 할당 =====
-                gb_val.configure_column("IP", header_name="IP", pinned="left", width=160)
-                gb_val.configure_column("실제", header_name="실제 화제성(W1)", width=130, valueFormatter=fmt_int, cellStyle=actual_style)
-                gb_val.configure_column("W-1 예측(오차)", header_name="W-1 예측(오차)", width=150, cellStyle=right_align)
-                gb_val.configure_column("W-2 예측(오차)", header_name="W-2 예측(오차)", width=150, cellStyle=right_align)
-                gb_val.configure_column("W-3 예측(오차)", header_name="W-3 예측(오차)", width=150, cellStyle=right_align)
-            
-                grid_options = gb_val.build()
+                # 2. Pandas Styler를 이용한 표 디자인 함수 정의
+                def apply_grid_styles(row):
+                    # 기본적으로 빈 스타일 배열 생성
+                    styles = [''] * len(row)
+                    
+                    # 현재 선택된 IP 행 하이라이트 (연한 노란색 배경, 굵은 빨간 글씨)
+                    if row["IP"] == global_ip:
+                        styles = ['background-color: #fffde7; font-weight: 700; color: #d93636;'] * len(row)
+                    
+                    # '실제' 컬럼(인덱스 1)은 구분을 위해 항상 배경색 적용
+                    styles[1] = styles[1] + ' background-color: #FFF2CC; font-weight: 700;'
+                    
+                    return styles
 
-                AgGrid(
-                    grid,
-                    gridOptions=grid_options,
-                    fit_columns_on_grid_load=False, # 👈 [핵심] 너비 강제 맞춤 해제
-                    allow_unsafe_jscode=True,
-                    update_mode=GridUpdateMode.NO_UPDATE,
-                    theme="alpine",
-                    key=f"predict_acc_grid_{global_ip}_v3" # 캐시 갱신을 위해 키 변경
+                # 3. 데이터프레임에 스타일 및 포맷팅 적용
+                styled_grid = (
+                    grid.style
+                    .apply(apply_grid_styles, axis=1)
+                    # 실제 값(숫자)에 천 단위 콤마 적용, 나머지는 그대로 통과
+                    .format({
+                        "실제": lambda x: f"{int(x):,}" if isinstance(x, (int, float)) and pd.notna(x) else x
+                    })
+                )
+
+                # 4. Streamlit 네이티브 함수로 렌더링 (expander 버그 면역)
+                st.dataframe(
+                    styled_grid,
+                    use_container_width=True, # 열 너비 꽉 차게 맞춤
+                    hide_index=True,          # 불필요한 인덱스 번호 숨김
+                    height=400                # 적절한 높이 지정
                 )
     st.divider()
 
