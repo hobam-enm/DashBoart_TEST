@@ -4449,21 +4449,19 @@ def render_pre_launch_analysis():
                 right_align = JsCode("""function(params){ return {'textAlign':'right'}; }""")
                 actual_style = JsCode("""function(params){ return {'backgroundColor':'#FFF2CC','fontWeight':'700','textAlign':'right'}; }""")
 
-                # 심플해진 컬럼 정의 (flex 속성을 추가하여 남는 공간을 비율대로 꽉 채움)
-                column_defs = [
-                    {"headerName": "IP", "field": "IP", "pinned": "left", "flex": 1.5},
-                    {"headerName": "실제 화제성(W1)", "field": "실제", "flex": 1, "valueFormatter": fmt_int, "cellStyle": actual_style},
-                    {"headerName": "W-1 예측(오차)", "field": "W-1 예측(오차)", "flex": 1, "cellStyle": right_align},
-                    {"headerName": "W-2 예측(오차)", "field": "W-2 예측(오차)", "flex": 1, "cellStyle": right_align},
-                    {"headerName": "W-3 예측(오차)", "field": "W-3 예측(오차)", "flex": 1, "cellStyle": right_align},
-                ]
-
+                # ===== [수정] JsCode 직렬화 오류 방지를 위해 configure_column을 사용하도록 변경 =====
                 gb_val = GridOptionsBuilder.from_dataframe(grid)
                 gb_val.configure_default_column(resizable=True, sortable=True, filter=True)
                 gb_val.configure_grid_options(domLayout="normal", suppressDragLeaveHidesColumns=True)
+                
+                # 개별 컬럼 설정 적용
+                gb_val.configure_column("IP", headerName="IP", pinned="left", flex=1.5)
+                gb_val.configure_column("실제", headerName="실제 화제성(W1)", flex=1, valueFormatter=fmt_int, cellStyle=actual_style)
+                gb_val.configure_column("W-1 예측(오차)", headerName="W-1 예측(오차)", flex=1, cellStyle=right_align)
+                gb_val.configure_column("W-2 예측(오차)", headerName="W-2 예측(오차)", flex=1, cellStyle=right_align)
+                gb_val.configure_column("W-3 예측(오차)", headerName="W-3 예측(오차)", flex=1, cellStyle=right_align)
             
                 grid_options = gb_val.build()
-                grid_options["columnDefs"] = column_defs
 
                 AgGrid(
                     grid,
