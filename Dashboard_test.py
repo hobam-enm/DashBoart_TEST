@@ -4450,9 +4450,14 @@ def render_pre_launch_analysis():
                 actual_style = JsCode("""function(params){ return {'backgroundColor':'#FFF2CC','fontWeight':'700','textAlign':'right'}; }""")
 
                 # ===== [수정] JsCode 직렬화 오류 방지를 위해 configure_column을 사용하도록 변경 =====
+                # 1. inf/-inf 값을 NaN으로 바꾼 뒤 문자열로 치환 (JSON 에러 완전 차단)
+                grid = grid.replace([np.inf, -np.inf], np.nan).fillna("-")
+
                 gb_val = GridOptionsBuilder.from_dataframe(grid)
                 gb_val.configure_default_column(resizable=True, sortable=True, filter=True)
-                gb_val.configure_grid_options(domLayout="normal", suppressDragLeaveHidesColumns=True)
+                
+                # 2. st.expander 내부 렌더링 버그 우회 (autoHeight 적용)
+                gb_val.configure_grid_options(domLayout="autoHeight", suppressDragLeaveHidesColumns=True)
                 
                 # 개별 컬럼 설정 적용
                 gb_val.configure_column("IP", headerName="IP", pinned="left", flex=1.5)
@@ -4462,12 +4467,10 @@ def render_pre_launch_analysis():
                 gb_val.configure_column("W-3 예측(오차)", headerName="W-3 예측(오차)", flex=1, cellStyle=right_align)
             
                 grid_options = gb_val.build()
-                grid = grid.fillna("")
 
                 AgGrid(
                     grid,
                     gridOptions=grid_options,
-                    height=420,
                     fit_columns_on_grid_load=True, # ===== [수정 1] 열 너비 꽉차게 설정 =====
                     allow_unsafe_jscode=True,
                     update_mode=GridUpdateMode.NO_UPDATE,
