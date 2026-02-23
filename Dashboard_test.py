@@ -4285,16 +4285,33 @@ def render_pre_launch_analysis():
 
     def _has_week(ip: str, w: str) -> bool:
         try:
-            # key metrics 존재 여부로 판단
-            sub = df_all[(df_all["IP"] == ip) & (df_all["주차"].astype(str) == str(w))].copy()
-            sub = sub[sub.get("metric").isin(["언급량", "MPI_인지", "MPI_선호", "MPI_시청의향"])].copy()
-            if not sub.empty:
-                return True
+            if "주차" not in df_all.columns:
+                return False
+
+            def _norm_week_label(s):
+                s = str(s)
+                return s.replace("+", "").replace("주차", "").strip()
+
+            # 해당 IP의 해당 주차 레코드 필터링
+            week_norm = df_all["주차"].astype(str).map(_norm_week_label)
+            sub = df_all[(df_all["IP"] == ip) & (week_norm == _norm_week_label(w))].copy()
+
+            # 🔑 핵심 사전지표 3종: 조회수 / 언급량 / MPI(인지·선호·시청의향)
+            # 하나라도 없으면 해당 주차는 '충분한 데이터 없음'으로 간주
+            has_buzz = not sub[sub.get("metric") == "언급량"].empty
+
+            mpi_metrics = ["MPI_인지", "MPI_선호", "MPI_시청의향"]
+            has_mpi = not sub[sub.get("metric").isin(mpi_metrics)].empty
+
+            has_view = False
             if "_get_view_data" in globals():
                 v = _get_view_data(df_all)
-                v = v[(v["IP"] == ip) & (v["주차"].astype(str) == str(w))]
-                return not v.empty
-            return False
+                if "주차" in v.columns:
+                    v_week_norm = v["주차"].astype(str).map(_norm_week_label)
+                    v_sub = v[(v["IP"] == ip) & (v_week_norm == _norm_week_label(w))]
+                    has_view = not v_sub.empty
+
+            return has_view and has_buzz and has_mpi
         except Exception:
             return False
 
@@ -4344,91 +4361,104 @@ def render_pre_launch_analysis():
         """, unsafe_allow_html=True)
 
     with st.expander("✅ 예측 정확도(방영작 검증)", expanded=False):
-        y_all = df_all[(df_all.get("metric") == "F_Score") & (df_all.get("주차").astype(str) == str(target_week))].copy()
-        y_all["y"] = pd.to_numeric(y_all.get("value"), errors="coerce")
-        y_ip = y_all.groupby("IP")["y"].mean().dropna()
-        if y_ip.empty:
-            st.info("검증용 데이터가 없습니다.")
+        if "주차" not in df_all.columns:
+            st.info("검증용 데이터에 '주차' 컬럼이 없어 예측 정확도를 계산할 수 없습니다.")
         else:
-            acc = pd.DataFrame({"IP": y_ip.index, "실제": y_ip.values})
+            def _norm_week_label(s):
+                s = str(s)
+                return s.replace("+", "").replace("주차", "").strip()
 
-            def _attach_pred(colname: str, cutoff: str):
-                pdf = preds.get(cutoff, {}).get("df")
-                if pdf is None or pdf.empty:
-                    acc[colname] = np.nan
-                    return
-                m = pdf.set_index("IP")["_pred"]
-                acc[colname] = acc["IP"].map(m)
+            week_norm = df_all["주차"].astype(str).map(_norm_week_label)
+            target_week_norm = _norm_week_label(target_week)
 
-            _attach_pred("W-3기반예측", "W-3")
-            _attach_pred("W-2기반예측", "W-2")
-            _attach_pred("W-1기반예측(최종)", "W-1")
+            y_all = df_all[
+                (df_all.get("metric") == "F_Score") &
+                (week_norm == target_week_norm)
+            ].copy()
+            y_all["y"] = pd.to_numeric(y_all.get("value"), errors="coerce")
+            y_ip = y_all.groupby("IP")["y"].mean().dropna()
+            if y_ip.empty:
+                st.info("검증용 데이터가 없습니다.")
+            else:
+                acc = pd.DataFrame({"IP": y_ip.index, "실제": y_ip.values})
 
-            # ===== [수정 4] 오차율 방향(+/-) 표기를 위해 분자 부분의 abs() 제거 =====
-            def _err_pct(p, a):
-                if pd.isna(p) or pd.isna(a) or a == 0:
-                    return np.nan
-                return (p - a) / abs(a) * 100.0
+                def _attach_pred(colname: str, cutoff: str):
+                    pdf = preds.get(cutoff, {}).get("df")
+                    if pdf is None or pdf.empty:
+                        acc[colname] = np.nan
+                        return
+                    m = pdf.set_index("IP")["_pred"]
+                    acc[colname] = acc["IP"].map(m)
 
-            acc["오차"] = np.nan  # placeholder
+                _attach_pred("W-3기반예측", "W-3")
+                _attach_pred("W-2기반예측", "W-2")
+                _attach_pred("W-1기반예측(최종)", "W-1")
 
-            acc["오차(W-3)"] = [ _err_pct(p,a) for p,a in zip(acc["W-3기반예측"], acc["실제"]) ]
-            acc["오차(W-2)"] = [ _err_pct(p,a) for p,a in zip(acc["W-2기반예측"], acc["실제"]) ]
-            acc["오차(W-1)"] = [ _err_pct(p,a) for p,a in zip(acc["W-1기반예측(최종)"], acc["실제"]) ]
+                # ===== [수정 4] 오차율 방향(+/-) 표기를 위해 분자 부분의 abs() 제거 =====
+                def _err_pct(p, a):
+                    if pd.isna(p) or pd.isna(a) or a == 0:
+                        return np.nan
+                    return (p - a) / abs(a) * 100.0
 
-            for c in ["W-3기반예측","W-2기반예측","W-1기반예측(최종)","실제"]:
-                acc[c] = pd.to_numeric(acc[c], errors="coerce").round(0)
+                acc["오차"] = np.nan  # placeholder
 
-            # ===== [수정 3] 예측값과 오차율을 결합하여 직관적인 텍스트 생성 =====
-            def _combine_pred_err(pred, err):
-                if pd.isna(pred): return "-"
-                p_str = f"{int(pred):,}"
-                if pd.isna(err): return p_str
-                sign = "+" if err > 0 else ""
-                return f"{p_str} ({sign}{err:.1f}%)"
+                acc["오차(W-3)"] = [ _err_pct(p,a) for p,a in zip(acc["W-3기반예측"], acc["실제"]) ]
+                acc["오차(W-2)"] = [ _err_pct(p,a) for p,a in zip(acc["W-2기반예측"], acc["실제"]) ]
+                acc["오차(W-1)"] = [ _err_pct(p,a) for p,a in zip(acc["W-1기반예측(최종)"], acc["실제"]) ]
 
-            acc["W-1 예측(오차)"] = [ _combine_pred_err(p, e) for p, e in zip(acc["W-1기반예측(최종)"], acc["오차(W-1)"]) ]
-            acc["W-2 예측(오차)"] = [ _combine_pred_err(p, e) for p, e in zip(acc["W-2기반예측"], acc["오차(W-2)"]) ]
-            acc["W-3 예측(오차)"] = [ _combine_pred_err(p, e) for p, e in zip(acc["W-3기반예측"], acc["오차(W-3)"]) ]
+                for c in ["W-3기반예측","W-2기반예측","W-1기반예측(최종)","실제"]:
+                    acc[c] = pd.to_numeric(acc[c], errors="coerce").round(0)
 
-            # ===== [수정 2] W-1이 가장 먼저 오도록 컬럼 순서 재배치 =====
-            grid = acc[["IP", "실제", "W-1 예측(오차)", "W-2 예측(오차)", "W-3 예측(오차)"]].copy()
+                # ===== [수정 3] 예측값과 오차율을 결합하여 직관적인 텍스트 생성 =====
+                def _combine_pred_err(pred, err):
+                    if pd.isna(pred): return "-"
+                    p_str = f"{int(pred):,}"
+                    if pd.isna(err): return p_str
+                    sign = "+" if err > 0 else ""
+                    return f"{p_str} ({sign}{err:.1f}%)"
 
-            # Formatter: 실제값 숫자 포맷팅
-            fmt_int = JsCode("""
-                function(params){
-                    if (params.value === null || params.value === undefined || params.value === '' || isNaN(params.value)) return '-';
-                    return Math.round(params.value).toLocaleString();
-                }
-            """)
-            right_align = JsCode("""function(params){ return {'textAlign':'right'}; }""")
-            actual_style = JsCode("""function(params){ return {'backgroundColor':'#FFF2CC','fontWeight':'700','textAlign':'right'}; }""")
+                acc["W-1 예측(오차)"] = [ _combine_pred_err(p, e) for p, e in zip(acc["W-1기반예측(최종)"], acc["오차(W-1)"]) ]
+                acc["W-2 예측(오차)"] = [ _combine_pred_err(p, e) for p, e in zip(acc["W-2기반예측"], acc["오차(W-2)"]) ]
+                acc["W-3 예측(오차)"] = [ _combine_pred_err(p, e) for p, e in zip(acc["W-3기반예측"], acc["오차(W-3)"]) ]
 
-            # 심플해진 컬럼 정의 (flex 속성을 추가하여 남는 공간을 비율대로 꽉 채움)
-            column_defs = [
-                {"headerName": "IP", "field": "IP", "pinned": "left", "flex": 1.5},
-                {"headerName": "실제 화제성(W1)", "field": "실제", "flex": 1, "valueFormatter": fmt_int, "cellStyle": actual_style},
-                {"headerName": "W-1 예측(오차)", "field": "W-1 예측(오차)", "flex": 1, "cellStyle": right_align},
-                {"headerName": "W-2 예측(오차)", "field": "W-2 예측(오차)", "flex": 1, "cellStyle": right_align},
-                {"headerName": "W-3 예측(오차)", "field": "W-3 예측(오차)", "flex": 1, "cellStyle": right_align},
-            ]
+                # ===== [수정 2] W-1이 가장 먼저 오도록 컬럼 순서 재배치 =====
+                grid = acc[["IP", "실제", "W-1 예측(오차)", "W-2 예측(오차)", "W-3 예측(오차)"]].copy()
 
-            gb_val = GridOptionsBuilder.from_dataframe(grid)
-            gb_val.configure_default_column(resizable=True, sortable=True, filter=True)
-            gb_val.configure_grid_options(domLayout="normal", suppressDragLeaveHidesColumns=True)
+                # Formatter: 실제값 숫자 포맷팅
+                fmt_int = JsCode("""
+                    function(params){
+                        if (params.value === null || params.value === undefined || params.value === '' || isNaN(params.value)) return '-';
+                        return Math.round(params.value).toLocaleString();
+                    }
+                """)
+                right_align = JsCode("""function(params){ return {'textAlign':'right'}; }""")
+                actual_style = JsCode("""function(params){ return {'backgroundColor':'#FFF2CC','fontWeight':'700','textAlign':'right'}; }""")
+
+                # 심플해진 컬럼 정의 (flex 속성을 추가하여 남는 공간을 비율대로 꽉 채움)
+                column_defs = [
+                    {"headerName": "IP", "field": "IP", "pinned": "left", "flex": 1.5},
+                    {"headerName": "실제 화제성(W1)", "field": "실제", "flex": 1, "valueFormatter": fmt_int, "cellStyle": actual_style},
+                    {"headerName": "W-1 예측(오차)", "field": "W-1 예측(오차)", "flex": 1, "cellStyle": right_align},
+                    {"headerName": "W-2 예측(오차)", "field": "W-2 예측(오차)", "flex": 1, "cellStyle": right_align},
+                    {"headerName": "W-3 예측(오차)", "field": "W-3 예측(오차)", "flex": 1, "cellStyle": right_align},
+                ]
+
+                gb_val = GridOptionsBuilder.from_dataframe(grid)
+                gb_val.configure_default_column(resizable=True, sortable=True, filter=True)
+                gb_val.configure_grid_options(domLayout="normal", suppressDragLeaveHidesColumns=True)
             
-            grid_options = gb_val.build()
-            grid_options["columnDefs"] = column_defs
+                grid_options = gb_val.build()
+                grid_options["columnDefs"] = column_defs
 
-            AgGrid(
-                grid,
-                gridOptions=grid_options,
-                height=420,
-                fit_columns_on_grid_load=True, # ===== [수정 1] 열 너비 꽉차게 설정 =====
-                allow_unsafe_jscode=True,
-                update_mode=GridUpdateMode.NO_UPDATE,
-                theme="alpine",
-            )
+                AgGrid(
+                    grid,
+                    gridOptions=grid_options,
+                    height=420,
+                    fit_columns_on_grid_load=True, # ===== [수정 1] 열 너비 꽉차게 설정 =====
+                    allow_unsafe_jscode=True,
+                    update_mode=GridUpdateMode.NO_UPDATE,
+                    theme="alpine",
+                )
     st.divider()
 
     # --- 8. [최종 수정] 전체 IP 사전지표 종합 테이블 (AgGrid) ---
