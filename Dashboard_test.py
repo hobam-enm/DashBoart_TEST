@@ -4530,6 +4530,28 @@ def render_pre_launch_analysis():
             </div>
         </div>
         """, unsafe_allow_html=True)
+        
+    # ===== [추가] Expander(아코디언) 테두리 및 배경 투명화 CSS =====
+    st.markdown("""
+    <style>
+    /* Expander 컨테이너 테두리/배경/그림자 제거 */
+    div[data-testid="stExpander"] details {
+        border: none !important;
+        background: transparent !important;
+        box-shadow: none !important;
+    }
+    /* 클릭하는 텍스트 영역(Summary) 여백 제거 및 투명화 */
+    div[data-testid="stExpander"] summary {
+        padding: 0px !important;
+        background: transparent !important;
+    }
+    /* 마우스 호버 시 회색 배경이 생기는 기본 효과 제거 (글자색만 살짝 파랗게) */
+    div[data-testid="stExpander"] summary:hover {
+        background: transparent !important;
+        color: #0b61ff !important; 
+    }
+    </style>
+    """, unsafe_allow_html=True)
 
     with st.expander("✅ 예측 정확도(방영작 검증)", expanded=False):
         if "주차" not in df_all.columns:
