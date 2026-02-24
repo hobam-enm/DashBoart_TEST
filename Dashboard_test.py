@@ -638,7 +638,7 @@ else:
 with st.sidebar:
     render_gradient_title("드라마 성과 대시보드", emoji="") # (폰트 키운 버전 적용됨)
     
-    # ===== [추가] 전역 IP 셀렉트박스 스타일 (연한 배경 & 가운데 정렬) =====
+    # ===== [추가] 전역 IP 셀렉트박스 스타일 (연한 배경 & 완벽한 가운데 정렬) =====
     st.markdown("""
     <style>
     /* 셀렉트박스 배경 및 테두리 */
@@ -646,11 +646,15 @@ with st.sidebar:
         background-color: #f1f5f9 !important; /* 연한 파스텔톤/회색 배경 */
         border: 1px solid #e2e8f0 !important;
         border-radius: 8px !important;
+        position: relative !important; /* 화살표 절대좌표 기준점 */
     }
-    /* 텍스트 컨테이너 가운데 정렬 */
+    
+    /* 텍스트 컨테이너 가운데 정렬 (화살표 영역 무시하고 꽉 채우기) */
     section[data-testid="stSidebar"] div[data-testid="stSelectbox"] div[data-baseweb="select"] > div > div:first-child {
         justify-content: center !important;
+        width: 100% !important;
     }
+    
     /* 텍스트 폰트 강조 및 정렬 */
     section[data-testid="stSidebar"] div[data-testid="stSelectbox"] div[data-baseweb="select"] span {
         text-align: center !important;
@@ -659,6 +663,15 @@ with st.sidebar:
         font-size: 15px !important;
         width: 100% !important;
         display: block !important;
+    }
+    
+    /* [핵심] 우측 화살표 아이콘을 공중에 띄워서 텍스트를 왼쪽으로 밀어내지 않게 함 */
+    section[data-testid="stSidebar"] div[data-testid="stSelectbox"] div[data-baseweb="select"] > div > div:last-child {
+        position: absolute !important;
+        right: 12px !important;
+        top: 50% !important;
+        transform: translateY(-50%) !important;
+        pointer-events: none !important; 
     }
     </style>
     """, unsafe_allow_html=True)
