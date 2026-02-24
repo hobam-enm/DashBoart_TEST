@@ -1395,6 +1395,24 @@ def render_overview():
     )
 #endregion
 #region [ 6-2. IP 성과 자세히보기 ]
+
+# [신규 추가] 본방 시작 여부 판단 헬퍼
+def get_aired_ips(df: pd.DataFrame) -> list:
+    """W1(1회차) 타깃시청률(T시청률) 데이터가 0 초과로 찍혀있는 IP 목록 반환"""
+    sub = df[df["metric"] == "T시청률"].copy()
+    sub["val"] = pd.to_numeric(sub["value"], errors="coerce").fillna(0)
+    
+    if "회차_numeric" not in sub.columns:
+        sub["회차_numeric"] = sub["회차"].astype(str).str.extract(r"(\d+)", expand=False).astype(float)
+    
+    # 1회차 T시청률이 0 초과인 경우 방영작으로 간주
+    aired_ips = sub[(sub["회차_numeric"] == 1) & (sub["val"] > 0)]["IP"].unique().tolist()
+    
+    # (안전장치) 1회차가 명시적으로 표기되지 않았더라도 T시청률이 0 초과로 존재하면 방영작으로 포함
+    fallback_ips = sub[sub["val"] > 0]["IP"].unique().tolist()
+    
+    return list(set(aired_ips) | set(fallback_ips))
+
 def render_ip_detail():
     
     df_full = load_data() # [3. 공통 함수]
@@ -1502,6 +1520,12 @@ def render_ip_detail():
 
     # --- 베이스(비교 그룹) 데이터 필터링 ---
     base_raw = df_full.copy()
+    
+    # [추가] 비교 대상은 본방이 시작된(T시청률 0초과) 작품만 남기기
+    # (단, 현재 선택된 타깃 IP는 방영 전이더라도 기준점이 되므로 예외적으로 포함시킵니다)
+    aired_ips = get_aired_ips(base_raw)
+    base_raw = base_raw[base_raw["IP"].isin(aired_ips) | (base_raw["IP"] == ip_selected)]
+    
     group_name_parts = []
 
     # 1. 편성 기준 필터
@@ -2977,17 +3001,22 @@ def render_comparison():
 
     st.divider()
 
-    # --- 데이터 준비 및 필터링 (이하 로직 기존과 동일) ---
+    # --- 데이터 준비 및 필터링 ---
     if not selected_ip1:
         st.info("기준 IP를 선택해주세요.")
         return
+
+    # [추가] 전체 데이터 풀에서 본방이 시작된(T시청률 0초과) IP 목록 추출
+    aired_ips = get_aired_ips(df_all)
 
     ep_limit = None
     if selected_max_ep != "전체":
         try: ep_limit = float(re.findall(r'\d+', str(selected_max_ep))[0])
         except: ep_limit = None
             
-    kpi_percentiles = get_kpi_data_for_all_ips(df_all, max_ep=ep_limit)
+    # [수정] 백분위(레이더 차트) 산출 시에도 방영작들만 모수로 사용
+    df_for_kpi = df_all[df_all["IP"].isin(aired_ips) | (df_all["IP"] == selected_ip1)].copy()
+    kpi_percentiles = get_kpi_data_for_all_ips(df_for_kpi, max_ep=ep_limit)
 
     df_target = df_all[df_all["IP"] == selected_ip1].copy()
     if ep_limit is not None:
@@ -2997,7 +3026,10 @@ def render_comparison():
 
     if comparison_mode == "IP vs 그룹 평균":
         group_name_parts = []
-        df_comp = df_all.copy()
+        
+        # [수정] 비교 그룹 생성 시 방영작 풀만 사용
+        df_comp = df_all[df_all["IP"].isin(aired_ips)].copy()
+        
         ip_prog = df_target["편성"].dropna().mode().iloc[0] if not df_target["편성"].dropna().empty else None
 
         # 편성 기준 필터(없으면 전체)
