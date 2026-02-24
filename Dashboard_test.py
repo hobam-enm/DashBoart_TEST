@@ -1004,7 +1004,10 @@ def render_overview():
         - **디지털 조회** `회차총합`: 방영주간 월~일 발생 총합 / 유튜브,인스타그램,틱톡,네이버TV,페이스북
         - **디지털 언급량** `회차총합`: 방영주차(월~일) 내 총합 / 커뮤니티,트위터,블로그                            
         - **화제성 점수** `회차평균`: 방영기간 주차별 화제성 점수의 평균 (펀덱스)
-        - **앵커드라마 기준**: 토일 3%↑, 월화 2%↑
+        - **앵커드라마 기준**: 
+          - 25년까지: 토일 3%↑, 월화 2%↑
+          - 26년부터: 토일 2.5%↑, 월화 1.5%↑
+          - (단, '신사장프로젝트'는 수치 무관 제외)
         """).strip())
         st.markdown("</div>", unsafe_allow_html=True)
 
@@ -1087,10 +1090,35 @@ def render_overview():
         return (ip_min == 1).sum()
 
     def count_anchor_dramas():
-        sub = f[f["metric"]=="T시청률"].groupby(["IP","편성"])["value"].mean().reset_index()
-        mon_tue = sub[(sub["편성"]=="월화") & (sub["value"]>2)].shape[0]
-        sat_sun = sub[(sub["편성"]=="토일") & (sub["value"]>3)].shape[0]
-        return mon_tue + sat_sun
+        # ===== 1. 타깃 시청률 기준 데이터 필터링 =====
+        # 앵커드라마 기준이 되는 T시청률 데이터만 추출합니다.
+        sub = f[f["metric"] == "T시청률"].copy()
+        
+        # 편성연도 컬럼이 없는 경우를 대비하여 안전하게 형변환 (기본값 2025년)
+        if "편성연도" in sub.columns:
+            sub["편성연도_num"] = pd.to_numeric(sub["편성연도"], errors="coerce").fillna(2025)
+        else:
+            sub["편성연도_num"] = 2025
+            
+        # IP, 편성, 편성연도별로 시청률 평균을 계산합니다.
+        sub = sub.groupby(["IP", "편성", "편성연도_num"])["value"].mean().reset_index()
+        
+        # ===== 2. 예외 IP 처리 =====
+        # '신사장프로젝트'는 수치와 관계없이 앵커드라마에서 제외합니다.
+        sub = sub[sub["IP"] != "신사장프로젝트"]
+        
+        # ===== 3. 연도 및 편성별 앵커드라마 조건 산출 =====
+        # 2025년 이하: 토일 3.0% 이상, 월화 2.0% 이상
+        cond_old_sat_sun = (sub["편성연도_num"] <= 2025) & (sub["편성"] == "토일") & (sub["value"] >= 3.0)
+        cond_old_mon_tue = (sub["편성연도_num"] <= 2025) & (sub["편성"] == "월화") & (sub["value"] >= 2.0)
+        
+        # 2026년 이상: 토일 2.5% 이상, 월화 1.5% 이상
+        cond_new_sat_sun = (sub["편성연도_num"] >= 2026) & (sub["편성"] == "토일") & (sub["value"] >= 2.5)
+        cond_new_mon_tue = (sub["편성연도_num"] >= 2026) & (sub["편성"] == "월화") & (sub["value"] >= 1.5)
+        
+        # 조건에 부합하는 작품들의 총 개수를 반환합니다.
+        anchor_dramas = sub[cond_old_sat_sun | cond_old_mon_tue | cond_new_sat_sun | cond_new_mon_tue]
+        return anchor_dramas.shape[0]
 
     # --- 요약 카드 ---
     st.caption('▶ IP별 평균')
