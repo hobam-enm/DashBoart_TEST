@@ -988,7 +988,7 @@ def get_previous_work_ip(df_full: pd.DataFrame, target_ip: str) -> str | None:
 def render_overview():
     df = load_data() 
   
-    # --- 페이지 전용 필터 ---   
+    # ===== 페이지 전용 필터 =====   
     filter_cols = st.columns(4)
     
     with filter_cols[0]:
@@ -1056,7 +1056,7 @@ def render_overview():
             label_visibility="collapsed"
         )
 
-    # --- 필터 적용 ---
+    # ===== 필터 적용 =====
     f = df.copy()
     if prog_sel:
         f = f[f["편성"].isin(prog_sel)]
@@ -1067,17 +1067,21 @@ def render_overview():
     if month_sel and date_col_for_month in f.columns:
         f = f[f[date_col_for_month].dt.month.isin(month_sel)]
 
+
     # ===== 내부 툴팁 전용 KPI 렌더링 함수 =====
     def kpi_tooltip(col, title, value, tooltip_text):
+        # 쌍따옴표 등 특수문자가 HTML 구조를 깨지 않도록 안전하게 치환합니다.
+        safe_tooltip = str(tooltip_text).replace('"', '&quot;')
+        
         with col:
             st.markdown(
-                f'<div class="kpi-card" title="{tooltip_text}">'
-                f'<div class="kpi-title" style="cursor: help;">{title} ℹ️</div>'
+                f'<div class="kpi-card" title="{safe_tooltip}">'
+                f'<div class="kpi-title">{title} <span title="{safe_tooltip}" style="cursor: help;">ℹ️</span></div>'
                 f'<div class="kpi-value">{value}</div></div>',
                 unsafe_allow_html=True
             )
 
-    # --- 요약카드 계산 서브함수 (KPI 공통 유틸 사용) ---
+    # ===== 요약카드 계산 서브함수 (KPI 공통 유틸 사용) =====
     def avg_of_ip_means(metric_name: str):
         return mean_of_ip_episode_mean(f, metric_name)
 
@@ -1099,7 +1103,8 @@ def render_overview():
         ip_min = sub.groupby("IP")["value"].min()
         return (ip_min == 1).sum()
 
-    # ===== 1. 앵커드라마 계산 로직 (툴팁 정보 포함) =====
+
+    # ===== 앵커드라마 계산 로직 (툴팁 정보 포함) =====
     def get_anchor_dramas_info():
         sub = f[f["metric"] == "T시청률"].copy()
         
@@ -1130,7 +1135,8 @@ def render_overview():
         
         return count, tooltip_str
 
-    # ===== 2. 펀덱스 Top3 랭크인 계산 로직 (툴팁 정보 포함) =====
+
+    # ===== 펀덱스 Top3 랭크인 계산 로직 (툴팁 정보 포함) =====
     def get_fundex_top3_info():
         sub = f[f["metric"] == "F_Total"].copy()
         if sub.empty:
@@ -1153,10 +1159,10 @@ def render_overview():
         
         return total_count, tooltip_str
 
-    # --- 요약 카드 ---
+
+    # ===== 요약 카드 렌더링 =====
     st.caption('▶ IP별 평균')
 
-    # [수정] 5열 구조 -> 6열 구조로 변경
     c1, c2, c3, c4, c5, c6 = st.columns(6)
     st.markdown("<div style='margin-top:20px'></div>", unsafe_allow_html=True)
     c7, c8, c9, c10, c11, c12 = st.columns(6)
@@ -1176,12 +1182,16 @@ def render_overview():
     anchor_total, anchor_tooltip = get_anchor_dramas_info()
     fundex_top3_count, fundex_top3_tooltip = get_fundex_top3_info()
 
-    # --- 1행 --- (마지막 c6는 요청하신대로 빈칸으로 남겨둡니다)
+    # --- 1행 --- 
     kpi(c1, "🎯 타깃 시청률", fmt(t_rating, digits=3))
     kpi(c2, "🏠 가구 시청률", fmt(h_rating, digits=3))
     kpi(c3, "📺 티빙 LIVE UV", fmt(tving_live, intlike=True))
     kpi(c4, "⚡ 티빙 당일 VOD UV", fmt(tving_quick, intlike=True)) 
     kpi(c5, "▶️ 티빙 주간 VOD UV", fmt(tving_vod, intlike=True))   
+    
+    # 빈 6번째 열에 보이지 않는 kpi-card를 삽입하여 CSS :has(.kpi-card) 예외 룰을 정상 작동시킵니다.
+    with c6:
+        st.markdown("<div class='kpi-card' style='visibility:hidden; border:none; box-shadow:none;'></div>", unsafe_allow_html=True)
     
     # --- 2행 ---
     kpi(c7, "👀 디지털 조회수", fmt(digital_view, intlike=True))
@@ -1195,7 +1205,8 @@ def render_overview():
 
     st.divider()
 
-    # --- 주차별 시청자수 트렌드 (Stacked Bar) ---
+
+    # ===== 주차별 시청자수 트렌드 (Stacked Bar) =====
     df_trend = f[f["metric"]=="시청인구"].copy()
     if not df_trend.empty:
         tv_weekly = df_trend[df_trend["매체"]=="TV"].groupby("주차시작일")["value"].sum()
@@ -1266,14 +1277,15 @@ def render_overview():
 
     st.divider()
 
-    # --- 주요작품 테이블 (AgGrid) ---
+
+    # ===== 주요작품 테이블 (AgGrid) =====
     st.markdown("#### 🎬 전체 작품 RAW")
 
     def calculate_overview_performance(df):
         all_ips = df["IP"].unique()
         if len(all_ips) == 0: return pd.DataFrame()
 
-        ep_col = _episode_col(df) # [5. 공통 함수]
+        ep_col = _episode_col(df) 
         
         def _get_mean_of_ep_sums(df, metric_name, media_list=None):
             sub = df[df["metric"] == metric_name]
