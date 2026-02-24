@@ -2781,9 +2781,11 @@ def _render_unified_charts(df_target, df_comp, target_name, comp_name, kpi_perce
             fig_tv = px.bar(df_melt, x="label", y="인구수", color="구분", barmode="group",
                             color_discrete_map={target_name: "#d93636", comp_name: comp_color},
                             text="인구수")
-            fig_tv.update_traces(texttemplate='%{text:,.0f}', textposition='outside')
-            fig_tv.update_layout(height=300, margin=dict(t=30), legend=dict(title=None, orientation="h", y=1.02),
-                                 xaxis_title=None, yaxis_title=None)
+            fig_tv.update_traces(texttemplate='%{text:,.0f}', textposition='outside', cliponaxis=False)
+            max_val = float(df_melt["인구수"].max()) if len(df_melt) else 0.0
+            fig_tv.update_layout(height=320, margin=dict(t=60, b=20), legend=dict(title=None, orientation="h", y=1.02),
+                                 xaxis_title=None, yaxis_title=None,
+                                 yaxis=dict(range=[0, max_val * 1.2 if max_val > 0 else 1]))
             st.plotly_chart(fig_tv, use_container_width=True)
         else:
             st.info("데이터 없음")
@@ -2804,9 +2806,11 @@ def _render_unified_charts(df_target, df_comp, target_name, comp_name, kpi_perce
             fig_tv = px.bar(df_melt, x="label", y="인구수", color="구분", barmode="group",
                             color_discrete_map={target_name: "#d93636", comp_name: comp_color},
                             text="인구수")
-            fig_tv.update_traces(texttemplate='%{text:,.0f}', textposition='outside')
-            fig_tv.update_layout(height=300, margin=dict(t=30), legend=dict(title=None, orientation="h", y=1.02),
-                                 xaxis_title=None, yaxis_title=None)
+            fig_tv.update_traces(texttemplate='%{text:,.0f}', textposition='outside', cliponaxis=False)
+            max_val = float(df_melt["인구수"].max()) if len(df_melt) else 0.0
+            fig_tv.update_layout(height=320, margin=dict(t=60, b=20), legend=dict(title=None, orientation="h", y=1.02),
+                                 xaxis_title=None, yaxis_title=None,
+                                 yaxis=dict(range=[0, max_val * 1.2 if max_val > 0 else 1]))
             st.plotly_chart(fig_tv, use_container_width=True)
         else:
             st.info("데이터 없음")
@@ -4524,7 +4528,7 @@ def render_pre_launch_analysis():
                 실제 화제성점수 ({target_week}): <b>{(f"{actual_val:,.0f}" if actual_val is not None else "방영전입니다")}</b>
             </div>
             <div style="color:#6b7280; font-size:12.5px; margin-top:6px; line-height:1.35;">
-                사전 데이터가 누적된 주차에 맞춰 학습된 모델로 방영 첫 주차 화제성점수를 추정<br/>
+                시사지표/MPI 3종/디지털 2종 데이터의 절대값과 기울기를 바탕으로 추정됩니다<br/>
                 <b>적용 모델:</b> {chosen} 기반 · <b>평균오차율:</b> {mape_text}<br/>
                 (데이터가 누적되면(예: W-2 → W-1) 더 많은 정보를 반영한 모델로 자동 전환됩니다.)
             </div>
@@ -4575,6 +4579,15 @@ def render_pre_launch_analysis():
             else:
                 acc = pd.DataFrame({"IP": y_ip.index, "실제": y_ip.values})
 
+                # --- [추가] 실제 주차 F_Total 순위 매핑 ---
+                rank_all = df_all[
+                    (df_all.get("metric") == "F_Total") &
+                    (week_norm == target_week_norm)
+                ].copy()
+                rank_all["rank_val"] = pd.to_numeric(rank_all.get("value"), errors="coerce")
+                rank_map = rank_all.groupby("IP")["rank_val"].min()
+                acc["순위"] = acc["IP"].map(rank_map)
+
                 def _attach_pred(colname: str, cutoff: str):
                     pdf = preds.get(cutoff, {}).get("df")
                     if pdf is None or pdf.empty:
@@ -4599,8 +4612,22 @@ def render_pre_launch_analysis():
                 acc["오차(W-2)"] = [ _err_pct(p,a) for p,a in zip(acc["W-2기반예측"], acc["실제"]) ]
                 acc["오차(W-1)"] = [ _err_pct(p,a) for p,a in zip(acc["W-1기반예측(최종)"], acc["실제"]) ]
 
-                for c in ["W-3기반예측","W-2기반예측","W-1기반예측(최종)","실제"]:
+                for c in ["W-3기반예측","W-2기반예측","W-1기반예측(최종)"]:
                     acc[c] = pd.to_numeric(acc[c], errors="coerce").round(0)
+
+                # [추가] 실제값 + (N위) 텍스트 결합
+                def _format_actual_with_rank(score, rank):
+                    if pd.isna(score):
+                        return "-"
+                    score_str = f"{int(score):,}"
+                    if pd.isna(rank):
+                        return score_str
+                    return f"{score_str} ({int(rank)}위)"
+
+                acc["실제"] = [
+                    _format_actual_with_rank(s, r)
+                    for s, r in zip(acc["실제"], acc["순위"])
+                ]
 
                 # ===== [수정 3] 예측값과 오차율을 결합하여 직관적인 텍스트 생성 =====
                 def _combine_pred_err(pred, err):
@@ -4617,7 +4644,7 @@ def render_pre_launch_analysis():
                 # ===== [수정 2] W-1이 가장 먼저 오도록 컬럼 순서 재배치 =====
                 grid = acc[["IP", "실제", "W-1 예측(오차)", "W-2 예측(오차)", "W-3 예측(오차)"]].copy()
 
-                # Formatter: 실제값 숫자 포맷팅
+                # Formatter: 실제값 숫자 포맷팅 (현재 미사용, 기존 구조 유지)
                 fmt_int = JsCode("""
                     function(params){
                         if (params.value === null || params.value === undefined || params.value === '' || isNaN(params.value)) return '-';
@@ -4649,10 +4676,7 @@ def render_pre_launch_analysis():
                 styled_grid = (
                     grid.style
                     .apply(apply_grid_styles, axis=1)
-                    # 실제 값(숫자)에 천 단위 콤마 적용, 나머지는 그대로 통과
-                    .format({
-                        "실제": lambda x: f"{int(x):,}" if isinstance(x, (int, float)) and pd.notna(x) else x
-                    })
+                    # 실제 컬럼은 이미 문자열(예: 3,421 (2위))로 가공됨
                 )
 
                 # 4. Streamlit 네이티브 함수로 렌더링 (expander 버그 면역)
