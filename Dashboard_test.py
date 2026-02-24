@@ -4674,14 +4674,24 @@ def render_pre_launch_analysis():
                 def apply_grid_styles(row):
                     # 기본적으로 빈 스타일 배열 생성
                     styles = [''] * len(row)
-                    
-                    # 현재 선택된 IP 행 하이라이트 (연한 노란색 배경, 굵은 빨간 글씨)
-                    if row["IP"] == global_ip:
+
+                    is_global = (row["IP"] == global_ip)
+                    is_similar = (row["IP"] in similar_ip_set)
+
+                    # 현재 선택된 IP 행 하이라이트 (최우선)
+                    if is_global:
                         styles = ['background-color: #fffde7; font-weight: 700; color: #d93636;'] * len(row)
-                    
+                    # 선택 IP 예측점수와 실제값이 유사한 IP 하이라이트 (보조 강조)
+                    elif is_similar:
+                        styles = ['background-color: #fff5f5; color: #c62828; font-weight: 600;'] * len(row)
+
                     # '실제' 컬럼(인덱스 1)은 구분을 위해 항상 배경색 적용
-                    styles[1] = styles[1] + ' background-color: #FFF2CC; font-weight: 700;'
-                    
+                    # 유사행은 연노랑 대신 연붉은색 계열로 유지하여 하이라이트가 보이게 처리
+                    if is_similar and not is_global:
+                        styles[1] = styles[1] + ' background-color: #ffe3e3; font-weight: 700; color: #b71c1c;'
+                    else:
+                        styles[1] = styles[1] + ' background-color: #FFF2CC; font-weight: 700;'
+
                     return styles
 
                 # 3. 데이터프레임에 스타일 및 포맷팅 적용
