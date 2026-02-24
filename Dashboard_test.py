@@ -668,7 +668,7 @@ with st.sidebar:
         font-size: 15px !important;
         width: 100% !important;
         display: block !important;
-        line-height: 38px !important; /* 높이에 맞춰 텍스트 수직 중앙 정렬 */
+        line-height: 30px !important; /* 높이에 맞춰 텍스트 수직 중앙 정렬 */
     }
     
     /* [핵심] 우측 화살표 아이콘을 공중에 띄워서 텍스트를 왼쪽으로 밀어내지 않게 함 */
