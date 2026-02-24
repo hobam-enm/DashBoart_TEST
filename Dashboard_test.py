@@ -4576,7 +4576,7 @@ def render_pre_launch_analysis():
             if y_ip.empty:
                 st.info("검증용 데이터가 없습니다.")
             else:
-                acc = pd.DataFrame({"IP": y_ip.index, "실제": y_ip.values})
+                acc = pd.DataFrame({"IP": y_ip.index, "실제_num": y_ip.values})
 
                 # --- [추가] 실제 주차 F_Total 순위 매핑 ---
                 rank_all = df_all[
@@ -4607,26 +4607,17 @@ def render_pre_launch_analysis():
 
                 acc["오차"] = np.nan  # placeholder
 
-                acc["오차(W-3)"] = [ _err_pct(p,a) for p,a in zip(acc["W-3기반예측"], acc["실제"]) ]
-                acc["오차(W-2)"] = [ _err_pct(p,a) for p,a in zip(acc["W-2기반예측"], acc["실제"]) ]
-                acc["오차(W-1)"] = [ _err_pct(p,a) for p,a in zip(acc["W-1기반예측(최종)"], acc["실제"]) ]
+                acc["오차(W-3)"] = [ _err_pct(p,a) for p,a in zip(acc["W-3기반예측"], acc["실제_num"]) ]
+                acc["오차(W-2)"] = [ _err_pct(p,a) for p,a in zip(acc["W-2기반예측"], acc["실제_num"]) ]
+                acc["오차(W-1)"] = [ _err_pct(p,a) for p,a in zip(acc["W-1기반예측(최종)"], acc["실제_num"]) ]
 
-                for c in ["W-3기반예측","W-2기반예측","W-1기반예측(최종)"]:
+                for c in ["W-3기반예측","W-2기반예측","W-1기반예측(최종)","실제_num"]:
                     acc[c] = pd.to_numeric(acc[c], errors="coerce").round(0)
 
-                # [추가] 실제값 + (N위) 텍스트 결합
-                def _format_actual_with_rank(score, rank):
-                    if pd.isna(score):
-                        return "-"
-                    score_str = f"{int(score):,}"
-                    if pd.isna(rank):
-                        return score_str
-                    return f"{score_str} ({int(rank)}위)"
-
-                acc["실제"] = [
-                    _format_actual_with_rank(s, r)
-                    for s, r in zip(acc["실제"], acc["순위"])
-                ]
+                # [수정] 실제값은 숫자 정렬 가능하도록 유지하고, 표시용 정보는 fractional 인코딩
+                # 표시 포맷에서만 "점수 (N위)"로 렌더링됨
+                _rank_fill = pd.to_numeric(acc["순위"], errors="coerce").fillna(9999)
+                acc["실제"] = acc["실제_num"] + (_rank_fill / 1_000_000.0)
 
                 # ===== [수정 3] 예측값과 오차율을 결합하여 직관적인 텍스트 생성 =====
                 def _combine_pred_err(pred, err):
@@ -4639,6 +4630,28 @@ def render_pre_launch_analysis():
                 acc["W-1 예측(오차)"] = [ _combine_pred_err(p, e) for p, e in zip(acc["W-1기반예측(최종)"], acc["오차(W-1)"]) ]
                 acc["W-2 예측(오차)"] = [ _combine_pred_err(p, e) for p, e in zip(acc["W-2기반예측"], acc["오차(W-2)"]) ]
                 acc["W-3 예측(오차)"] = [ _combine_pred_err(p, e) for p, e in zip(acc["W-3기반예측"], acc["오차(W-3)"]) ]
+
+                # [추가] 현재 선택 IP의 예상점수와 실제점수 기준으로 가장 유사한 IP 5개 하이라이트 후보
+                similar_ip_set = set()
+                try:
+                    current_pred_score = None
+                    _chosen_key = chosen if ("chosen" in locals() and chosen is not None) else "W-1"
+                    _pred_bundle = preds.get(_chosen_key, {}) if isinstance(preds, dict) else {}
+                    _pred_ip_val = _pred_bundle.get("ip")
+                    if _pred_ip_val is not None and pd.notna(_pred_ip_val):
+                        current_pred_score = float(_pred_ip_val)
+                    if current_pred_score is not None:
+                        _sim = acc[["IP", "실제_num"]].copy()
+                        _sim["실제_num"] = pd.to_numeric(_sim["실제_num"], errors="coerce")
+                        _sim = _sim.dropna(subset=["실제_num"])
+                        _sim = _sim[_sim["IP"] != global_ip]
+                        if not _sim.empty:
+                            _sim["__diff"] = (_sim["실제_num"] - current_pred_score).abs()
+                            similar_ip_set = set(
+                                _sim.sort_values(["__diff", "실제_num"], ascending=[True, False])["IP"].head(5).tolist()
+                            )
+                except Exception:
+                    similar_ip_set = set()
 
                 # ===== [수정 2] W-1이 가장 먼저 오도록 컬럼 순서 재배치 =====
                 grid = acc[["IP", "실제", "W-1 예측(오차)", "W-2 예측(오차)", "W-3 예측(오차)"]].copy()
@@ -4675,7 +4688,18 @@ def render_pre_launch_analysis():
                 styled_grid = (
                     grid.style
                     .apply(apply_grid_styles, axis=1)
-                    # 실제 컬럼은 이미 문자열(예: 3,421 (2위))로 가공됨
+                    .format({
+                        "실제": lambda x: (
+                            "-"
+                            if (x is None or (isinstance(x, float) and pd.isna(x)))
+                            else (
+                                (lambda _score, _rank: f"{_score:,}" if _rank >= 9999 else f"{_score:,} ({_rank}위)")(
+                                    int(float(x)),
+                                    int(round((float(x) - int(float(x))) * 1_000_000))
+                                )
+                            )
+                        )
+                    })
                 )
 
                 # 4. Streamlit 네이티브 함수로 렌더링 (expander 버그 면역)
