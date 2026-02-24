@@ -1104,21 +1104,28 @@ def render_overview():
         return (ip_min == 1).sum()
 
 
-    # ===== 앵커드라마 계산 로직 (툴팁 정보 포함) =====
+    # ===== 1. 앵커드라마 계산 로직 (툴팁 정보 포함) =====
     def get_anchor_dramas_info():
         sub = f[f["metric"] == "T시청률"].copy()
         
         if "편성연도" in sub.columns:
-            sub["편성연도_num"] = pd.to_numeric(sub["편성연도"], errors="coerce").fillna(2025)
+            # 1) '24년', '2025년' 등에서 숫자만 추출
+            extracted_year = sub["편성연도"].astype(str).str.extract(r'(\d+)')[0].astype(float)
+            # 2) 2자리 연도(예: 24, 25)를 4자리 연도(2024, 2025)로 통일
+            sub["편성연도_num"] = extracted_year.apply(lambda x: x + 2000 if pd.notna(x) and x < 100 else x)
+            # 3) 예외 처리: 값을 못 찾았으면 기본값 2025 할당
+            sub["편성연도_num"] = sub["편성연도_num"].fillna(2025)
         else:
             sub["편성연도_num"] = 2025
             
         sub = sub.groupby(["IP", "편성", "편성연도_num"])["value"].mean().reset_index()
         sub = sub[sub["IP"] != "신사장프로젝트"]
         
+        # 2025년 이하 기준
         cond_old_sat_sun = (sub["편성연도_num"] <= 2025) & (sub["편성"] == "토일") & (sub["value"] >= 3.0)
         cond_old_mon_tue = (sub["편성연도_num"] <= 2025) & (sub["편성"] == "월화") & (sub["value"] >= 2.0)
         
+        # 2026년 이상 기준
         cond_new_sat_sun = (sub["편성연도_num"] >= 2026) & (sub["편성"] == "토일") & (sub["value"] >= 2.5)
         cond_new_mon_tue = (sub["편성연도_num"] >= 2026) & (sub["편성"] == "월화") & (sub["value"] >= 1.5)
         
@@ -1127,7 +1134,7 @@ def render_overview():
         
         count = anchor_dramas.shape[0]
         
-        # 툴팁용 텍스트 생성 (HTML의 title 속성에서는 &#10;이 줄바꿈 역할을 합니다)
+        # 툴팁용 텍스트 생성
         tooltip_lines = []
         for _, row in anchor_dramas.iterrows():
             tooltip_lines.append(f"• {row['IP']} ({row['value']:.2f}%)")
