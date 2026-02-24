@@ -4522,13 +4522,12 @@ def render_pre_launch_analysis():
 
         st.markdown(f"""
         <div class="kpi-card" style="padding:16px 14px;">
-            <div class="kpi-title">예측 화제성점수 ({target_week})</div>
+            <div class="kpi-title">시사지표/MPI 3종/디지털 2종 데이터의 절대값과 기울기를 바탕으로 추정됩니다</div>
             <div class="kpi-value" style="font-size:34px; margin-top:6px;">{pred_val:,.0f}</div>
             <div style="color:#111827; font-size:13px; margin-top:8px;">
                 실제 화제성점수 ({target_week}): <b>{(f"{actual_val:,.0f}" if actual_val is not None else "방영전입니다")}</b>
             </div>
             <div style="color:#6b7280; font-size:12.5px; margin-top:6px; line-height:1.35;">
-                시사지표/MPI 3종/디지털 2종 데이터의 절대값과 기울기를 바탕으로 추정됩니다<br/>
                 <b>적용 모델:</b> {chosen} 기반 · <b>평균오차율:</b> {mape_text}<br/>
                 (데이터가 누적되면(예: W-2 → W-1) 더 많은 정보를 반영한 모델로 자동 전환됩니다.)
             </div>
