@@ -1067,12 +1067,22 @@ def render_overview():
     if month_sel and date_col_for_month in f.columns:
         f = f[f[date_col_for_month].dt.month.isin(month_sel)]
 
+    # ===== 내부 툴팁 전용 KPI 렌더링 함수 =====
+    def kpi_tooltip(col, title, value, tooltip_text):
+        with col:
+            st.markdown(
+                f'<div class="kpi-card" title="{tooltip_text}">'
+                f'<div class="kpi-title" style="cursor: help;">{title} ℹ️</div>'
+                f'<div class="kpi-value">{value}</div></div>',
+                unsafe_allow_html=True
+            )
+
     # --- 요약카드 계산 서브함수 (KPI 공통 유틸 사용) ---
     def avg_of_ip_means(metric_name: str):
-        return mean_of_ip_episode_mean(f, metric_name) # [5. 공통 함수]
+        return mean_of_ip_episode_mean(f, metric_name)
 
     def avg_of_ip_tving_epSum_mean(media_name: str):
-        return mean_of_ip_episode_sum(f, "시청인구", [media_name]) # [5. 공통 함수]
+        return mean_of_ip_episode_sum(f, "시청인구", [media_name])
 
     def avg_of_ip_tving_quick():
         return mean_of_ip_episode_sum(f, "시청인구", ["TVING QUICK"])
@@ -1081,7 +1091,7 @@ def render_overview():
         return mean_of_ip_episode_sum(f, "시청인구", ["TVING VOD"])
 
     def avg_of_ip_sums(metric_name: str):
-        return mean_of_ip_sums(f, metric_name) # [5. 공통 함수]
+        return mean_of_ip_sums(f, metric_name)
 
     def count_ip_with_min1(metric_name: str):
         sub = f[f["metric"] == metric_name]
@@ -1089,43 +1099,67 @@ def render_overview():
         ip_min = sub.groupby("IP")["value"].min()
         return (ip_min == 1).sum()
 
-    def count_anchor_dramas():
-        # ===== 1. 타깃 시청률 기준 데이터 필터링 =====
-        # 앵커드라마 기준이 되는 T시청률 데이터만 추출합니다.
+    # ===== 1. 앵커드라마 계산 로직 (툴팁 정보 포함) =====
+    def get_anchor_dramas_info():
         sub = f[f["metric"] == "T시청률"].copy()
         
-        # 편성연도 컬럼이 없는 경우를 대비하여 안전하게 형변환 (기본값 2025년)
         if "편성연도" in sub.columns:
             sub["편성연도_num"] = pd.to_numeric(sub["편성연도"], errors="coerce").fillna(2025)
         else:
             sub["편성연도_num"] = 2025
             
-        # IP, 편성, 편성연도별로 시청률 평균을 계산합니다.
         sub = sub.groupby(["IP", "편성", "편성연도_num"])["value"].mean().reset_index()
-        
-        # ===== 2. 예외 IP 처리 =====
-        # '신사장프로젝트'는 수치와 관계없이 앵커드라마에서 제외합니다.
         sub = sub[sub["IP"] != "신사장프로젝트"]
         
-        # ===== 3. 연도 및 편성별 앵커드라마 조건 산출 =====
-        # 2025년 이하: 토일 3.0% 이상, 월화 2.0% 이상
         cond_old_sat_sun = (sub["편성연도_num"] <= 2025) & (sub["편성"] == "토일") & (sub["value"] >= 3.0)
         cond_old_mon_tue = (sub["편성연도_num"] <= 2025) & (sub["편성"] == "월화") & (sub["value"] >= 2.0)
         
-        # 2026년 이상: 토일 2.5% 이상, 월화 1.5% 이상
         cond_new_sat_sun = (sub["편성연도_num"] >= 2026) & (sub["편성"] == "토일") & (sub["value"] >= 2.5)
         cond_new_mon_tue = (sub["편성연도_num"] >= 2026) & (sub["편성"] == "월화") & (sub["value"] >= 1.5)
         
-        # 조건에 부합하는 작품들의 총 개수를 반환합니다.
         anchor_dramas = sub[cond_old_sat_sun | cond_old_mon_tue | cond_new_sat_sun | cond_new_mon_tue]
-        return anchor_dramas.shape[0]
+        anchor_dramas = anchor_dramas.sort_values(by="value", ascending=False)
+        
+        count = anchor_dramas.shape[0]
+        
+        # 툴팁용 텍스트 생성 (HTML의 title 속성에서는 &#10;이 줄바꿈 역할을 합니다)
+        tooltip_lines = []
+        for _, row in anchor_dramas.iterrows():
+            tooltip_lines.append(f"• {row['IP']} ({row['value']:.2f}%)")
+        tooltip_str = "&#10;".join(tooltip_lines) if tooltip_lines else "조건에 부합하는 앵커드라마가 없습니다."
+        
+        return count, tooltip_str
+
+    # ===== 2. 펀덱스 Top3 랭크인 계산 로직 (툴팁 정보 포함) =====
+    def get_fundex_top3_info():
+        sub = f[f["metric"] == "F_Total"].copy()
+        if sub.empty:
+            return 0, "데이터 없음"
+            
+        # 3위 이내 데이터 추출
+        sub["value_num"] = pd.to_numeric(sub["value"], errors="coerce")
+        top3_sub = sub[sub["value_num"] <= 3]
+        
+        # 전체 랭크인 횟수
+        total_count = top3_sub.shape[0]
+        
+        # IP별 랭크인 횟수 산출 (내림차순 정렬)
+        ip_counts = top3_sub["IP"].value_counts()
+        
+        tooltip_lines = []
+        for ip, cnt in ip_counts.items():
+            tooltip_lines.append(f"• {ip} ({cnt}회 랭크인)")
+        tooltip_str = "&#10;".join(tooltip_lines) if tooltip_lines else "Top3 랭크인 작품이 없습니다."
+        
+        return total_count, tooltip_str
 
     # --- 요약 카드 ---
     st.caption('▶ IP별 평균')
 
-    c1, c2, c3, c4, c5 = st.columns(5)
+    # [수정] 5열 구조 -> 6열 구조로 변경
+    c1, c2, c3, c4, c5, c6 = st.columns(6)
     st.markdown("<div style='margin-top:20px'></div>", unsafe_allow_html=True)
-    c6, c7, c8, c9, c10 = st.columns(5)
+    c7, c8, c9, c10, c11, c12 = st.columns(6)
 
     t_rating   = avg_of_ip_means("T시청률")
     h_rating   = avg_of_ip_means("H시청률")
@@ -1136,20 +1170,28 @@ def render_overview():
     digital_view = avg_of_ip_sums("조회수")
     digital_buzz = avg_of_ip_sums("언급량")
     f_score      = avg_of_ip_means("F_Score")
-    fundex_top1 = count_ip_with_min1("F_Total")
-    anchor_total = count_anchor_dramas()
+    fundex_top1  = count_ip_with_min1("F_Total")
+    
+    # 신규 추가된 함수 호출
+    anchor_total, anchor_tooltip = get_anchor_dramas_info()
+    fundex_top3_count, fundex_top3_tooltip = get_fundex_top3_info()
 
+    # --- 1행 --- (마지막 c6는 요청하신대로 빈칸으로 남겨둡니다)
     kpi(c1, "🎯 타깃 시청률", fmt(t_rating, digits=3))
     kpi(c2, "🏠 가구 시청률", fmt(h_rating, digits=3))
     kpi(c3, "📺 티빙 LIVE UV", fmt(tving_live, intlike=True))
     kpi(c4, "⚡ 티빙 당일 VOD UV", fmt(tving_quick, intlike=True)) 
     kpi(c5, "▶️ 티빙 주간 VOD UV", fmt(tving_vod, intlike=True))   
     
-    kpi(c6, "👀 디지털 조회수", fmt(digital_view, intlike=True))
-    kpi(c7, "💬 디지털 언급량", fmt(digital_buzz, intlike=True))
-    kpi(c8, "🔥 화제성 점수",  fmt(f_score, intlike=True))
-    kpi(c9, "🥇 펀덱스 1위", f"{fundex_top1}작품")
-    kpi(c10, "⚓ 앵커드라마", f"{anchor_total}작품")
+    # --- 2행 ---
+    kpi(c7, "👀 디지털 조회수", fmt(digital_view, intlike=True))
+    kpi(c8, "💬 디지털 언급량", fmt(digital_buzz, intlike=True))
+    kpi(c9, "🔥 화제성 점수",  fmt(f_score, intlike=True))
+    kpi(c10, "🥇 펀덱스 1위", f"{fundex_top1}작품")
+    
+    # 신규 지표(툴팁 적용)
+    kpi_tooltip(c11, "🏆 펀덱스 Top3", f"{fundex_top3_count}회", fundex_top3_tooltip)
+    kpi_tooltip(c12, "⚓ 앵커드라마", f"{anchor_total}작품", anchor_tooltip)
 
     st.divider()
 
@@ -1279,7 +1321,7 @@ def render_overview():
     fmt_thousands = JsCode("""function(params){ if(params.value==null||isNaN(params.value))return ''; return Math.round(params.value).toLocaleString(); }""")
     fmt_rank = JsCode("""function(params){ if(params.value==null||isNaN(params.value))return ''; if(params.value==0) return '–'; return Math.round(params.value)+'위'; }""")
 
-    # [신규] 선택된 IP 행 하이라이트 스타일
+    # 선택된 IP 행 하이라이트 스타일
     target_ip = st.session_state.get("global_ip", "")
     
     highlight_jscode = JsCode(f"""
@@ -1302,7 +1344,7 @@ def render_overview():
         headerClass='centered-header'
     )
     
-    # [핵심] getRowStyle 적용
+    # getRowStyle 적용
     gb.configure_grid_options(
         rowHeight=34, 
         suppressMenuHide=True, 
@@ -1332,9 +1374,6 @@ def render_overview():
         update_mode=GridUpdateMode.NO_UPDATE,
         allow_unsafe_jscode=True
     )
-
-
-# =====================================================
 #endregion
 #region [ 6-2. IP 성과 자세히보기 ]
 def render_ip_detail():
