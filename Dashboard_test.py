@@ -1207,7 +1207,7 @@ def render_overview():
     kpi(c10, "🥇 펀덱스 1위", f"{fundex_top1}작품")
     
     # 신규 지표(툴팁 적용)
-    kpi_tooltip(c11, "🏆 펀덱스 Top3", f"{fundex_top3_count}회", fundex_top3_tooltip)
+    kpi_tooltip(c11, "🏆 펀덱스 Top3 랭크인", f"{fundex_top3_count}회", fundex_top3_tooltip)
     kpi_tooltip(c12, "⚓ 앵커드라마", f"{anchor_total}작품", anchor_tooltip)
 
     st.divider()
